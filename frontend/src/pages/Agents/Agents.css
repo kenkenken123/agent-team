@@ -1,0 +1,45 @@
+.agents-page {
+  padding: 24px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.agents-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.agents-table .ant-table {
+  background: #161B22;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid #21262D;
+}
+
+.agents-table .ant-table-thead > tr > th {
+  background: #21262D !important;
+  color: #8B949E;
+  border-bottom: 1px solid #30363D;
+}
+
+.agents-table .ant-table-tbody > tr > td {
+  border-bottom: 1px solid #21262D;
+}
+
+.agents-table .ant-table-tbody > tr:hover > td {
+  background: #21262D !important;
+}
+
+.agent-form .ant-form-item-label > label {
+  color: #C9D1D9;
+}
+
+.agent-form .ant-input,
+.agent-form .ant-input-number,
+.agent-form .ant-select-selector {
+  background: #0D1117 !important;
+  border-color: #30363D !important;
+  color: #C9D1D9 !important;
+}

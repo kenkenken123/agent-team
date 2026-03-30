@@ -1,0 +1,19 @@
+# .NET / C#
+bin/
+obj/
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Node.js
+node_modules/
+dist/
+build/
+.env
+.DS_Store
+
+# Data Directory
+backend/AgentTeam.Api/data/
+data/

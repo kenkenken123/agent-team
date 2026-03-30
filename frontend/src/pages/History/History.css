@@ -1,0 +1,33 @@
+.history-page {
+  padding: 24px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.history-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.history-table .ant-table {
+  background: #161B22;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid #21262D;
+}
+
+.history-table .ant-table-thead > tr > th {
+  background: #21262D !important;
+  color: #8B949E;
+  border-bottom: 1px solid #30363D;
+}
+
+.history-table .ant-table-tbody > tr > td {
+  border-bottom: 1px solid #21262D;
+}
+
+.history-table .ant-table-tbody > tr:hover > td {
+  background: #21262D !important;
+}

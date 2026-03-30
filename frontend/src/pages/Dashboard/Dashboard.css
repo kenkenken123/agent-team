@@ -1,0 +1,51 @@
+.dashboard-page {
+  padding: 24px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.dashboard-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 24px;
+}
+
+.dashboard-title-area {
+  display: flex;
+  flex-direction: column;
+}
+
+.stats-row .stat-card {
+  background: #161B22;
+  border: 1px solid #21262D;
+  border-radius: 12px;
+  transition: border-color 0.2s, transform 0.2s;
+  cursor: default;
+}
+
+.stats-row .stat-card:hover {
+  border-color: #30363D;
+  transform: translateY(-2px);
+}
+
+.stat-label {
+  color: #8B949E;
+  font-size: 13px;
+}
+
+.stat-icon {
+  font-size: 20px;
+  margin-right: 4px;
+}
+
+.agent-icon { color: #58A6FF; }
+.running-icon { color: #3FB950; }
+.today-icon { color: #D29922; }
+.token-icon { color: #BC8CFF; }
+
+.info-card {
+  background: #161B22;
+  border: 1px solid #21262D;
+  border-radius: 12px;
+}

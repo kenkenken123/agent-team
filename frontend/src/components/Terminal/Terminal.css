@@ -1,0 +1,53 @@
+.terminal-header-bar {
+  height: 32px;
+  background: #161B22;
+  border-bottom: 1px solid #30363D;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 12px;
+  flex-shrink: 0;
+}
+
+.terminal-task-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.info-text {
+  font-size: 11px;
+  color: #8B949E;
+  font-family: 'Inter', sans-serif;
+}
+
+.terminal-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.term-btn {
+  background: transparent;
+  border: 1px solid #30363D;
+  color: #8B949E;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.term-btn:hover {
+  background: #30363D;
+  color: #C9D1D9;
+}
+
+.terminal-wrapper {
+  display: flex;
+  flex-direction: column;
+}

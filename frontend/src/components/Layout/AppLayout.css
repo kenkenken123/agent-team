@@ -1,0 +1,91 @@
+.app-layout {
+  height: 100vh;
+  overflow: hidden;
+}
+
+.app-sider {
+  background: #0D1117 !important;
+  border-right: 1px solid #21262D;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-sider .ant-layout-sider-trigger {
+  background: #161B22 !important;
+  border-top: 1px solid #21262D;
+  color: #8B949E;
+}
+
+.app-logo {
+  padding: 16px 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-bottom: 1px solid #21262D;
+  min-height: 64px;
+}
+
+.logo-icon {
+  font-size: 22px;
+  width: 36px;
+  height: 36px;
+  background: linear-gradient(135deg, #58A6FF, #BC8CFF);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.logo-text {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.app-menu {
+  background: transparent !important;
+  border-right: none !important;
+  flex: 1;
+  padding: 8px 0;
+}
+
+.app-menu .ant-menu-item {
+  color: #8B949E !important;
+  margin: 2px 8px !important;
+  border-radius: 8px !important;
+  transition: background 0.15s, color 0.15s;
+}
+
+.app-menu .ant-menu-item:hover {
+  background: #21262D !important;
+  color: #C9D1D9 !important;
+}
+
+.app-menu .ant-menu-item-selected {
+  background: #1C2128 !important;
+  color: #58A6FF !important;
+}
+
+.app-menu .ant-menu-item-selected::after {
+  display: none !important;
+}
+
+.app-content {
+  background: #0D1117;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+.app-content > * {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.app-version {
+  padding: 12px;
+  border-top: 1px solid #21262D;
+  text-align: center;
+}
