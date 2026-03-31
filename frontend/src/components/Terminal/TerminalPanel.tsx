@@ -16,6 +16,7 @@ interface TerminalPanelProps {
 const TerminalPanel: React.FC<TerminalPanelProps> = ({ task, onStatusChange }) => {
   const [wsStatus, setWsStatus] = useState<'connecting' | 'open' | 'closed'>('closed');
   const [thinkingLogs, setThinkingLogs] = useState<string[]>([]);
+  const thinkingCountRef = useRef<number>(0);
   const [modalIndex, setModalIndex] = useState<number | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -36,11 +37,10 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ task, onStatusChange }) =
         write(text.substring(lastIdx, match.index), instant);
       }
       const thinkingContent = match[1];
-      setThinkingLogs(prev => {
-        const nextLogs = [...prev, thinkingContent];
-        write(`\x1b[34m[✦ 思考过程已折叠，请在此处点击展示: http://show-thinking/${nextLogs.length - 1} ✦]\x1b[0m\r\n`, instant);
-        return nextLogs;
-      });
+      const currentIndex = thinkingCountRef.current;
+      thinkingCountRef.current += 1;
+      setThinkingLogs(prev => [...prev, thinkingContent]);
+      write(`\x1b[34m[✦ 思考过程已折叠，请在此处点击展示: http://show-thinking/${currentIndex} ✦]\x1b[0m\r\n`, instant);
       lastIdx = thinkingPattern.lastIndex;
     }
     if (lastIdx < text.length) {
@@ -65,6 +65,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ task, onStatusChange }) =
     loadedTaskIdRef.current = task.id;
     clear();
     setThinkingLogs([]);
+    thinkingCountRef.current = 0;
 
     write(`\x1b[34m┌─ Agent: ${task.agentName}\x1b[0m\r\n`, true);
     write(`\x1b[34m│  Task ID: ${task.id}\x1b[0m\r\n`, true);

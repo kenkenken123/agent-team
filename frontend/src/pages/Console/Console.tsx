@@ -431,6 +431,7 @@ const ConsolePage: React.FC = () => {
                 <Upload
                   name="file"
                   action="http://localhost:5000/api/Upload"
+                  data={selectedAgentId ? { agentId: selectedAgentId } : undefined}
                   showUploadList={false}
                   onChange={(info) => {
                     if (info.file.status === 'uploading') {

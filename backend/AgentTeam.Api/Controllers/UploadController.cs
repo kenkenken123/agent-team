@@ -1,3 +1,4 @@
+using AgentTeam.Api.Data;
 using Microsoft.AspNetCore.Mvc;
 
 namespace AgentTeam.Api.Controllers;
@@ -8,22 +9,35 @@ public class UploadController : ControllerBase
 {
     private readonly IWebHostEnvironment _env;
 
-    public UploadController(IWebHostEnvironment env)
+    private readonly AppDbContext _db;
+
+    public UploadController(IWebHostEnvironment env, AppDbContext db)
     {
         _env = env;
+        _db = db;
     }
 
     [HttpPost]
-    public async Task<IActionResult> UploadImage(IFormFile file)
+    public async Task<IActionResult> UploadImage([FromForm] IFormFile file, [FromForm] Guid? agentId)
     {
         if (file == null || file.Length == 0) 
             return BadRequest(new { error = "文件为空" });
 
         var ext = Path.GetExtension(file.FileName);
-        var yearMonth = DateTime.Now.ToString("yyyyMM");
         var uniqueId = Guid.NewGuid().ToString("N");
-        
-        var folder = Path.Combine(_env.ContentRootPath, "data", "uploads", yearMonth);
+        string baseFolder = Path.Combine(_env.ContentRootPath, "data", "uploads");
+        var yearMonthDay = DateTime.Now.ToString("yyyy/MM/dd").Replace('/', Path.DirectorySeparatorChar);
+
+        if (agentId.HasValue)
+        {
+            var agent = await _db.Agents.FindAsync(agentId.Value);
+            if (agent != null && !string.IsNullOrWhiteSpace(agent.WorkingDirectory))
+            {
+                baseFolder = Path.Combine(agent.WorkingDirectory, "temp", "pic");
+            }
+        }
+
+        var folder = Path.Combine(baseFolder, yearMonthDay);
         if (!Directory.Exists(folder))
             Directory.CreateDirectory(folder);
 
