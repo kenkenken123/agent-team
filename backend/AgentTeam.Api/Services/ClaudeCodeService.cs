@@ -280,13 +280,34 @@ public class ClaudeCodeService(
                     if (msgEl.TryGetProperty("type", out var msgTypeEl))
                     {
                         var msgType = msgTypeEl.GetString();
-                        if (msgType == "message" && msgEl.TryGetProperty("text", out var textEl))
+                        if (msgType == "message" && msgEl.TryGetProperty("content", out var contentList) && contentList.ValueKind == JsonValueKind.Array)
                         {
-                            extractedText = textEl.GetString();
-                        }
-                        else if (msgType == "tool_use" && msgEl.TryGetProperty("name", out var nameEl))
-                        {
-                            extractedText = $"\x1b[36m[Claude 正在调用工具: {nameEl.GetString()}]\x1b[0m\r\n";
+                            var sb = new System.Text.StringBuilder();
+                            foreach (var item in contentList.EnumerateArray())
+                            {
+                                if (item.TryGetProperty("type", out var itemTypeEl))
+                                {
+                                    var itemType = itemTypeEl.GetString();
+                                    if (itemType == "text" && item.TryGetProperty("text", out var textEl))
+                                    {
+                                        sb.Append(textEl.GetString());
+                                    }
+                                    else if (itemType == "tool_use" && item.TryGetProperty("name", out var nameEl))
+                                    {
+                                        sb.Append($"\x1b[36m[Claude 正在调用工具: {nameEl.GetString()}]\x1b[0m\r\n");
+                                    }
+                                    else if (itemType == "thinking" && item.TryGetProperty("thinking", out var thinkingEl))
+                                    {
+                                        // 思考过程以灰色显示
+                                        sb.Append($"\x1b[90m[思考: {thinkingEl.GetString()}]\x1b[0m\r\n");
+                                    }
+                                }
+                            }
+                            extractedText = sb.ToString();
+                            if (string.IsNullOrEmpty(extractedText))
+                            {
+                                extractedText = null;
+                            }
                         }
                     }
                 }
