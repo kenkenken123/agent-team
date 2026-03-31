@@ -14,11 +14,9 @@ public class AgentsController(AppDbContext db) : ControllerBase
     public async Task<IActionResult> GetAll()
     {
         var agents = await db.Agents
+            .Include(a => a.Template)
             .OrderByDescending(a => a.UpdatedAt)
-            .Select(a => new AgentDto(
-                a.Id, a.Name, a.Description, a.WorkingDirectory,
-                a.SystemPrompt, a.Model, a.MaxTurns, a.AllowedTools,
-                a.IsEnabled, a.CreatedAt, a.UpdatedAt))
+            .Select(a => ToDto(a))
             .ToListAsync();
         return Ok(agents);
     }
@@ -26,7 +24,7 @@ public class AgentsController(AppDbContext db) : ControllerBase
     [HttpGet("{id:guid}")]
     public async Task<IActionResult> GetById(Guid id)
     {
-        var a = await db.Agents.FindAsync(id);
+        var a = await db.Agents.Include(a => a.Template).FirstOrDefaultAsync(x => x.Id == id);
         if (a == null) return NotFound();
         return Ok(ToDto(a));
     }
@@ -37,15 +35,17 @@ public class AgentsController(AppDbContext db) : ControllerBase
         if (!Directory.Exists(req.WorkingDirectory))
             return BadRequest(new { error = $"工作目录不存在: {req.WorkingDirectory}" });
 
+        var template = await db.AgentTemplates.FindAsync(req.TemplateId);
+        if (template == null) return BadRequest(new { error = $"未找到Template: {req.TemplateId}" });
+
         var agent = new Agent
         {
             Name = req.Name,
-            Description = req.Description,
+            TemplateId = req.TemplateId,
+            Template = template,
             WorkingDirectory = req.WorkingDirectory,
-            SystemPrompt = req.SystemPrompt,
             Model = req.Model,
-            MaxTurns = req.MaxTurns,
-            AllowedTools = req.AllowedTools
+            MaxTurns = req.MaxTurns
         };
         db.Agents.Add(agent);
         await db.SaveChangesAsync();
@@ -55,19 +55,21 @@ public class AgentsController(AppDbContext db) : ControllerBase
     [HttpPut("{id:guid}")]
     public async Task<IActionResult> Update(Guid id, [FromBody] UpdateAgentRequest req)
     {
-        var agent = await db.Agents.FindAsync(id);
+        var agent = await db.Agents.Include(a => a.Template).FirstOrDefaultAsync(a => a.Id == id);
         if (agent == null) return NotFound();
 
         if (!Directory.Exists(req.WorkingDirectory))
             return BadRequest(new { error = $"工作目录不存在: {req.WorkingDirectory}" });
 
+        var template = await db.AgentTemplates.FindAsync(req.TemplateId);
+        if (template == null) return BadRequest(new { error = $"未找到Template: {req.TemplateId}" });
+
         agent.Name = req.Name;
-        agent.Description = req.Description;
+        agent.TemplateId = req.TemplateId;
+        agent.Template = template;
         agent.WorkingDirectory = req.WorkingDirectory;
-        agent.SystemPrompt = req.SystemPrompt;
         agent.Model = req.Model;
         agent.MaxTurns = req.MaxTurns;
-        agent.AllowedTools = req.AllowedTools;
         agent.IsEnabled = req.IsEnabled;
         agent.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync();
@@ -85,7 +87,7 @@ public class AgentsController(AppDbContext db) : ControllerBase
     }
 
     private static AgentDto ToDto(Agent a) => new(
-        a.Id, a.Name, a.Description, a.WorkingDirectory,
-        a.SystemPrompt, a.Model, a.MaxTurns, a.AllowedTools,
-        a.IsEnabled, a.CreatedAt, a.UpdatedAt);
+        a.Id, a.Name, a.TemplateId, 
+        a.Template == null ? null : new AgentTemplateDto(a.Template.Id, a.Template.Name, a.Template.Description, a.Template.SystemPrompt, a.Template.IsEnabled, a.Template.CreatedAt, a.Template.UpdatedAt), 
+        a.WorkingDirectory, a.Model, a.MaxTurns, a.IsEnabled, a.CreatedAt, a.UpdatedAt);
 }

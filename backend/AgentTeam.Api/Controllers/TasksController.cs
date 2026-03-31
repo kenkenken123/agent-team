@@ -48,7 +48,7 @@ public class TasksController(
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] CreateTaskRequest req)
     {
-        var agent = await db.Agents.FindAsync(req.AgentId);
+        var agent = await db.Agents.Include(a => a.Template).FirstOrDefaultAsync(a => a.Id == req.AgentId);
         if (agent == null) return BadRequest(new { error = "Agent 不存在" });
         if (!agent.IsEnabled) return BadRequest(new { error = "Agent 已被禁用" });
 

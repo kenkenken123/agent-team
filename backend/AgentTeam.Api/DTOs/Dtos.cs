@@ -2,15 +2,37 @@ namespace AgentTeam.Api.DTOs;
 
 // ───── Agent DTOs ─────
 
-public record AgentDto(
+public record AgentTemplateDto(
     Guid Id,
     string Name,
     string Description,
-    string WorkingDirectory,
     string SystemPrompt,
+    bool IsEnabled,
+    DateTime CreatedAt,
+    DateTime UpdatedAt
+);
+
+public record CreateAgentTemplateRequest(
+    string Name,
+    string Description,
+    string SystemPrompt
+);
+
+public record UpdateAgentTemplateRequest(
+    string Name,
+    string Description,
+    string SystemPrompt,
+    bool IsEnabled
+);
+
+public record AgentDto(
+    Guid Id,
+    string Name,
+    Guid TemplateId,
+    AgentTemplateDto? Template,
+    string WorkingDirectory,
     string Model,
     int? MaxTurns,
-    string? AllowedTools,
     bool IsEnabled,
     DateTime CreatedAt,
     DateTime UpdatedAt
@@ -18,22 +40,18 @@ public record AgentDto(
 
 public record CreateAgentRequest(
     string Name,
-    string Description,
+    Guid TemplateId,
     string WorkingDirectory,
-    string SystemPrompt,
     string Model,
-    int? MaxTurns,
-    string? AllowedTools
+    int? MaxTurns
 );
 
 public record UpdateAgentRequest(
     string Name,
-    string Description,
+    Guid TemplateId,
     string WorkingDirectory,
-    string SystemPrompt,
     string Model,
     int? MaxTurns,
-    string? AllowedTools,
     bool IsEnabled
 );
 

@@ -1,11 +1,11 @@
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import {
-  Layout, List, Button, Input, Select, Typography, Space,
+  Layout, List, Button, Select, Typography, Space,
   message, Popconfirm, Badge, Spin, Empty, Tooltip,
 } from 'antd';
 
 import {
-  PlayCircleOutlined, StopOutlined, ReloadOutlined,
+  PlayCircleOutlined, StopOutlined, ReloadOutlined, PlusOutlined,
   RobotOutlined, ClockCircleOutlined, CheckCircleOutlined,
   CloseCircleOutlined, ExclamationCircleOutlined, DeleteOutlined, PictureOutlined
 } from '@ant-design/icons';
@@ -14,14 +14,12 @@ import { Upload, Mentions } from 'antd';
 import { agentApi } from '../../api/agentApi';
 import { taskApi } from '../../api/taskApi';
 import type { Agent, AgentTask } from '../../types';
-import TaskStatusTag from '../../components/TaskStatusTag';
 import TerminalPanel from '../../components/Terminal/TerminalPanel';
 import './Console.css';
 
+import { MODELS } from '../Agents/Agents.tsx';
 const { Sider, Content } = Layout;
-const { TextArea } = Input;
 const { Text } = Typography;
-const { Option } = Mentions;
 
 
 const ConsolePage: React.FC = () => {
@@ -38,7 +36,7 @@ const ConsolePage: React.FC = () => {
   const prevSessionTaskCountRef = useRef(0);
   const prevSessionIdRef = useRef<string | null>(null);
   const isInitialLoadRef = useRef(true);
-  
+
   const [currentTake, setCurrentTake] = useState(5);
   const [totalTasks, setTotalTasks] = useState(0);
 
@@ -49,7 +47,7 @@ const ConsolePage: React.FC = () => {
       .then(res => res.json())
       .then(data => {
         if (data && data.commands) {
-           setAvailableCommands(data.commands.map((c: string) => c.replace('/', '')));
+          setAvailableCommands(data.commands.map((c: string) => c.replace('/', '')));
         }
       })
       .catch(console.error);
@@ -58,9 +56,9 @@ const ConsolePage: React.FC = () => {
   const currentSessionTasks = useMemo(() => {
     if (!selectedTask) return [];
     return tasks
-      .filter(t => 
-        t.claudeSessionId 
-          ? t.claudeSessionId === selectedTask.claudeSessionId 
+      .filter(t =>
+        t.claudeSessionId
+          ? t.claudeSessionId === selectedTask.claudeSessionId
           : t.id === selectedTask.id
       )
       .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
@@ -141,11 +139,6 @@ const ConsolePage: React.FC = () => {
     return () => clearInterval(pollRef.current);
   }, [loadTasks]);
 
-  const handleLoadMore = () => {
-    const nextTake = currentTake + 5;
-    setCurrentTake(nextTake);
-    loadTasks(nextTake);
-  };
 
   // 左侧任务列表去重：如果是同一个 claudeSessionId，只保留最新的一条代表该会话
   const siderTasks = useMemo(() => {
@@ -173,7 +166,7 @@ const ConsolePage: React.FC = () => {
       message.warning('请选择 Agent 并输入任务指令');
       return;
     }
-    
+
     // 如果没有手动选 continueSession，但当前选中的任务有 SessionId，则优先使用关联 Session
     const activeSessionId = continueSession || (selectedTask?.claudeSessionId ?? null);
 
@@ -187,7 +180,7 @@ const ConsolePage: React.FC = () => {
       message.success('任务已启动' + (activeSessionId ? ' (续写上下文)' : ''));
       setPrompt('');
       setContinueSession(null);
-      
+
       // 这里的逻辑：启动后我们把这个新任务设为选中任务，后续的 conversationTasks 过滤就会带上它
       setSelectedTask(task);
       await loadTasks();
@@ -265,8 +258,16 @@ const ConsolePage: React.FC = () => {
           <div className="task-sider-title">
             <Text style={{ color: '#8B949E', fontSize: 12 }}>任务历史 ({totalTasks})</Text>
             {selectedAgent && (
-              <Tooltip title="刷新列表">
-                <Button type="text" size="small" icon={<ReloadOutlined />} onClick={() => loadTasks()} />
+              <Tooltip title="新增会话">
+                <Button 
+                  type="text" 
+                  size="small" 
+                  icon={<PlusOutlined />} 
+                  onClick={() => {
+                    setSelectedTask(null);
+                    setContinueSession(null);
+                  }} 
+                />
               </Tooltip>
             )}
           </div>
@@ -274,15 +275,6 @@ const ConsolePage: React.FC = () => {
             <List
               className="task-list"
               dataSource={siderTasks}
-              loadMore={
-                totalTasks > tasks.length ? (
-                  <div style={{ textAlign: 'center', margin: '12px 0' }}>
-                    <Button type="link" onClick={handleLoadMore} loading={loadingTasks}>
-                      上拉加载更多...
-                    </Button>
-                  </div>
-                ) : null
-              }
               renderItem={task => (
                 <List.Item
                   className={`task-list-item ${selectedTask?.id === task.id ? 'active' : ''}`}
@@ -345,17 +337,17 @@ const ConsolePage: React.FC = () => {
             ) : (
               // 找出所有具有相同 SessionId 的任务，或者如果是单次任务则只显示选中的
               currentSessionTasks.map(task => (
-                  <div className="chat-message-group" key={task.id}>
-                    <div className="message-bubble user-bubble">
-                      <div className="bubble-content">{task.prompt}</div>
-                    </div>
-                    <div className="message-bubble assistant-bubble">
-                      <TerminalPanel task={task} onStatusChange={handleStatusChange} />
-                    </div>
+                <div className="chat-message-group" key={task.id}>
+                  <div className="message-bubble user-bubble">
+                    <div className="bubble-content">{task.prompt}</div>
                   </div>
-                ))
+                  <div className="message-bubble assistant-bubble">
+                    <TerminalPanel task={task} onStatusChange={handleStatusChange} />
+                  </div>
+                </div>
+              ))
             )}
-            
+
             {launching && (
               <div className="chat-message-group">
                 <div className="message-bubble user-bubble" style={{ opacity: 0.7 }}>
@@ -375,73 +367,107 @@ const ConsolePage: React.FC = () => {
 
 
           <div className="chat-input-wrapper">
-             <div className="chat-input-bar">
-                {continueSession && (
-                  <div className="continue-hint-badge">
-                    续写会话: {continueSession.substring(0, 8)} 
-                    <Button type="link" size="small" onClick={() => setContinueSession(null)}>取消</Button>
-                  </div>
-                )}
-                <Mentions
-                  className="chat-textarea"
-                  value={prompt}
-                  onChange={setPrompt}
-                  placeholder="给 Agent 发送指令... (可用 / 唤起智能补充指令) (Ctrl+Enter 发送)"
-                  autoSize={{ minRows: 1, maxRows: 6 }}
-                  prefix="/"
-                  options={availableCommands.map(cmd => ({
-                    value: cmd,
-                    label: `/${cmd}`
-                  }))}
-                  onKeyDown={e => {
-                    if (e.key === 'Enter' && e.ctrlKey) {
-                      e.preventDefault();
-                      handleLaunch();
+            {selectedAgent && (
+              <div style={{ marginBottom: 4, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Text style={{ color: '#8B949E', fontSize: 12 }}>当前模型:</Text>
+                <Select
+                  size="small"
+                  mode="tags"
+                  maxCount={1}
+                  value={selectedAgent.model ? [selectedAgent.model] : []}
+                  onChange={async (val) => {
+                    const newModel = val && val.length > 0 ? val[0] : '';
+                    if (!newModel) return;
+                    try {
+                      await agentApi.update(selectedAgent.id, {
+                        name: selectedAgent.name,
+                        templateId: selectedAgent.templateId,
+                        workingDirectory: selectedAgent.workingDirectory,
+                        model: newModel,
+                        maxTurns: selectedAgent.maxTurns,
+                        isEnabled: selectedAgent.isEnabled
+                      });
+                      message.success('已切换模型');
+                      agentApi.getAll().then(data => {
+                        const activeAgents = data.filter(a => a.isEnabled);
+                        setAgents(activeAgents);
+                      });
+                    } catch (e: any) {
+                      message.error('修改模型失败');
                     }
                   }}
-                  disabled={!selectedAgentId}
+                  style={{ width: 220, fontSize: 12 }}
+                  options={MODELS.map(m => ({ label: m, value: m }))}
                 />
-                <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '8px' }}>
-                  <Upload
-                    name="file"
-                    action="http://localhost:5000/api/Upload"
-                    showUploadList={false}
-                    onChange={(info) => {
-                      if (info.file.status === 'uploading') {
-                         message.loading({ content: '图片上传中...', key: 'uploading' });
-                      }
-                      if (info.file.status === 'done') {
-                         message.success({ content: '图片已添加！', key: 'uploading' });
-                         const path = info.file.response.url;
-                         setPrompt(prev => prev ? `${prev}\n请查看这张图片并分析: ${path}` : `请查看这张图片并分析: ${path}`);
-                      } else if (info.file.status === 'error') {
-                         message.error({ content: '图片上传失败', key: 'uploading' });
-                      }
-                    }}
-                  >
-                    <Button 
-                      icon={<PictureOutlined />} 
-                      style={{ marginTop: 4, background: 'transparent', borderColor: '#30363D', color: '#8B949E' }}
-                      disabled={!selectedAgentId}
-                      title="上传图片供 Claude 分析"
-                    />
-                  </Upload>
-                  
-                  <Button
-                    className="send-button"
-                    type="primary"
-                    icon={<PlayCircleOutlined />}
-                    loading={launching}
-                    onClick={handleLaunch}
-                    disabled={!selectedAgentId || !prompt.trim()}
-                  >
-                    发送 [Ctrl+Enter]
-                  </Button>
+              </div>
+            )}
+            <div className="chat-input-bar">
+              {continueSession && (
+                <div className="continue-hint-badge">
+                  续写会话: {continueSession.substring(0, 8)}
+                  <Button type="link" size="small" onClick={() => setContinueSession(null)}>取消</Button>
                 </div>
-             </div>
-             <div className="input-footer-text">
-                Claude Code 专注于代码执行和管理。按 Ctrl+Enter 快速启动。
-             </div>
+              )}
+              <Mentions
+                className="chat-textarea"
+                value={prompt}
+                onChange={setPrompt}
+                placeholder="给 Agent 发送指令... (可用 / 唤起智能补充指令) (Ctrl+Enter 发送)"
+                autoSize={{ minRows: 1, maxRows: 6 }}
+                prefix="/"
+                options={availableCommands.map(cmd => ({
+                  value: cmd,
+                  label: `/${cmd}`
+                }))}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && e.ctrlKey) {
+                    e.preventDefault();
+                    handleLaunch();
+                  }
+                }}
+                disabled={!selectedAgentId}
+              />
+              <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '8px' }}>
+                <Upload
+                  name="file"
+                  action="http://localhost:5000/api/Upload"
+                  showUploadList={false}
+                  onChange={(info) => {
+                    if (info.file.status === 'uploading') {
+                      message.loading({ content: '图片上传中...', key: 'uploading' });
+                    }
+                    if (info.file.status === 'done') {
+                      message.success({ content: '图片已添加！', key: 'uploading' });
+                      const path = info.file.response.url;
+                      setPrompt(prev => prev ? `${prev}\n请查看这张图片并分析: ${path}` : `请查看这张图片并分析: ${path}`);
+                    } else if (info.file.status === 'error') {
+                      message.error({ content: '图片上传失败', key: 'uploading' });
+                    }
+                  }}
+                >
+                  <Button
+                    icon={<PictureOutlined />}
+                    style={{ marginTop: 4, background: 'transparent', borderColor: '#30363D', color: '#8B949E' }}
+                    disabled={!selectedAgentId}
+                    title="上传图片供 Claude 分析"
+                  />
+                </Upload>
+
+                <Button
+                  className="send-button"
+                  type="primary"
+                  icon={<PlayCircleOutlined />}
+                  loading={launching}
+                  onClick={handleLaunch}
+                  disabled={!selectedAgentId || !prompt.trim()}
+                >
+                  发送 [Ctrl+Enter]
+                </Button>
+              </div>
+            </div>
+            <div className="input-footer-text">
+              Claude Code 专注于代码执行和管理。按 Ctrl+Enter 快速启动。
+            </div>
           </div>
         </Content>
       </Layout>

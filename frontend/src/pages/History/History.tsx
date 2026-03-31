@@ -28,7 +28,7 @@ const HistoryPage: React.FC = () => {
         agentId: filterAgentId,
         status: filterStatus,
       });
-      setTasks(data);
+      setTasks(data.items);
     } finally {
       setLoading(false);
     }

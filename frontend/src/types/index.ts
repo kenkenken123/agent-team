@@ -1,13 +1,32 @@
+export interface AgentTemplate {
+  id: string;
+  name: string;
+  description: string;
+  systemPrompt: string;
+  isEnabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateAgentTemplateRequest {
+  name: string;
+  description: string;
+  systemPrompt: string;
+}
+
+export interface UpdateAgentTemplateRequest extends CreateAgentTemplateRequest {
+  isEnabled: boolean;
+}
+
 // Agent 类型
 export interface Agent {
   id: string;
   name: string;
-  description: string;
+  templateId: string;
+  template?: AgentTemplate;
   workingDirectory: string;
-  systemPrompt: string;
   model: string;
   maxTurns?: number;
-  allowedTools?: string;
   isEnabled: boolean;
   createdAt: string;
   updatedAt: string;
@@ -15,12 +34,10 @@ export interface Agent {
 
 export interface CreateAgentRequest {
   name: string;
-  description: string;
+  templateId: string;
   workingDirectory: string;
-  systemPrompt: string;
   model: string;
   maxTurns?: number;
-  allowedTools?: string;
 }
 
 export interface UpdateAgentRequest extends CreateAgentRequest {

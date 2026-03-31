@@ -189,25 +189,14 @@ public class ClaudeCodeService(
             args.Append("--print ");
             args.Append($"--model {agent.Model} ");
 
-            if (!string.IsNullOrWhiteSpace(agent.SystemPrompt))
+            if (agent.Template != null && !string.IsNullOrWhiteSpace(agent.Template.SystemPrompt))
             {
-                var escapedPrompt = agent.SystemPrompt.Replace("\"", "\\\"");
+                var escapedPrompt = agent.Template.SystemPrompt.Replace("\"", "\\\"");
                 args.Append($"--system-prompt \"{escapedPrompt}\" ");
             }
 
             if (agent.MaxTurns.HasValue)
                 args.Append($"--max-turns {agent.MaxTurns} ");
-
-            if (!string.IsNullOrEmpty(agent.AllowedTools))
-            {
-                try
-                {
-                    var tools = JsonSerializer.Deserialize<string[]>(agent.AllowedTools);
-                    if (tools != null && tools.Length > 0)
-                        args.Append($"--allowedTools {string.Join(",", tools)} ");
-                }
-                catch { /* ignore */ }
-            }
         }
 
         // 追加 --output-format stream-json --verbose 以便解析流式的事件与 session_id
