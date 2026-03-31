@@ -35,7 +35,7 @@ public class AgentTemplatesController(AppDbContext db) : ControllerBase
         var t = new AgentTemplate
         {
             Name = req.Name,
-            Description = req.Description,
+            Description = req.Description ?? "",
             SystemPrompt = req.SystemPrompt
         };
         db.AgentTemplates.Add(t);
@@ -50,7 +50,7 @@ public class AgentTemplatesController(AppDbContext db) : ControllerBase
         if (t == null) return NotFound();
 
         t.Name = req.Name;
-        t.Description = req.Description;
+        t.Description = req.Description ?? "";
         t.SystemPrompt = req.SystemPrompt;
         t.IsEnabled = req.IsEnabled;
         t.UpdatedAt = DateTime.UtcNow;

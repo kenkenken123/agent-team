@@ -15,7 +15,7 @@ public class TasksController(
     OutputFileService outputFileService) : ControllerBase
 {
     [HttpGet]
-    public async Task<IActionResult> GetAll([FromQuery] Guid? agentId, [FromQuery] string? status, [FromQuery] int skip = 0, [FromQuery] int take = 5)
+    public async Task<IActionResult> GetAll([FromQuery] Guid? agentId, [FromQuery] string? status, [FromQuery] string? sessionId, [FromQuery] int skip = 0, [FromQuery] int take = 5)
     {
         var query = db.Tasks.Include(t => t.Agent).AsQueryable();
 
@@ -24,6 +24,9 @@ public class TasksController(
 
         if (!string.IsNullOrEmpty(status) && Enum.TryParse<AgentTeam.Api.Models.TaskStatus>(status, true, out var s))
             query = query.Where(t => t.Status == s);
+
+        if (!string.IsNullOrEmpty(sessionId))
+            query = query.Where(t => t.ClaudeSessionId != null && t.ClaudeSessionId.Contains(sessionId));
 
         var total = await query.CountAsync();
 

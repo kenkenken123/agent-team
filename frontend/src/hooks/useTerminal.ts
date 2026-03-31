@@ -3,7 +3,10 @@ import { useRef, useCallback } from 'react';
 import type { Terminal } from '@xterm/xterm';
 import type { FitAddon } from '@xterm/addon-fit';
 
-export function useTerminal(containerRef: React.RefObject<HTMLDivElement | null>) {
+export function useTerminal(
+  containerRef: React.RefObject<HTMLDivElement | null>,
+  onLinkClick?: (uri: string) => void
+) {
   const termRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
   const bufferRef = useRef<string>('');
@@ -51,7 +54,14 @@ export function useTerminal(containerRef: React.RefObject<HTMLDivElement | null>
     });
 
     const fitAddon = new FitAddon();
-    const webLinksAddon = new WebLinksAddon();
+    const webLinksAddon = new WebLinksAddon((e, uri) => {
+      if (uri.startsWith('http://show-thinking/')) {
+        e.preventDefault();
+        onLinkClick?.(uri);
+      } else {
+        window.open(uri, '_blank');
+      }
+    });
     term.loadAddon(fitAddon);
     term.loadAddon(webLinksAddon);
     

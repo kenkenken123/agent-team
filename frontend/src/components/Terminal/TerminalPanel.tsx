@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useCallback, useState } from 'react';
+import { Modal } from 'antd';
 
 import { useTerminal } from '../../hooks/useTerminal';
 import { useTaskWebSocket } from '../../hooks/useTaskWebSocket';
@@ -15,9 +16,14 @@ interface TerminalPanelProps {
 const TerminalPanel: React.FC<TerminalPanelProps> = ({ task, onStatusChange }) => {
   const [wsStatus, setWsStatus] = useState<'connecting' | 'open' | 'closed'>('closed');
   const [thinkingLogs, setThinkingLogs] = useState<string[]>([]);
+  const [modalIndex, setModalIndex] = useState<number | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const { init, write, clear, fit, dispose } = useTerminal(containerRef);
+  const { init, write, clear, fit, dispose } = useTerminal(containerRef, (uri) => {
+    const parts = uri.split('/');
+    const idxStr = parts[parts.length - 1];
+    setModalIndex(parseInt(idxStr, 10));
+  });
   const loadedTaskIdRef = useRef<string | null>(null);
 
   // 自定义输出处理器，分离提取思考日志
@@ -30,8 +36,11 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ task, onStatusChange }) =
         write(text.substring(lastIdx, match.index), instant);
       }
       const thinkingContent = match[1];
-      setThinkingLogs(prev => [...prev, thinkingContent]);
-      write('\x1b[34m[✦ 思考过程已折叠，请在上方折叠面板查看 ✦]\x1b[0m\r\n', instant);
+      setThinkingLogs(prev => {
+        const nextLogs = [...prev, thinkingContent];
+        write(`\x1b[34m[✦ 思考过程已折叠，请在此处点击展示: http://show-thinking/${nextLogs.length - 1} ✦]\x1b[0m\r\n`, instant);
+        return nextLogs;
+      });
       lastIdx = thinkingPattern.lastIndex;
     }
     if (lastIdx < text.length) {
@@ -128,32 +137,28 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ task, onStatusChange }) =
         </div>
       )}
       
-      {/* 渲染折叠的思考过程面板 */}
-      {thinkingLogs.length > 0 && task && (
-        <div style={{ backgroundColor: '#1E1E1E', borderBottom: '1px solid #30363D', padding: '8px 12px' }}>
-          {thinkingLogs.map((log, idx) => (
-            <details key={idx} style={{ marginBottom: idx === thinkingLogs.length - 1 ? 0 : 8 }}>
-              <summary style={{ cursor: 'pointer', color: '#8B949E', fontSize: '12px', userSelect: 'none' }}>
-                ✦ Claude 思考过程 ({idx + 1}) - 展开查看详情
-              </summary>
-              <pre style={{ 
-                margin: '8px 0 0', 
-                padding: '8px', 
-                background: '#0D1117', 
-                borderRadius: '4px', 
-                color: '#8B949E', 
-                fontSize: '11px', 
-                whiteSpace: 'pre-wrap',
-                wordWrap: 'break-word',
-                maxHeight: '300px',
-                overflowY: 'auto'
-              }}>
-                {log}
-              </pre>
-            </details>
-          ))}
-        </div>
-      )}
+      <Modal 
+        title={`Claude 思考过程 (${(modalIndex ?? 0) + 1})`} 
+        open={modalIndex !== null} 
+        onCancel={() => setModalIndex(null)}
+        footer={null}
+        width={800}
+      >
+        <pre style={{
+          margin: 0,
+          padding: '12px',
+          background: '#0D1117',
+          borderRadius: '6px',
+          color: '#8B949E',
+          fontSize: '12px',
+          whiteSpace: 'pre-wrap',
+          wordWrap: 'break-word',
+          maxHeight: '60vh',
+          overflowY: 'auto'
+        }}>
+          {modalIndex !== null && thinkingLogs[modalIndex]}
+        </pre>
+      </Modal>
 
       <div ref={containerRef} className="terminal-container" style={{ display: task ? 'block' : 'none' }} />
     </div>

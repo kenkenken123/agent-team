@@ -260,6 +260,40 @@ public class ClaudeCodeService(
             using var doc = JsonDocument.Parse(line);
             var root = doc.RootElement;
 
+            // ===== 提取 usage / token 统计 =====
+            JsonElement? usageEl = null;
+            if (root.TryGetProperty("usage", out var u1)) usageEl = u1;
+            else if (root.TryGetProperty("message", out var m) && m.TryGetProperty("usage", out var u2)) usageEl = u2;
+
+            if (usageEl.HasValue)
+            {
+                int inputTokens = 0, outputTokens = 0;
+                if (usageEl.Value.ValueKind == JsonValueKind.Object)
+                {
+                    if (usageEl.Value.TryGetProperty("input_tokens", out var inEl) && inEl.ValueKind == JsonValueKind.Number)
+                        inputTokens = inEl.GetInt32();
+                    if (usageEl.Value.TryGetProperty("output_tokens", out var outEl) && outEl.ValueKind == JsonValueKind.Number)
+                        outputTokens = outEl.GetInt32();
+
+                    if (inputTokens > 0 || outputTokens > 0)
+                    {
+                        _ = Task.Run(async () =>
+                        {
+                            using var scope = scopeFactory.CreateScope();
+                            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+                            var t = await db.Tasks.FindAsync(taskId);
+                            if (t != null)
+                            {
+                                t.InputTokens = (t.InputTokens ?? 0) + inputTokens;
+                                t.OutputTokens = (t.OutputTokens ?? 0) + outputTokens;
+                                t.TokensUsed = t.InputTokens + t.OutputTokens;
+                                await db.SaveChangesAsync();
+                            }
+                        });
+                    }
+                }
+            }
+
             // ===== 实时流模式 (stream-json) 处理 =====
             if (root.TryGetProperty("type", out var typeEl))
             {
@@ -350,32 +384,7 @@ public class ClaudeCodeService(
                 }
             }
 
-            // 提取 usage / token 统计
-            if (root.TryGetProperty("usage", out var usageEl))
-            {
-                int? inputTokens = null, outputTokens = null;
-                if (usageEl.TryGetProperty("input_tokens", out var inEl))
-                    inputTokens = inEl.GetInt32();
-                if (usageEl.TryGetProperty("output_tokens", out var outEl))
-                    outputTokens = outEl.GetInt32();
 
-                if (inputTokens.HasValue || outputTokens.HasValue)
-                {
-                    _ = Task.Run(async () =>
-                    {
-                        using var scope = scopeFactory.CreateScope();
-                        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-                        var t = await db.Tasks.FindAsync(taskId);
-                        if (t != null)
-                        {
-                            t.InputTokens = inputTokens;
-                            t.OutputTokens = outputTokens;
-                            t.TokensUsed = (inputTokens ?? 0) + (outputTokens ?? 0);
-                            await db.SaveChangesAsync();
-                        }
-                    });
-                }
-            }
             
             // 提取 result 输出给前端
             if (root.TryGetProperty("result", out var resultEl) && resultEl.ValueKind == JsonValueKind.String)

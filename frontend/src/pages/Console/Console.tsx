@@ -368,7 +368,7 @@ const ConsolePage: React.FC = () => {
 
           <div className="chat-input-wrapper">
             {selectedAgent && (
-              <div style={{ marginBottom: 4, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ padding: '0 16px', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
                 <Text style={{ color: '#8B949E', fontSize: 12 }}>当前模型:</Text>
                 <Select
                   size="small"
@@ -453,16 +453,31 @@ const ConsolePage: React.FC = () => {
                   />
                 </Upload>
 
-                <Button
-                  className="send-button"
-                  type="primary"
-                  icon={<PlayCircleOutlined />}
-                  loading={launching}
-                  onClick={handleLaunch}
-                  disabled={!selectedAgentId || !prompt.trim()}
-                >
-                  发送 [Ctrl+Enter]
-                </Button>
+                {launching || selectedTask?.status === 'Running' ? (
+                  <Button
+                    className="send-button"
+                    type="primary"
+                    danger
+                    icon={<StopOutlined />}
+                    onClick={() => {
+                      if (selectedTask) handleCancel(selectedTask.id);
+                      setLaunching(false);
+                    }}
+                  >
+                    停止任务
+                  </Button>
+                ) : (
+                  <Button
+                    className="send-button"
+                    type="primary"
+                    icon={<PlayCircleOutlined />}
+                    loading={launching}
+                    onClick={handleLaunch}
+                    disabled={!selectedAgentId || !prompt.trim()}
+                  >
+                    发送 [Ctrl+Enter]
+                  </Button>
+                )}
               </div>
             </div>
             <div className="input-footer-text">

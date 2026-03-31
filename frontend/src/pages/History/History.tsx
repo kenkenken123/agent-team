@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Table, Select, Typography, Space, Tooltip } from 'antd';
+import { Table, Select, Typography, Space, Tooltip, Input } from 'antd';
 import { RobotOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { agentApi } from '../../api/agentApi';
@@ -15,6 +15,7 @@ const HistoryPage: React.FC = () => {
   const [tasks, setTasks] = useState<AgentTask[]>([]);
   const [filterAgentId, setFilterAgentId] = useState<string | undefined>();
   const [filterStatus, setFilterStatus] = useState<string | undefined>();
+  const [filterSessionId, setFilterSessionId] = useState<string | undefined>();
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -27,6 +28,7 @@ const HistoryPage: React.FC = () => {
       const data = await taskApi.getAll({
         agentId: filterAgentId,
         status: filterStatus,
+        sessionId: filterSessionId,
       });
       setTasks(data.items);
     } finally {
@@ -34,7 +36,7 @@ const HistoryPage: React.FC = () => {
     }
   };
 
-  useEffect(() => { load(); }, [filterAgentId, filterStatus]);
+  useEffect(() => { load(); }, [filterAgentId, filterStatus, filterSessionId]);
 
   const columns: ColumnsType<AgentTask> = [
     {
@@ -103,6 +105,12 @@ const HistoryPage: React.FC = () => {
       <div className="history-header">
         <Title level={3} style={{ margin: 0, color: '#F0F6FC' }}>任务历史</Title>
         <Space>
+          <Input.Search
+            style={{ width: 220 }}
+            placeholder="搜索会话 ID"
+            allowClear
+            onSearch={val => setFilterSessionId(val || undefined)}
+          />
           <Select
             style={{ width: 180 }}
             placeholder="筛选 Agent"

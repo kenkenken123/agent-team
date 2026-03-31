@@ -14,13 +14,13 @@ public record AgentTemplateDto(
 
 public record CreateAgentTemplateRequest(
     string Name,
-    string Description,
+    string? Description,
     string SystemPrompt
 );
 
 public record UpdateAgentTemplateRequest(
     string Name,
-    string Description,
+    string? Description,
     string SystemPrompt,
     bool IsEnabled
 );
