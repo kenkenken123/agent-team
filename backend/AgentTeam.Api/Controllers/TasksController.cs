@@ -15,7 +15,7 @@ public class TasksController(
     OutputFileService outputFileService) : ControllerBase
 {
     [HttpGet]
-    public async Task<IActionResult> GetAll([FromQuery] Guid? agentId, [FromQuery] string? status)
+    public async Task<IActionResult> GetAll([FromQuery] Guid? agentId, [FromQuery] string? status, [FromQuery] int skip = 0, [FromQuery] int take = 5)
     {
         var query = db.Tasks.Include(t => t.Agent).AsQueryable();
 
@@ -25,12 +25,16 @@ public class TasksController(
         if (!string.IsNullOrEmpty(status) && Enum.TryParse<AgentTeam.Api.Models.TaskStatus>(status, true, out var s))
             query = query.Where(t => t.Status == s);
 
+        var total = await query.CountAsync();
+
         var tasks = await query
             .OrderByDescending(t => t.CreatedAt)
+            .Skip(skip)
+            .Take(take)
             .Select(t => ToDto(t))
             .ToListAsync();
 
-        return Ok(tasks);
+        return Ok(new { items = tasks, total });
     }
 
     [HttpGet("{id:guid}")]

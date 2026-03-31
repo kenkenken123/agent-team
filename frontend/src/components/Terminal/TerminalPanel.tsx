@@ -14,10 +14,30 @@ interface TerminalPanelProps {
 
 const TerminalPanel: React.FC<TerminalPanelProps> = ({ task, onStatusChange }) => {
   const [wsStatus, setWsStatus] = useState<'connecting' | 'open' | 'closed'>('closed');
+  const [thinkingLogs, setThinkingLogs] = useState<string[]>([]);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const { init, write, clear, fit, dispose } = useTerminal(containerRef);
   const loadedTaskIdRef = useRef<string | null>(null);
+
+  // 自定义输出处理器，分离提取思考日志
+  const processOutput = useCallback((text: string, instant = false) => {
+    const thinkingPattern = /\x1b\[90m\[思考: ([\s\S]*?)\]\x1b\[0m\r\n/g;
+    let match;
+    let lastIdx = 0;
+    while ((match = thinkingPattern.exec(text)) !== null) {
+      if (match.index > lastIdx) {
+        write(text.substring(lastIdx, match.index), instant);
+      }
+      const thinkingContent = match[1];
+      setThinkingLogs(prev => [...prev, thinkingContent]);
+      write('\x1b[34m[✦ 思考过程已折叠，请在上方折叠面板查看 ✦]\x1b[0m\r\n', instant);
+      lastIdx = thinkingPattern.lastIndex;
+    }
+    if (lastIdx < text.length) {
+      write(text.substring(lastIdx), instant);
+    }
+  }, [write]);
 
   // 初始化终端
   useEffect(() => {
@@ -35,6 +55,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ task, onStatusChange }) =
     if (!task || task.id === loadedTaskIdRef.current) return;
     loadedTaskIdRef.current = task.id;
     clear();
+    setThinkingLogs([]);
 
     write(`\x1b[34m┌─ Agent: ${task.agentName}\x1b[0m\r\n`, true);
     write(`\x1b[34m│  Task ID: ${task.id}\x1b[0m\r\n`, true);
@@ -43,7 +64,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ task, onStatusChange }) =
 
     // 始终尝试加载历史/存量输出
     taskApi.getOutput(task.id).then(content => {
-      if (content) write(content, true);
+      if (content) processOutput(content, true);
       else if (task.status !== 'Running') {
         write('\x1b[90m[暂无历史输出]\x1b[0m\r\n', true);
       }
@@ -55,7 +76,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ task, onStatusChange }) =
 
   const handleWsMessage = useCallback((msg: WsMessage) => {
     if (msg.type === 'output') {
-      write(msg.content);
+      processOutput(msg.content);
     } else if (msg.type === 'status') {
       const colors: Record<string, string> = {
         Running: '\x1b[33m',
@@ -101,12 +122,39 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ task, onStatusChange }) =
         </div>
       )}
       {!task && (
-
         <div className="terminal-empty">
           <div className="terminal-empty-icon">{'>'}_</div>
           <p>选择一个运行中或历史任务查看输出</p>
         </div>
       )}
+      
+      {/* 渲染折叠的思考过程面板 */}
+      {thinkingLogs.length > 0 && task && (
+        <div style={{ backgroundColor: '#1E1E1E', borderBottom: '1px solid #30363D', padding: '8px 12px' }}>
+          {thinkingLogs.map((log, idx) => (
+            <details key={idx} style={{ marginBottom: idx === thinkingLogs.length - 1 ? 0 : 8 }}>
+              <summary style={{ cursor: 'pointer', color: '#8B949E', fontSize: '12px', userSelect: 'none' }}>
+                ✦ Claude 思考过程 ({idx + 1}) - 展开查看详情
+              </summary>
+              <pre style={{ 
+                margin: '8px 0 0', 
+                padding: '8px', 
+                background: '#0D1117', 
+                borderRadius: '4px', 
+                color: '#8B949E', 
+                fontSize: '11px', 
+                whiteSpace: 'pre-wrap',
+                wordWrap: 'break-word',
+                maxHeight: '300px',
+                overflowY: 'auto'
+              }}>
+                {log}
+              </pre>
+            </details>
+          ))}
+        </div>
+      )}
+
       <div ref={containerRef} className="terminal-container" style={{ display: task ? 'block' : 'none' }} />
     </div>
   );

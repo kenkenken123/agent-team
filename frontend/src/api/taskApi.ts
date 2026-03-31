@@ -2,8 +2,8 @@ import api from './request';
 import type { AgentTask, CreateTaskRequest, OverviewStats } from '../types';
 
 export const taskApi = {
-  getAll: (params?: { agentId?: string; status?: string }) =>
-    api.get<AgentTask[]>('/api/tasks', { params }).then(r => r.data),
+  getAll: (params?: { agentId?: string; status?: string; skip?: number; take?: number }) =>
+    api.get<{ items: AgentTask[], total: number }>('/api/tasks', { params }).then(r => r.data),
   getById: (id: string) => api.get<AgentTask>(`/api/tasks/${id}`).then(r => r.data),
   create: (req: CreateTaskRequest) => api.post<AgentTask>('/api/tasks', req).then(r => r.data),
   cancel: (id: string) => api.post(`/api/tasks/${id}/cancel`),

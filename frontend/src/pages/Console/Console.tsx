@@ -38,6 +38,9 @@ const ConsolePage: React.FC = () => {
   const prevSessionTaskCountRef = useRef(0);
   const prevSessionIdRef = useRef<string | null>(null);
   const isInitialLoadRef = useRef(true);
+  
+  const [currentTake, setCurrentTake] = useState(5);
+  const [totalTasks, setTotalTasks] = useState(0);
 
   // 添加命令状态
   const [availableCommands, setAvailableCommands] = useState<string[]>([]);
@@ -112,25 +115,37 @@ const ConsolePage: React.FC = () => {
 
 
   // 加载选中 Agent 的任务列表
-  const loadTasks = useCallback(async () => {
+  const loadTasks = useCallback(async (takeOverride?: number) => {
     if (!selectedAgentId) return;
     setLoadingTasks(true);
     try {
-      const data = await taskApi.getAll({ agentId: selectedAgentId });
-      setTasks(data);
+      const take = takeOverride || currentTake;
+      const data = await taskApi.getAll({ agentId: selectedAgentId, skip: 0, take });
+      setTasks(data.items);
+      setTotalTasks(data.total);
       // 同步更新已选任务的状态
-      setSelectedTask(prev => prev ? data.find(t => t.id === prev.id) ?? prev : null);
+      setSelectedTask(prev => prev ? data.items.find((t: AgentTask) => t.id === prev.id) ?? prev : null);
     } finally {
       setLoadingTasks(false);
     }
+  }, [selectedAgentId, currentTake]);
+
+  useEffect(() => {
+    setCurrentTake(5); // 重置选定 Agent 时的默认条数
   }, [selectedAgentId]);
 
   useEffect(() => {
     loadTasks();
     clearInterval(pollRef.current);
-    pollRef.current = setInterval(loadTasks, 5000);
+    pollRef.current = setInterval(() => loadTasks(), 5000);
     return () => clearInterval(pollRef.current);
   }, [loadTasks]);
+
+  const handleLoadMore = () => {
+    const nextTake = currentTake + 5;
+    setCurrentTake(nextTake);
+    loadTasks(nextTake);
+  };
 
   // 左侧任务列表去重：如果是同一个 claudeSessionId，只保留最新的一条代表该会话
   const siderTasks = useMemo(() => {
@@ -248,10 +263,10 @@ const ConsolePage: React.FC = () => {
             />
           </div>
           <div className="task-sider-title">
-            <Text style={{ color: '#8B949E', fontSize: 12 }}>任务历史</Text>
+            <Text style={{ color: '#8B949E', fontSize: 12 }}>任务历史 ({totalTasks})</Text>
             {selectedAgent && (
               <Tooltip title="刷新列表">
-                <Button type="text" size="small" icon={<ReloadOutlined />} onClick={loadTasks} />
+                <Button type="text" size="small" icon={<ReloadOutlined />} onClick={() => loadTasks()} />
               </Tooltip>
             )}
           </div>
@@ -259,6 +274,15 @@ const ConsolePage: React.FC = () => {
             <List
               className="task-list"
               dataSource={siderTasks}
+              loadMore={
+                totalTasks > tasks.length ? (
+                  <div style={{ textAlign: 'center', margin: '12px 0' }}>
+                    <Button type="link" onClick={handleLoadMore} loading={loadingTasks}>
+                      上拉加载更多...
+                    </Button>
+                  </div>
+                ) : null
+              }
               renderItem={task => (
                 <List.Item
                   className={`task-list-item ${selectedTask?.id === task.id ? 'active' : ''}`}
