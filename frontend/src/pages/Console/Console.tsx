@@ -9,7 +9,7 @@ import {
   RobotOutlined, ClockCircleOutlined, CheckCircleOutlined,
   CloseCircleOutlined, ExclamationCircleOutlined, DeleteOutlined, PictureOutlined
 } from '@ant-design/icons';
-import { Upload } from 'antd';
+import { Upload, Mentions } from 'antd';
 
 import { agentApi } from '../../api/agentApi';
 import { taskApi } from '../../api/taskApi';
@@ -21,6 +21,7 @@ import './Console.css';
 const { Sider, Content } = Layout;
 const { TextArea } = Input;
 const { Text } = Typography;
+const { Option } = Mentions;
 
 
 const ConsolePage: React.FC = () => {
@@ -37,6 +38,19 @@ const ConsolePage: React.FC = () => {
   const prevSessionTaskCountRef = useRef(0);
   const prevSessionIdRef = useRef<string | null>(null);
   const isInitialLoadRef = useRef(true);
+
+  // 添加命令状态
+  const [availableCommands, setAvailableCommands] = useState<string[]>([]);
+  useEffect(() => {
+    fetch('http://localhost:5000/api/commands')
+      .then(res => res.json())
+      .then(data => {
+        if (data && data.commands) {
+           setAvailableCommands(data.commands.map((c: string) => c.replace('/', '')));
+        }
+      })
+      .catch(console.error);
+  }, []);
 
   const currentSessionTasks = useMemo(() => {
     if (!selectedTask) return [];
@@ -344,12 +358,17 @@ const ConsolePage: React.FC = () => {
                     <Button type="link" size="small" onClick={() => setContinueSession(null)}>取消</Button>
                   </div>
                 )}
-                <TextArea
+                <Mentions
                   className="chat-textarea"
                   value={prompt}
-                  onChange={e => setPrompt(e.target.value)}
-                  placeholder="向 Agent 发送工作指令... 支持选图让其分析 (Ctrl+Enter 发送)"
+                  onChange={setPrompt}
+                  placeholder="给 Agent 发送指令... (可用 / 唤起智能补充指令) (Ctrl+Enter 发送)"
                   autoSize={{ minRows: 1, maxRows: 6 }}
+                  prefix="/"
+                  options={availableCommands.map(cmd => ({
+                    value: cmd,
+                    label: `/${cmd}`
+                  }))}
                   onKeyDown={e => {
                     if (e.key === 'Enter' && e.ctrlKey) {
                       e.preventDefault();

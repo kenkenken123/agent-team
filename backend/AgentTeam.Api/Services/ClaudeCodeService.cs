@@ -180,8 +180,8 @@ public class ClaudeCodeService(
 
         if (!string.IsNullOrEmpty(task.ClaudeSessionId))
         {
-            // 恢复上下文
-            args.Append($"--resume {task.ClaudeSessionId} ");
+            // 恢复上下文, 注意必须加上 --print (-p) 以防陷入交互模式
+            args.Append($"--resume {task.ClaudeSessionId} --print ");
         }
         else
         {
