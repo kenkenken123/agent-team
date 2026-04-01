@@ -175,10 +175,13 @@ const ConsolePage: React.FC = () => {
       const task = await taskApi.create({
         agentId: selectedAgentId,
         prompt: prompt.trim(),
-        resumeSessionId: activeSessionId || undefined
+        resumeSessionId: activeSessionId || undefined,
+        forceNewSession: !activeSessionId // 关键：如果没有指定 Session，强制新开
       });
+      
       message.success('任务已启动' + (activeSessionId ? ' (续写上下文)' : ''));
       setPrompt('');
+      // 启动后立即清除用于显示“续写中”的标记，因为任务已经接管了 Session
       setContinueSession(null);
 
       // 这里的逻辑：启动后我们把这个新任务设为选中任务，后续的 conversationTasks 过滤就会带上它
@@ -372,11 +375,8 @@ const ConsolePage: React.FC = () => {
                 <Text style={{ color: '#8B949E', fontSize: 12 }}>当前模型:</Text>
                 <Select
                   size="small"
-                  mode="tags"
-                  maxCount={1}
-                  value={selectedAgent.model ? [selectedAgent.model] : []}
-                  onChange={async (val) => {
-                    const newModel = val && val.length > 0 ? val[0] : '';
+                  value={selectedAgent.model}
+                  onChange={async (newModel) => {
                     if (!newModel) return;
                     try {
                       await agentApi.update(selectedAgent.id, {

@@ -1,5 +1,5 @@
 .terminal-header-bar {
-  height: 32px;
+  height: 36px;
   background: #161B22;
   border-bottom: 1px solid #30363D;
   display: flex;
@@ -7,6 +7,7 @@
   justify-content: space-between;
   padding: 0 12px;
   flex-shrink: 0;
+  border-radius: 8px 8px 0 0;
 }
 
 .terminal-task-info {
@@ -19,16 +20,18 @@
   width: 8px;
   height: 8px;
   border-radius: 50%;
+  box-shadow: 0 0 4px rgba(0,0,0,0.5);
 }
 
 .info-text {
-  font-size: 11px;
+  font-size: 12px;
   color: #8B949E;
-  font-family: 'Inter', sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial;
 }
 
 .terminal-actions {
   display: flex;
+  align-items: center;
   gap: 8px;
 }
 
@@ -37,17 +40,165 @@
   border: 1px solid #30363D;
   color: #8B949E;
   font-size: 11px;
-  padding: 2px 8px;
+  padding: 2px 10px;
   border-radius: 4px;
   cursor: pointer;
+  transition: all 0.2s;
 }
 
 .term-btn:hover {
   background: #30363D;
   color: #C9D1D9;
+  border-color: #58A6FF;
+}
+
+.term-icon-btn {
+  color: #8B949E !important;
+}
+
+.term-icon-btn:hover {
+  color: #58A6FF !important;
+  background: rgba(88, 166, 255, 0.1) !important;
 }
 
 .terminal-wrapper {
   display: flex;
   flex-direction: column;
+  background: #0D1117;
+  border: 1px solid #30363D;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 12px 0;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  width: 100%;
+}
+
+.terminal-wrapper.expanded {
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+}
+
+.terminal-content {
+  position: relative;
+  width: 100%;
+}
+
+.terminal-preview-overlay {
+  padding: 12px 16px;
+  cursor: pointer;
+  transition: background 0.2s;
+  min-height: 80px;
+}
+
+.terminal-preview-overlay:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.preview-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  color: #58A6FF;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.preview-text {
+  color: #8B949E;
+  font-size: 13px;
+  line-height: 1.5;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.terminal-container {
+  padding: 8px;
+  background: #0D1117;
+  width: 100%;
+}
+
+.markdown-body {
+  color: #C9D1D9;
+  font-size: 14px;
+  line-height: 1.6;
+  max-height: 70vh;
+  overflow-y: auto;
+  padding: 16px;
+  width: 100%;
+}
+
+.markdown-body.preview-mode {
+  padding: 0;
+  max-height: 250px;
+  overflow: hidden;
+  position: relative;
+  mask-image: linear-gradient(to bottom, black 80%, transparent 100%);
+}
+
+.markdown-body.expanded-mode {
+  padding: 16px;
+  max-height: 500px;
+  background: #0D1117;
+}
+
+.markdown-body pre {
+  background-color: #161b22 !important;
+  border-radius: 6px;
+  padding: 12px;
+  overflow: auto;
+  margin: 12px 0;
+  width: 100%;
+}
+
+.code-block-wrapper {
+  margin: 0 !important;
+  border-radius: 6px;
+  width: 100%;
+}
+
+.markdown-body code {
+  font-family: ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, Liberation Mono, monospace;
+  font-size: 85%;
+  background-color: rgba(110,118,129,0.4);
+  padding: 0.2em 0.4em;
+  border-radius: 6px;
+}
+
+.markdown-body h1, .markdown-body h2, .markdown-body h3 {
+  color: #58A6FF;
+  margin-top: 24px;
+  margin-bottom: 16px;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.markdown-body p {
+  margin-top: 0;
+  margin-bottom: 16px;
+}
+
+.thinking-modal .ant-modal-content {
+  background-color: #0D1117;
+}
+
+.thinking-modal .ant-modal-header {
+  background-color: #161B22;
+  border-bottom: 1px solid #30363D;
+  padding: 12px 24px;
+}
+
+.thinking-modal .ant-modal-title {
+  color: #C9D1D9;
+}
+
+.thinking-modal .ant-modal-close {
+  color: #8B949E;
+}
+
+.thinking-modal .ant-modal-footer {
+  border-top: 1px solid #30363D;
+  padding: 12px 24px;
 }

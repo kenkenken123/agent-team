@@ -1,5 +1,18 @@
-import React, { useEffect, useRef, useCallback, useState } from 'react';
-import { Modal } from 'antd';
+import React, { useEffect, useRef, useCallback, useState, useMemo } from 'react';
+import { Modal, Button, Typography, Space, Tooltip } from 'antd';
+import { 
+  ExpandAltOutlined, 
+  ShrinkOutlined, 
+  ConsoleSqlOutlined,
+  CheckCircleFilled,
+  InfoCircleFilled,
+  BulbOutlined,
+  CodeOutlined
+} from '@ant-design/icons';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 
 import { useTerminal } from '../../hooks/useTerminal';
 import { useTaskWebSocket } from '../../hooks/useTaskWebSocket';
@@ -7,6 +20,8 @@ import type { AgentTask, WsMessage } from '../../types';
 import { taskApi } from '../../api/taskApi';
 import '@xterm/xterm/css/xterm.css';
 import './Terminal.css';
+
+const { Text } = Typography;
 
 interface TerminalPanelProps {
   task: AgentTask | null;
@@ -19,6 +34,11 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ task, onStatusChange }) =
   const thinkingCountRef = useRef<number>(0);
   const [modalIndex, setModalIndex] = useState<number | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [showMarkdown, setShowMarkdown] = useState(true);
+
+  // 提取预览内容的辅助函数 (简单展示一些核心输出内容)
+  const [previewContent, setPreviewContent] = useState<string>('');
 
   const { init, write, clear, fit, dispose } = useTerminal(containerRef, (uri) => {
     const parts = uri.split('/');
@@ -32,6 +52,14 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ task, onStatusChange }) =
     const thinkingPattern = /\x1b\[90m\[思考: ([\s\S]*?)\]\x1b\[0m\r\n/g;
     let match;
     let lastIdx = 0;
+    
+    // 累积原始输出以供预览
+    setPreviewContent(prev => {
+      const combined = prev + text;
+      // 限制预览长度，避免性能问题
+      return combined.length > 5000 ? combined.substring(combined.length - 5000) : combined;
+    });
+
     while ((match = thinkingPattern.exec(text)) !== null) {
       if (match.index > lastIdx) {
         write(text.substring(lastIdx, match.index), instant);
@@ -47,6 +75,25 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ task, onStatusChange }) =
       write(text.substring(lastIdx), instant);
     }
   }, [write]);
+
+  // 渲染预览内容的逻辑
+  const renderedPreview = useMemo(() => {
+    if (!previewContent) return task?.status === 'Running' ? '正在等待输出...' : '暂无输出内容';
+    
+    // 1. 移除 ANSI 转义码
+    let clean = previewContent.replace(/\x1b\[[0-9;]*m/g, '');
+    
+    // 2. 移除 [思考: ...] 块，因为它们已经在 Modal 中展示了
+    clean = clean.replace(/\[思考: [\s\S]*?\]\r?\n?/g, '');
+    
+    // 3. 移除特定的 Agent 装饰线
+    clean = clean.replace(/[┌│└]─ Agent:.*?\r?\n?/g, '');
+    clean = clean.replace(/[┌│└]─ Task ID:.*?\r?\n?/g, '');
+    clean = clean.replace(/[┌│└]─ Prompt:.*?\r?\n?/g, '');
+    clean = clean.replace(/[┌│└]─ Status:.*?\r?\n?/g, '');
+
+    return clean.trim();
+  }, [previewContent, task?.status]);
 
   // 初始化终端
   useEffect(() => {
@@ -65,6 +112,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ task, onStatusChange }) =
     loadedTaskIdRef.current = task.id;
     clear();
     setThinkingLogs([]);
+    setPreviewContent('');
     thinkingCountRef.current = 0;
 
     write(`\x1b[34m┌─ Agent: ${task.agentName}\x1b[0m\r\n`, true);
@@ -81,7 +129,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ task, onStatusChange }) =
     }).catch(err => {
       console.error('加载输出失败', err);
     });
-  }, [task?.id]);
+  }, [task?.id, clear, processOutput, write]);
 
 
   const handleWsMessage = useCallback((msg: WsMessage) => {
@@ -98,7 +146,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ task, onStatusChange }) =
       write(`\r\n${color}[状态变更: ${msg.status}]\x1b[0m\r\n`);
       onStatusChange?.(msg.taskId, msg.status);
     }
-  }, [write, onStatusChange]);
+  }, [write, onStatusChange, processOutput]);
 
   useTaskWebSocket(task?.status === 'Running' ? task.id : null, {
     onMessage: handleWsMessage,
@@ -114,23 +162,126 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ task, onStatusChange }) =
     },
   });
 
+  const MarkdownComponents = useMemo(() => ({
+    code({ node, inline, className, children, ...props }: any) {
+      const match = /language-(\w+)/.exec(className || '');
+      return !inline && match ? (
+        <SyntaxHighlighter
+          style={oneDark}
+          language={match[1]}
+          PreTag="div"
+          className="rounded-md my-2"
+          {...props}
+        >
+          {String(children).replace(/\n$/, '')}
+        </SyntaxHighlighter>
+      ) : (
+        <code className={className} {...props}>
+          {children}
+        </code>
+      );
+    },
+  }), []);
 
   return (
-    <div className="terminal-wrapper">
+    <div className={`terminal-wrapper ${isExpanded ? 'expanded' : 'collapsed'}`}>
       {task && (
-        <div className="terminal-header-bar">
-          <div className="terminal-task-info">
-            <span className="dot" style={{ backgroundColor: wsStatus === 'open' ? '#3FB950' : '#F85149' }}></span>
-            <span className="info-text">
-              {wsStatus === 'open' ? '已连接实时流' : '未连接'} | 任务: {task.id.substring(0, 8)}
-            </span>
+        <>
+          <div className="terminal-header-bar">
+            <div className="terminal-task-info">
+              <span className="dot" style={{ backgroundColor: wsStatus === 'open' ? '#3FB950' : '#F85149' }}></span>
+              <span className="info-text">
+                {wsStatus === 'open' ? '实时流已连接' : '离线状态'} | {task.status}
+              </span>
+            </div>
+            <div className="terminal-actions">
+              <Tooltip title={isExpanded ? "折叠预览" : "展开详情"}>
+                <Button 
+                  type="text" 
+                  size="small" 
+                  icon={isExpanded ? <ShrinkOutlined /> : <ExpandAltOutlined />} 
+                  onClick={() => {
+                    const newExpanded = !isExpanded;
+                    setIsExpanded(newExpanded);
+                    if (newExpanded && !showMarkdown) {
+                      setTimeout(() => fit(), 100);
+                    }
+                  }}
+                  className="term-icon-btn"
+                />
+              </Tooltip>
+              {isExpanded && (
+                <Tooltip title={showMarkdown ? "切换到终端视图" : "切换到 Markdown 视图"}>
+                  <Button 
+                    type="text" 
+                    size="small" 
+                    icon={<CodeOutlined />} 
+                    onClick={() => {
+                      const next = !showMarkdown;
+                      setShowMarkdown(next);
+                      if (!next) {
+                        setTimeout(() => fit(), 50);
+                      }
+                    }}
+                    className={`term-icon-btn ${showMarkdown ? 'active' : ''}`}
+                    style={{ color: showMarkdown ? '#58A6FF' : undefined }}
+                  />
+                </Tooltip>
+              )}
+              <button onClick={() => clear()} className="term-btn">清空</button>
+              <button onClick={() => fit()} className="term-btn">自适应</button>
+            </div>
           </div>
-          <div className="terminal-actions">
-            <button onClick={() => clear()} className="term-btn">清空</button>
-            <button onClick={() => fit()} className="term-btn">自适应</button>
+
+          <div className="terminal-content">
+            {!isExpanded && (
+              <div className="terminal-preview-overlay" onClick={() => setIsExpanded(true)}>
+                <div className="preview-header">
+                  <Space>
+                    <ConsoleSqlOutlined />
+                    <span>Markdown 预览 (点击展开)</span>
+                  </Space>
+                  {task.status === 'Completed' && <CheckCircleFilled style={{ color: '#3FB950' }} />}
+                  {task.status === 'Running' && <InfoCircleFilled style={{ color: '#58A6FF' }} />}
+                </div>
+                <div className="markdown-body preview-mode">
+                  <ReactMarkdown 
+                    remarkPlugins={[remarkGfm]}
+                    components={MarkdownComponents}
+                  >
+                    {renderedPreview}
+                  </ReactMarkdown>
+                </div>
+              </div>
+            )}
+            
+            {isExpanded && showMarkdown && (
+              <div className="markdown-body expanded-mode">
+                <ReactMarkdown 
+                  remarkPlugins={[remarkGfm]}
+                  components={MarkdownComponents}
+                >
+                  {renderedPreview}
+                </ReactMarkdown>
+              </div>
+            )}
+
+            <div 
+              ref={containerRef} 
+              className="terminal-container" 
+              style={{ 
+                visibility: (isExpanded && !showMarkdown) ? 'visible' : 'hidden',
+                height: (isExpanded && !showMarkdown) ? '500px' : '0px',
+                transition: 'all 0.3s ease',
+                pointerEvents: (isExpanded && !showMarkdown) ? 'auto' : 'none',
+                position: (isExpanded && showMarkdown) ? 'absolute' : 'relative',
+                top: 0
+              }} 
+            />
           </div>
-        </div>
+        </>
       )}
+
       {!task && (
         <div className="terminal-empty">
           <div className="terminal-empty-icon">{'>'}_</div>
@@ -139,29 +290,37 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ task, onStatusChange }) =
       )}
       
       <Modal 
-        title={`Claude 思考过程 (${(modalIndex ?? 0) + 1})`} 
+        title={
+          <Space>
+            <BulbOutlined style={{ color: '#FAAD14' }} />
+            <span>Claude 思考过程分析</span>
+            <Text type="secondary" style={{ fontSize: 12, fontWeight: 'normal' }}>
+              ({(modalIndex ?? 0) + 1} / {thinkingLogs.length})
+            </Text>
+          </Space>
+        } 
         open={modalIndex !== null} 
         onCancel={() => setModalIndex(null)}
-        footer={null}
-        width={800}
+        footer={[
+          <Button key="close" onClick={() => setModalIndex(null)} type="primary">
+            完成
+          </Button>
+        ]}
+        width={900}
+        centered
+        className="thinking-modal"
       >
-        <pre style={{
-          margin: 0,
-          padding: '12px',
-          background: '#0D1117',
-          borderRadius: '6px',
-          color: '#8B949E',
-          fontSize: '12px',
-          whiteSpace: 'pre-wrap',
-          wordWrap: 'break-word',
-          maxHeight: '60vh',
-          overflowY: 'auto'
-        }}>
-          {modalIndex !== null && thinkingLogs[modalIndex]}
-        </pre>
+        <div className="markdown-body">
+          {modalIndex !== null && (
+            <ReactMarkdown 
+              remarkPlugins={[remarkGfm]}
+              components={MarkdownComponents}
+            >
+              {thinkingLogs[modalIndex]}
+            </ReactMarkdown>
+          )}
+        </div>
       </Modal>
-
-      <div ref={containerRef} className="terminal-container" style={{ display: task ? 'block' : 'none' }} />
     </div>
   );
 };

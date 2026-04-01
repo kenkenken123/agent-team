@@ -55,15 +55,19 @@ public class TasksController(
         if (agent == null) return BadRequest(new { error = "Agent 不存在" });
         if (!agent.IsEnabled) return BadRequest(new { error = "Agent 已被禁用" });
 
-        // 获取要使用的 SessionId（优先用请求中指定的，其次用 Agent 最后一次任务的）
-        string? sessionId = req.ResumeSessionId;
-        if (sessionId == null)
+        // 获取要使用的 SessionId
+        string? sessionId = null;
+        if (!req.ForceNewSession)
         {
-            var lastTask = await db.Tasks
-                .Where(t => t.AgentId == req.AgentId && t.ClaudeSessionId != null)
-                .OrderByDescending(t => t.CreatedAt)
-                .FirstOrDefaultAsync();
-            sessionId = lastTask?.ClaudeSessionId;
+            sessionId = req.ResumeSessionId;
+            if (sessionId == null)
+            {
+                var lastTask = await db.Tasks
+                    .Where(t => t.AgentId == req.AgentId && t.ClaudeSessionId != null)
+                    .OrderByDescending(t => t.CreatedAt)
+                    .FirstOrDefaultAsync();
+                sessionId = lastTask?.ClaudeSessionId;
+            }
         }
 
         var task = new AgentTask

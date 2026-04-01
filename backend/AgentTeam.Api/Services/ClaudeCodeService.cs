@@ -105,6 +105,9 @@ public class ClaudeCodeService(
         var stdoutTask = ReadStreamAsync(process.StandardOutput, task.Id, outputPath, isError: false);
         var stderrTask = ReadStreamAsync(process.StandardError, task.Id, outputPath, isError: true);
 
+        // 关键：将进程加入运行中集合，否则 Cancel 找不到
+        lock (_lock) { _runningProcesses[task.Id] = process; }
+
         // 等待进程结束
         _ = Task.Run(async () =>
         {

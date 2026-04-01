@@ -68,6 +68,7 @@ export interface CreateTaskRequest {
   agentId: string;
   prompt: string;
   resumeSessionId?: string;
+  forceNewSession?: boolean;
   terminalType?: string;
 }
 

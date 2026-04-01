@@ -77,8 +77,10 @@ public record TaskDto(
 public record CreateTaskRequest(
     Guid AgentId,
     string Prompt,
-    /// <summary>可选：指定从哪个 Session 继续（留空则使用 Agent 最后的 Session）</summary>
+    /// <summary>可选：指定从哪个 Session 继续（留空则尝试自动续写）</summary>
     string? ResumeSessionId = null,
+    /// <summary>是否强制开启新会话（即便有历史 Session 也不续写）</summary>
+    bool ForceNewSession = false,
     string TerminalType = "powershell"
 );
 
