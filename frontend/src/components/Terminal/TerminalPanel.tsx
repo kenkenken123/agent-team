@@ -106,30 +106,53 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ task, onStatusChange }) =
     };
   }, []);
 
-  // 任务切换时加载历史输出
+  // 记录已经加载过输出的 task 状态，避免重复加载
+  const loadedStatusRef = useRef<string | null>(null);
+
+  // 任务切换时，重置终端
   useEffect(() => {
-    if (!task || task.id === loadedTaskIdRef.current) return;
-    loadedTaskIdRef.current = task.id;
-    clear();
-    setThinkingLogs([]);
-    setPreviewContent('');
-    thinkingCountRef.current = 0;
+    if (!task) return;
+    
+    // 切换到新任务时，重置全部状态
+    if (task.id !== loadedTaskIdRef.current) {
+      loadedTaskIdRef.current = task.id;
+      loadedStatusRef.current = null;
+      clear();
+      setThinkingLogs([]);
+      setPreviewContent('');
+      thinkingCountRef.current = 0;
 
-    write(`\x1b[34m┌─ Agent: ${task.agentName}\x1b[0m\r\n`, true);
-    write(`\x1b[34m│  Task ID: ${task.id}\x1b[0m\r\n`, true);
-    write(`\x1b[34m│  Prompt: ${task.prompt}\x1b[0m\r\n`, true);
-    write(`\x1b[34m└─ Status: ${task.status}\x1b[0m\r\n\r\n`, true);
+      write(`\x1b[34m┌─ Agent: ${task.agentName}\x1b[0m\r\n`, true);
+      write(`\x1b[34m│  Task ID: ${task.id}\x1b[0m\r\n`, true);
+      write(`\x1b[34m│  Prompt: ${task.prompt}\x1b[0m\r\n`, true);
+      write(`\x1b[34m└─ Status: ${task.status}\x1b[0m\r\n\r\n`, true);
+    }
 
-    // 始终尝试加载历史/存量输出
-    taskApi.getOutput(task.id).then(content => {
-      if (content) processOutput(content, true);
-      else if (task.status !== 'Running') {
-        write('\x1b[90m[暂无历史输出]\x1b[0m\r\n', true);
-      }
-    }).catch(err => {
-      console.error('加载输出失败', err);
-    });
-  }, [task?.id, clear, processOutput, write]);
+    // 只有在任务完成/失败后，才从 API 拉取历史输出（补全 WebSocket 可能遗漏的内容）
+    // 对于 Running 状态，由 WebSocket 实时推送
+    const terminalStatus = task.status;
+    if (
+      (terminalStatus === 'Completed' || terminalStatus === 'Failed' || terminalStatus === 'Cancelled') &&
+      loadedStatusRef.current !== terminalStatus
+    ) {
+      loadedStatusRef.current = terminalStatus;
+      // 先清空再重新加载完整的历史输出
+      clear();
+      setThinkingLogs([]);
+      setPreviewContent('');
+      thinkingCountRef.current = 0;
+      write(`\x1b[34m┌─ Agent: ${task.agentName}\x1b[0m\r\n`, true);
+      write(`\x1b[34m│  Task ID: ${task.id}\x1b[0m\r\n`, true);
+      write(`\x1b[34m│  Prompt: ${task.prompt}\x1b[0m\r\n`, true);
+      write(`\x1b[34m└─ Status: ${task.status}\x1b[0m\r\n\r\n`, true);
+      taskApi.getOutput(task.id).then(content => {
+        if (content) processOutput(content, true);
+        else write('\x1b[90m[暂无历史输出]\x1b[0m\r\n', true);
+      }).catch(err => {
+        console.error('加载输出失败', err);
+      });
+    }
+  }, [task?.id, task?.status, clear, processOutput, write]);
 
 
   const handleWsMessage = useCallback((msg: WsMessage) => {
@@ -148,7 +171,9 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ task, onStatusChange }) =
     }
   }, [write, onStatusChange, processOutput]);
 
-  useTaskWebSocket(task?.status === 'Running' ? task.id : null, {
+  // 关键修复：只要有 taskId，就建立 WebSocket 连接（不依赖 status）
+  // 之前的 bug 是只在 Running 时才连，但任务启动初始是 Pending，导致完全接收不到消息
+  useTaskWebSocket(task?.id ?? null, {
     onMessage: handleWsMessage,
     onOpen: () => {
       setWsStatus('open');
@@ -156,9 +181,6 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ task, onStatusChange }) =
     },
     onClose: () => {
       setWsStatus('closed');
-      if (task?.status === 'Running') {
-        write('\x1b[90m[连接断开，尝试重连...]\x1b[0m\r\n');
-      }
     },
   });
 

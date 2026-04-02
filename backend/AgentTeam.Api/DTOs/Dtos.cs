@@ -68,6 +68,7 @@ public record TaskDto(
     int? TokensUsed,
     int? InputTokens,
     int? OutputTokens,
+    string? Model,
     DateTime? StartedAt,
     DateTime? CompletedAt,
     int? ExitCode,
@@ -81,6 +82,7 @@ public record CreateTaskRequest(
     string? ResumeSessionId = null,
     /// <summary>是否强制开启新会话（即便有历史 Session 也不续写）</summary>
     bool ForceNewSession = false,
+    string? Model = null,
     string TerminalType = "powershell"
 );
 

@@ -21,6 +21,9 @@ public class AgentTask
     /// <summary>Claude Code 对话 ID，用于 --resume 恢复上下文</summary>
     public string? ClaudeSessionId { get; set; }
 
+    /// <summary>执行当前任务时所选的模型</summary>
+    public string? Model { get; set; }
+
     /// <summary>终端类型：cmd / powershell / bash</summary>
     public string TerminalType { get; set; } = "powershell";
 

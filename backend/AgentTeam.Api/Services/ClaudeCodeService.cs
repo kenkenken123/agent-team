@@ -183,24 +183,26 @@ public class ClaudeCodeService(
 
         if (!string.IsNullOrEmpty(task.ClaudeSessionId))
         {
-            // 恢复上下文, 注意必须加上 --print (-p) 以防陷入交互模式
-            args.Append($"--resume {task.ClaudeSessionId} --print ");
+            // 恢复上下文
+            args.Append($"--resume {task.ClaudeSessionId} ");
         }
-        else
+
+        // 无论是否恢复，都应该尝试应用该任务指定的模型和配置
+        // 注意：--print 必须加上以防陷入交互模式
+        args.Append("--print ");
+        
+        var effectiveModel = task.Model ?? agent.Model;
+        if (!string.IsNullOrEmpty(effectiveModel))
+            args.Append($"--model {effectiveModel} ");
+
+        if (agent.Template != null && !string.IsNullOrWhiteSpace(agent.Template.SystemPrompt))
         {
-            // 全新任务
-            args.Append("--print ");
-            args.Append($"--model {agent.Model} ");
-
-            if (agent.Template != null && !string.IsNullOrWhiteSpace(agent.Template.SystemPrompt))
-            {
-                var escapedPrompt = agent.Template.SystemPrompt.Replace("\"", "\\\"");
-                args.Append($"--system-prompt \"{escapedPrompt}\" ");
-            }
-
-            if (agent.MaxTurns.HasValue)
-                args.Append($"--max-turns {agent.MaxTurns} ");
+            var escapedPrompt = agent.Template.SystemPrompt.Replace("\"", "\\\"");
+            args.Append($"--system-prompt \"{escapedPrompt}\" ");
         }
+
+        if (agent.MaxTurns.HasValue)
+            args.Append($"--max-turns {agent.MaxTurns} ");
 
         // 追加 --output-format stream-json --verbose 以便解析流式的事件与 session_id
         args.Append("--output-format stream-json --verbose ");
@@ -320,7 +322,20 @@ public class ClaudeCodeService(
                                     }
                                     else if (itemType == "tool_use" && item.TryGetProperty("name", out var nameEl))
                                     {
-                                        sb.Append($"\x1b[36m[Claude 正在调用工具: {nameEl.GetString()}]\x1b[0m\r\n");
+                                        var toolName = nameEl.GetString();
+                                        var detail = string.Empty;
+                                        if (item.TryGetProperty("input", out var inputEl))
+                                        {
+                                            if (toolName == "Grep" || toolName == "grep_search")
+                                                detail = inputEl.TryGetProperty("query", out var query) ? $": {query.GetString()}" : "";
+                                            else if (toolName == "Bash" || toolName == "run_command")
+                                                detail = inputEl.TryGetProperty("command", out var cmd) ? $": {cmd.GetString()}" : "";
+                                            else if (toolName == "Read" || toolName == "view_file")
+                                                detail = inputEl.TryGetProperty("path", out var path) ? $": {Path.GetFileName(path.GetString())}" : "";
+                                            else if (toolName == "Write" || toolName == "write_to_file")
+                                                detail = inputEl.TryGetProperty("path", out var wpath) ? $": {Path.GetFileName(wpath.GetString())}" : "";
+                                        }
+                                        sb.Append($"\r\n\x1b[36m[Claude 正在调用工具: {toolName}{detail}]\x1b[0m\r\n");
                                     }
                                     else if (itemType == "thinking" && item.TryGetProperty("thinking", out var thinkingEl))
                                     {

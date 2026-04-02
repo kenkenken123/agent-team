@@ -55,13 +55,16 @@ const ConsolePage: React.FC = () => {
 
   const currentSessionTasks = useMemo(() => {
     if (!selectedTask) return [];
-    return tasks
-      .filter(t =>
-        t.claudeSessionId
-          ? t.claudeSessionId === selectedTask.claudeSessionId
-          : t.id === selectedTask.id
-      )
-      .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+    
+    // 如果选中的任务有 SessionId，则展示该 Session 下的所有子任务
+    if (selectedTask.claudeSessionId) {
+      return tasks
+        .filter(t => t.claudeSessionId === selectedTask.claudeSessionId)
+        .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+    }
+    
+    // 如果选中的任务暂时还没分配 SessionId (刚启动)，则只展示该单条任务
+    return [selectedTask];
   }, [tasks, selectedTask]);
 
   const scrollToBottom = () => {
@@ -135,7 +138,9 @@ const ConsolePage: React.FC = () => {
   useEffect(() => {
     loadTasks();
     clearInterval(pollRef.current);
-    pollRef.current = setInterval(() => loadTasks(), 5000);
+    pollRef.current = setInterval(async () => {
+      await loadTasks();
+    }, 2000); // 提高轮询频率以快速获取 SessionId
     return () => clearInterval(pollRef.current);
   }, [loadTasks]);
 

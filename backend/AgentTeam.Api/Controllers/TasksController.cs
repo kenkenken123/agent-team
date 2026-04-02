@@ -76,7 +76,8 @@ public class TasksController(
             Agent = agent,
             Prompt = req.Prompt,
             ClaudeSessionId = sessionId,
-            TerminalType = req.TerminalType
+            TerminalType = req.TerminalType,
+            Model = req.Model ?? agent.Model // 优先使用请求指定的模型
         };
 
         db.Tasks.Add(task);
@@ -143,6 +144,7 @@ public class TasksController(
         t.TokensUsed,
         t.InputTokens,
         t.OutputTokens,
+        t.Model,
         t.StartedAt,
         t.CompletedAt,
         t.ExitCode,
