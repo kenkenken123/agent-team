@@ -8,17 +8,12 @@ echo ===========================================
 
 echo [1/3] Cleaning up old processes
 rem --- Clean common ports ---
-for %%p in (5000 5173 4001 5501 5502 5503) do (
+for %%p in (5501 5502 5503) do (
     for /f "tokens=5" %%a in ('netstat -aon ^| findstr :%%p ^| findstr LISTENING 2^>nul') do (
         echo Killing process on port %%p with PID %%a
         taskkill /F /PID %%a /T 2>nul
     )
 )
-
-rem --- Clean processes by name ---
-taskkill /F /IM node.exe /T 2>nul
-taskkill /F /IM dotnet.exe /T 2>nul
-taskkill /F /IM AgentTeam.Api.exe /T 2>nul
 
 timeout /t 2 /nobreak >nul
 

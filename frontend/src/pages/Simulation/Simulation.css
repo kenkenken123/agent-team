@@ -1,0 +1,103 @@
+.simulation-page {
+  padding: 24px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background-color: #0d1117;
+  color: #c9d1d9;
+  overflow: hidden; /* Prevent page-level scroll, we want internal scrolling */
+}
+
+.simulation-header {
+  margin-bottom: 24px;
+  flex-shrink: 0;
+}
+
+.simulation-content {
+  display: flex;
+  gap: 24px;
+  flex: 1;
+  min-height: 0; /* Important for flex children to be able to shrink */
+}
+
+.game-canvas-container {
+  flex: 1;
+  border: 4px solid #30363d;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+  background-color: #1a1a2e;
+  position: relative;
+  min-height: 200px; /* Lower min-height to allow more flexibility */
+}
+
+.simulation-controls {
+  width: 320px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.agents-list-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding-right: 8px;
+}
+
+.agent-control-card {
+  background: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 8px;
+  transition: all 0.3s ease;
+  margin-bottom: 12px;
+}
+
+.agent-control-card:hover {
+  border-color: #58a6ff33;
+  transform: translateY(-2px);
+}
+
+.agent-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.name-status {
+  display: flex;
+  flex-direction: column;
+}
+
+.name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #f0f6fc;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.actions .ant-btn {
+  flex: 1;
+  padding: 0 4px;
+  font-size: 12px;
+}
+
+/* 像素风格字体微调 */
+canvas {
+  image-rendering: pixelated;
+  display: block;
+}
+
+.simulation-loading {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #0d1117;
+}

@@ -10,18 +10,20 @@ import Dashboard from '../../pages/Dashboard/Dashboard';
 import AgentsPage from '../../pages/Agents/Agents';
 import ConsolePage from '../../pages/Console/Console';
 import HistoryPage from '../../pages/History/History';
+import SimulationPage from '../../pages/Simulation/Simulation';
 import './AppLayout.css';
 
 const { Sider, Content } = Layout;
 const { Text } = Typography;
 
-type PageKey = 'dashboard' | 'agents' | 'console' | 'history';
+type PageKey = 'dashboard' | 'agents' | 'console' | 'history' | 'simulation';
 
 const PAGE_MAP: Record<PageKey, React.ReactNode> = {
   dashboard: <Dashboard />,
   agents: <AgentsPage />,
   console: <ConsolePage />,
   history: <HistoryPage />,
+  simulation: <SimulationPage />,
 };
 
 const AppLayout: React.FC = () => {
@@ -74,6 +76,11 @@ const AppLayout: React.FC = () => {
               key: 'history',
               icon: <HistoryOutlined />,
               label: '任务历史',
+            },
+            {
+              key: 'simulation',
+              icon: <RobotOutlined />,
+              label: '赛博世界',
             },
           ]}
         />

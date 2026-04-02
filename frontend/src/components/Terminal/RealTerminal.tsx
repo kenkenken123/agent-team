@@ -1,6 +1,6 @@
-import React, { useRef, useEffect, useCallback } from 'react';
+import React, { useRef, useEffect } from 'react';
 import { Button, Tooltip } from 'antd';
-import { ReloadOutlined, FullscreenOutlined, FullscreenExitOutlined } from '@ant-design/icons';
+import { ReloadOutlined, FullscreenOutlined } from '@ant-design/icons';
 import { usePtyTerminal } from '../../hooks/usePtyTerminal';
 import type { PtyStatus } from '../../hooks/usePtyTerminal';
 
