@@ -43,7 +43,7 @@ const ConsolePage: React.FC = () => {
   // 添加命令状态
   const [availableCommands, setAvailableCommands] = useState<string[]>([]);
   useEffect(() => {
-    fetch('http://localhost:5000/api/commands')
+    fetch('http://localhost:5501/api/commands')
       .then(res => res.json())
       .then(data => {
         if (data && data.commands) {
@@ -435,7 +435,7 @@ const ConsolePage: React.FC = () => {
               <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '8px' }}>
                 <Upload
                   name="file"
-                  action="http://localhost:5000/api/Upload"
+                  action="http://localhost:5501/api/Upload"
                   data={selectedAgentId ? { agentId: selectedAgentId } : undefined}
                   showUploadList={false}
                   onChange={(info) => {

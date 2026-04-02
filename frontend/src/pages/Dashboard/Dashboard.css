@@ -1,51 +1,145 @@
-.dashboard-page {
-  padding: 24px;
-  max-width: 1400px;
-  margin: 0 auto;
+.dashboard-container {
+  padding: 32px;
+  background: radial-gradient(circle at top right, #1a2736 0%, #0d1117 70%);
+  min-height: 100vh;
+  color: #c9d1d9;
 }
 
 .dashboard-header {
+  margin-bottom: 40px;
+}
+
+.dashboard-header h1 {
+  font-family: 'Outfit', 'Inter', -apple-system, system-ui, sans-serif;
+  font-weight: 800;
+  font-size: 42px;
+  margin-bottom: 8px;
+  background: linear-gradient(135deg, #58a6ff 0%, #bc8cff 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  letter-spacing: -0.5px;
+}
+
+.dashboard-header p {
+  color: #8b949e;
+  font-size: 16px;
+  font-weight: 500;
+}
+
+/* 卡片容器：改用 Grid 以实现更现代的布局 */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 24px;
+  margin-bottom: 48px;
+}
+
+.stat-card {
+  background: rgba(22, 27, 34, 0.6);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(48, 54, 61, 0.8);
+  border-radius: 20px;
+  padding: 24px;
+  transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  position: relative;
+  overflow: hidden;
+}
+
+.stat-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, rgba(88, 166, 255, 0.3), transparent);
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+.stat-card:hover {
+  transform: translateY(-8px);
+  border-color: rgba(88, 166, 255, 0.4);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.3);
+}
+
+.stat-card:hover::before {
+  opacity: 1;
+}
+
+.stat-header {
   display: flex;
-  align-items: flex-start;
   justify-content: space-between;
-  margin-bottom: 24px;
-}
-
-.dashboard-title-area {
-  display: flex;
-  flex-direction: column;
-}
-
-.stats-row .stat-card {
-  background: #161B22;
-  border: 1px solid #21262D;
-  border-radius: 12px;
-  transition: border-color 0.2s, transform 0.2s;
-  cursor: default;
-}
-
-.stats-row .stat-card:hover {
-  border-color: #30363D;
-  transform: translateY(-2px);
+  align-items: center;
+  margin-bottom: 16px;
 }
 
 .stat-label {
-  color: #8B949E;
-  font-size: 13px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #8b949e;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .stat-icon {
   font-size: 20px;
-  margin-right: 4px;
-}
-
-.agent-icon { color: #58A6FF; }
-.running-icon { color: #3FB950; }
-.today-icon { color: #D29922; }
-.token-icon { color: #BC8CFF; }
-
-.info-card {
-  background: #161B22;
-  border: 1px solid #21262D;
+  padding: 8px;
+  background: rgba(88, 166, 255, 0.1);
   border-radius: 12px;
+  color: #58a6ff;
 }
+
+.stat-value {
+  font-family: 'JetBrains Mono', 'Roboto Mono', monospace;
+  font-size: 36px;
+  font-weight: 700;
+  color: #f0f6fc;
+}
+
+.stat-unit {
+  font-size: 14px;
+  color: #8b949e;
+  margin-left: 4px;
+}
+
+/* 详情卡片 */
+.detail-card {
+  background: rgba(22, 27, 34, 0.4);
+  border: 1px solid #30363d;
+  border-radius: 24px;
+  padding: 28px;
+}
+
+.detail-header {
+  font-size: 18px;
+  font-weight: 700;
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #21262d;
+  color: #c9d1d9;
+}
+
+.usage-row {
+  display: flex;
+  gap: 48px;
+}
+
+.usage-item {
+  flex: 1;
+}
+
+.usage-label {
+  font-size: 13px;
+  color: #8b949e;
+  margin-bottom: 8px;
+}
+
+.usage-value {
+  font-size: 28px;
+  font-weight: 800;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.usage-value.input { color: #58a6ff; }
+.usage-value.output { color: #3fb950; }

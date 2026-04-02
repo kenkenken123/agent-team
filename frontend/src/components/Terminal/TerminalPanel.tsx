@@ -7,7 +7,8 @@ import {
   CheckCircleFilled,
   InfoCircleFilled,
   BulbOutlined,
-  CodeOutlined
+  CodeOutlined,
+  CodeSandboxOutlined
 } from '@ant-design/icons';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -18,6 +19,7 @@ import { useTerminal } from '../../hooks/useTerminal';
 import { useTaskWebSocket } from '../../hooks/useTaskWebSocket';
 import type { AgentTask, WsMessage } from '../../types';
 import { taskApi } from '../../api/taskApi';
+import RealTerminal from './RealTerminal';
 import '@xterm/xterm/css/xterm.css';
 import './Terminal.css';
 
@@ -28,7 +30,10 @@ interface TerminalPanelProps {
   onStatusChange?: (taskId: string, status: string) => void;
 }
 
+type PanelTab = 'output' | 'terminal';
+
 const TerminalPanel: React.FC<TerminalPanelProps> = ({ task, onStatusChange }) => {
+  const [activeTab, setActiveTab] = useState<PanelTab>('output');
   const [wsStatus, setWsStatus] = useState<'connecting' | 'open' | 'closed'>('closed');
   const [thinkingLogs, setThinkingLogs] = useState<string[]>([]);
   const thinkingCountRef = useRef<number>(0);
@@ -210,96 +215,121 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ task, onStatusChange }) =
       {task && (
         <>
           <div className="terminal-header-bar">
-            <div className="terminal-task-info">
-              <span className="dot" style={{ backgroundColor: wsStatus === 'open' ? '#3FB950' : '#F85149' }}></span>
-              <span className="info-text">
-                {wsStatus === 'open' ? '实时流已连接' : '离线状态'} | {task.status}
-              </span>
+            {/* ── Tab 切换 ── */}
+            <div className="terminal-tabs">
+              <button
+                className={`terminal-tab ${activeTab === 'output' ? 'active' : ''}`}
+                onClick={() => setActiveTab('output')}
+              >
+                <ConsoleSqlOutlined /> 任务输出
+              </button>
+              <button
+                className={`terminal-tab ${activeTab === 'terminal' ? 'active' : ''}`}
+                onClick={() => setActiveTab('terminal')}
+              >
+                <CodeSandboxOutlined /> 真实终端
+              </button>
             </div>
-            <div className="terminal-actions">
-              <Tooltip title={isExpanded ? "折叠预览" : "展开详情"}>
-                <Button 
-                  type="text" 
-                  size="small" 
-                  icon={isExpanded ? <ShrinkOutlined /> : <ExpandAltOutlined />} 
-                  onClick={() => {
-                    const newExpanded = !isExpanded;
-                    setIsExpanded(newExpanded);
-                    if (newExpanded && !showMarkdown) {
-                      setTimeout(() => fit(), 100);
-                    }
-                  }}
-                  className="term-icon-btn"
-                />
-              </Tooltip>
-              {isExpanded && (
-                <Tooltip title={showMarkdown ? "切换到终端视图" : "切换到 Markdown 视图"}>
-                  <Button 
-                    type="text" 
-                    size="small" 
-                    icon={<CodeOutlined />} 
-                    onClick={() => {
-                      const next = !showMarkdown;
-                      setShowMarkdown(next);
-                      if (!next) {
-                        setTimeout(() => fit(), 50);
-                      }
-                    }}
-                    className={`term-icon-btn ${showMarkdown ? 'active' : ''}`}
-                    style={{ color: showMarkdown ? '#58A6FF' : undefined }}
-                  />
-                </Tooltip>
-              )}
-              <button onClick={() => clear()} className="term-btn">清空</button>
-              <button onClick={() => fit()} className="term-btn">自适应</button>
-            </div>
+
+            {/* ── 右侧状态 & 操作 ── */}
+            {activeTab === 'output' && (
+              <>
+                <div className="terminal-task-info">
+                  <span className="dot" style={{ backgroundColor: wsStatus === 'open' ? '#3FB950' : '#F85149' }}></span>
+                  <span className="info-text">
+                    {wsStatus === 'open' ? '实时流已连接' : '离线状态'} | {task.status}
+                  </span>
+                </div>
+                <div className="terminal-actions">
+                  <Tooltip title={isExpanded ? '折叠预览' : '展开详情'}>
+                    <Button
+                      type="text"
+                      size="small"
+                      icon={isExpanded ? <ShrinkOutlined /> : <ExpandAltOutlined />}
+                      onClick={() => {
+                        const newExpanded = !isExpanded;
+                        setIsExpanded(newExpanded);
+                        if (newExpanded && !showMarkdown) setTimeout(() => fit(), 100);
+                      }}
+                      className="term-icon-btn"
+                    />
+                  </Tooltip>
+                  {isExpanded && (
+                    <Tooltip title={showMarkdown ? '切换到终端视图' : '切换到 Markdown 视图'}>
+                      <Button
+                        type="text"
+                        size="small"
+                        icon={<CodeOutlined />}
+                        onClick={() => {
+                          const next = !showMarkdown;
+                          setShowMarkdown(next);
+                          if (!next) setTimeout(() => fit(), 50);
+                        }}
+                        className={`term-icon-btn ${showMarkdown ? 'active' : ''}`}
+                        style={{ color: showMarkdown ? '#58A6FF' : undefined }}
+                      />
+                    </Tooltip>
+                  )}
+                  <button onClick={() => clear()} className="term-btn">清空</button>
+                  <button onClick={() => fit()} className="term-btn">自适应</button>
+                </div>
+              </>
+            )}
           </div>
 
           <div className="terminal-content">
-            {!isExpanded && (
-              <div className="terminal-preview-overlay" onClick={() => setIsExpanded(true)}>
-                <div className="preview-header">
-                  <Space>
-                    <ConsoleSqlOutlined />
-                    <span>Markdown 预览 (点击展开)</span>
-                  </Space>
-                  {task.status === 'Completed' && <CheckCircleFilled style={{ color: '#3FB950' }} />}
-                  {task.status === 'Running' && <InfoCircleFilled style={{ color: '#58A6FF' }} />}
-                </div>
-                <div className="markdown-body preview-mode">
-                  <ReactMarkdown 
-                    remarkPlugins={[remarkGfm]}
-                    components={MarkdownComponents}
-                  >
-                    {renderedPreview}
-                  </ReactMarkdown>
-                </div>
-              </div>
-            )}
-            
-            {isExpanded && showMarkdown && (
-              <div className="markdown-body expanded-mode">
-                <ReactMarkdown 
-                  remarkPlugins={[remarkGfm]}
-                  components={MarkdownComponents}
-                >
-                  {renderedPreview}
-                </ReactMarkdown>
-              </div>
+            {/* ── 任务输出 Tab ── */}
+            {activeTab === 'output' && (
+              <>
+                {!isExpanded && (
+                  <div className="terminal-preview-overlay" onClick={() => setIsExpanded(true)}>
+                    <div className="preview-header">
+                      <Space>
+                        <ConsoleSqlOutlined />
+                        <span>Markdown 预览 (点击展开)</span>
+                      </Space>
+                      {task.status === 'Completed' && <CheckCircleFilled style={{ color: '#3FB950' }} />}
+                      {task.status === 'Running' && <InfoCircleFilled style={{ color: '#58A6FF' }} />}
+                    </div>
+                    <div className="markdown-body preview-mode">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]} components={MarkdownComponents}>
+                        {renderedPreview}
+                      </ReactMarkdown>
+                    </div>
+                  </div>
+                )}
+
+                {isExpanded && showMarkdown && (
+                  <div className="markdown-body expanded-mode">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]} components={MarkdownComponents}>
+                      {renderedPreview}
+                    </ReactMarkdown>
+                  </div>
+                )}
+
+                <div
+                  ref={containerRef}
+                  className="terminal-container"
+                  style={{
+                    visibility: (isExpanded && !showMarkdown) ? 'visible' : 'hidden',
+                    height: (isExpanded && !showMarkdown) ? '500px' : '0px',
+                    transition: 'all 0.3s ease',
+                    pointerEvents: (isExpanded && !showMarkdown) ? 'auto' : 'none',
+                    position: (isExpanded && showMarkdown) ? 'absolute' : 'relative',
+                    top: 0,
+                  }}
+                />
+              </>
             )}
 
-            <div 
-              ref={containerRef} 
-              className="terminal-container" 
-              style={{ 
-                visibility: (isExpanded && !showMarkdown) ? 'visible' : 'hidden',
-                height: (isExpanded && !showMarkdown) ? '500px' : '0px',
-                transition: 'all 0.3s ease',
-                pointerEvents: (isExpanded && !showMarkdown) ? 'auto' : 'none',
-                position: (isExpanded && showMarkdown) ? 'absolute' : 'relative',
-                top: 0
-              }} 
-            />
+            {/* ── 真实终端 Tab ── */}
+            {activeTab === 'terminal' && (
+              <RealTerminal 
+                active={activeTab === 'terminal'} 
+                cwd={task.workingDirectory}
+                initialCommand={task.claudeSessionId ? `claude --resume ${task.claudeSessionId}` : 'claude'}
+              />
+            )}
           </div>
         </>
       )}

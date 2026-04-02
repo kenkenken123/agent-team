@@ -51,6 +51,7 @@ export interface AgentTask {
   id: string;
   agentId: string;
   agentName: string;
+  workingDirectory?: string;
   prompt: string;
   status: TaskStatus;
   claudeSessionId?: string;

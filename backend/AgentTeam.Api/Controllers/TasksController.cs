@@ -137,6 +137,7 @@ public class TasksController(
         t.Id,
         t.AgentId,
         t.Agent?.Name ?? "",
+        t.Agent?.WorkingDirectory,
         t.Prompt,
         t.Status.ToString(),
         t.ClaudeSessionId,

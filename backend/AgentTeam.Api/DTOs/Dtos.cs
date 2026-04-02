@@ -61,6 +61,7 @@ public record TaskDto(
     Guid Id,
     Guid AgentId,
     string AgentName,
+    string? WorkingDirectory,
     string Prompt,
     string Status,
     string? ClaudeSessionId,

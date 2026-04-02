@@ -32,10 +32,10 @@ builder.Services.AddSingleton<ClaudeCodeService>();
 builder.Services.AddSingleton<TaskWebSocketManager>();
 
 
-// CORS（开发时允许前端 5173 端口）
+// CORS（开发时允许前端新端口 5502）
 builder.Services.AddCors(opts =>
     opts.AddDefaultPolicy(p =>
-        p.WithOrigins("http://localhost:5173", "http://localhost:3000")
+        p.WithOrigins("http://localhost:5502", "http://localhost:5173", "http://localhost:3000")
          .AllowAnyHeader()
          .AllowAnyMethod()));
 
@@ -91,6 +91,8 @@ app.Map("/ws/task/{taskId:guid}", async (HttpContext context, Guid taskId) =>
     var socket = await context.WebSockets.AcceptWebSocketAsync();
     await wsManager.HandleAsync(taskId, socket);
 });
+
+
 
 app.MapControllers();
 Console.WriteLine("Backend is running...");
