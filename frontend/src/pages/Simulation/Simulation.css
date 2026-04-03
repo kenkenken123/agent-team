@@ -115,6 +115,9 @@ canvas {
   padding: 16px;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
   pointer-events: none; /* Don't block mouse interactions */
+  transform: translate(-50%, -100%); /* Center and Pin to top */
+  margin-top: -15px; /* Extra gap above head */
+  transition: opacity 0.1s ease-out;
   animation: cardAppear 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
   overflow: hidden;
 }
@@ -186,3 +189,151 @@ canvas {
   border: 1px solid rgba(48, 54, 61, 0.8);
 }
 
+/* Agent Detail Drawer Styling */
+.simulation-detail-drawer .ant-drawer-content {
+  background-color: #0d1117e6 !important;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-left: 1px solid rgba(88, 166, 255, 0.2);
+}
+
+.simulation-detail-drawer .ant-drawer-header {
+  background: transparent !important;
+  border-bottom: 1px solid #30363d !important;
+  padding: 24px 24px 16px 24px !important;
+}
+
+.simulation-detail-drawer .ant-drawer-title {
+  color: #f0f6fc !important;
+}
+
+.simulation-detail-drawer .ant-drawer-close {
+  color: #8b949e !important;
+}
+
+.detail-drawer-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.detail-drawer-header .title-area {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.detail-drawer-header .agent-name {
+  font-size: 20px;
+  font-weight: 700;
+  color: #f0f6fc;
+  letter-spacing: -0.5px;
+}
+
+.detail-content {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+  color: #c9d1d9;
+}
+
+.detail-content .section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.detail-content .section-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #8b949e;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.info-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.grid-item {
+  background: rgba(22, 27, 34, 0.5);
+  border: 1px solid #30363d;
+  border-radius: 8px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.grid-item .label {
+  font-size: 11px;
+  color: #8b949e;
+}
+
+.grid-item .value {
+  font-size: 14px;
+  font-weight: 500;
+  color: #f0f6fc;
+}
+
+.path-display, .prompt-display {
+  font-family: 'SF Mono', Cascadia Code, source-code-pro, Menlo, Monaco, Consolas, monospace;
+  font-size: 13px;
+  background: #010409;
+  border: 1px solid #30363d;
+  border-radius: 8px;
+  padding: 16px;
+  color: #79c0ff;
+  line-height: 1.6;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.prompt-display {
+  color: #d2a8ff;
+}
+
+.drawer-footer-actions {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.action-btn {
+  height: 54px !important;
+  border-radius: 12px !important;
+  font-weight: 600 !important;
+  font-size: 15px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+.chat-btn {
+  background: linear-gradient(135deg, #1f6feb 0%, #0d419d 100%) !important;
+  border: none !important;
+  box-shadow: 0 4px 12px rgba(31, 111, 235, 0.25) !important;
+}
+
+.chat-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 16px rgba(31, 111, 235, 0.4) !important;
+  filter: brightness(1.1);
+}
+
+.terminal-btn {
+  background: rgba(33, 38, 45, 0.8) !important;
+  border: 1px solid #30363d !important;
+  color: #f0f6fc !important;
+}
+
+.terminal-btn:hover {
+  background: #30363d !important;
+  border-color: #8b949e !important;
+  color: #58a6ff !important;
+  transform: translateY(-2px);
+}

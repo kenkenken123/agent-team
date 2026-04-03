@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useGameStore } from '../../stores/gameStore';
-import { Card, Typography, Tag, Space, Spin } from 'antd';
-import { RobotOutlined } from '@ant-design/icons';
+import { Card, Typography, Tag, Space, Spin, Drawer, Button } from 'antd';
+import { RobotOutlined, MessageOutlined, CodeOutlined } from '@ant-design/icons';
 import { OfficeState } from '../../office/engine/officeState.js';
 import { OfficeCanvas } from '../../office/components/OfficeCanvas.js';
 import { loadAllAssets } from '../../office/assetLoader.js';
@@ -32,7 +32,11 @@ const SimulationPage: React.FC = () => {
   // Zoom and Pan state for OfficeCanvas
   const [zoom, setZoom] = useState(2); // Pixel art usually looks better at 2x or 3x
   const panRef = useRef({ x: 0, y: 0 });
-  const [hoveredAgentInfo, setHoveredAgentInfo] = useState<{ id: string | null; x: number; y: number }>({ id: null, x: 0, y: 0 });
+  const [hoveredAgentInfo, setHoveredAgentInfo] = useState<{ id: string; x: number; y: number } | null>(null);
+  
+  // Detail Panel State
+  const [detailVisible, setDetailVisible] = useState(false);
+  const [selectedDetailAgentId, setSelectedDetailAgentId] = useState<string | null>(null);
 
 
   // 1. Load Assets
@@ -119,12 +123,21 @@ const SimulationPage: React.FC = () => {
 
   }, [agents, assetsLoaded, guidToNumericMap]);
 
-  const { setPage, setSelectedAgentId } = useAppStore();
+  const { setPage, setSelectedAgentId, setInitialConsoleTab } = useAppStore();
+  const detailAgent = agents.find(a => a.id === selectedDetailAgentId);
 
   const handleAgentClick = (id: number) => {
     const guid = numericToGuidMap.current.get(id);
     if (guid) {
-      setSelectedAgentId(guid);
+      setSelectedDetailAgentId(guid);
+      setDetailVisible(true);
+    }
+  };
+
+  const jumpToConsole = (tab: 'output' | 'terminal') => {
+    if (selectedDetailAgentId) {
+      setSelectedAgentId(selectedDetailAgentId);
+      setInitialConsoleTab(tab);
       setPage('console');
     }
   };
@@ -137,14 +150,18 @@ const SimulationPage: React.FC = () => {
     return messages[hash % messages.length];
   }, []);
 
-  const handleHover = (id: number | null, x?: number, y?: number) => {
-    if (id === null) {
-      setHoveredAgentInfo({ id: null, x: 0, y: 0 });
+  const handleHover = useCallback((id: number | null, x?: number, y?: number) => {
+    if (id === null || x === undefined || y === undefined) {
+      setHoveredAgentInfo(null);
     } else {
       const guid = numericToGuidMap.current.get(id);
-      setHoveredAgentInfo({ id: guid || null, x: x || 0, y: y || 0 });
+      if (guid) {
+        setHoveredAgentInfo({ id: guid, x, y });
+      } else {
+        setHoveredAgentInfo(null);
+      }
     }
-  };
+  }, [numericToGuidMap]);
 
   if (!assetsLoaded) {
     return (
@@ -154,7 +171,7 @@ const SimulationPage: React.FC = () => {
     );
   }
 
-  const currentHoveredAgent = agents.find(a => a.id === hoveredAgentInfo.id);
+  const currentHoveredAgent = hoveredAgentInfo ? agents.find(a => a.id === hoveredAgentInfo.id) : null;
 
   return (
     <div className="simulation-page">
@@ -179,12 +196,13 @@ const SimulationPage: React.FC = () => {
           />
 
           {/* Hover Detail Card */}
-          {currentHoveredAgent && (
+          {currentHoveredAgent && hoveredAgentInfo && (
             <div 
               className="agent-hover-card"
+              key={currentHoveredAgent.id}
               style={{
-                left: hoveredAgentInfo.x + 15,
-                top: hoveredAgentInfo.y + 15,
+                left: hoveredAgentInfo.x,
+                top: hoveredAgentInfo.y,
               }}
             >
               <div className="card-glare" />
@@ -222,42 +240,101 @@ const SimulationPage: React.FC = () => {
             </div>
           )}
         </div>
-
-        <div className="simulation-controls">
-          <Typography.Title level={4} style={{ color: '#F0F6FC', marginBottom: 20 }}>
-            指挥中心
-          </Typography.Title>
-          <div className="agents-list-scroll">
-            <Space direction="vertical" style={{ width: '100%' }} size="large">
-              {agents.map(agent => (
-                <Card 
-                  key={agent.id} 
-                  className="agent-control-card" 
-                  size="small"
-                  onClick={() => {
-                    setSelectedAgentId(agent.id);
-                    setPage('console');
-                  }}
-                  style={{ cursor: 'pointer' }}
-                >
-                  <div className="agent-info">
-                    <RobotOutlined style={{ fontSize: 24, color: `#${agent.color.toString(16).padStart(6, '0')}` }} />
-                    <div className="name-status">
-                      <div className="name" style={{ color: '#F0F6FC' }}>{agent.name}</div>
-                      <div className="status-tag">
-                        {agent.status === 'idle' && <Tag color="default">待命</Tag>}
-                        {agent.status === 'walking' && <Tag color="processing">移动中...</Tag>}
-                        {agent.status === 'working' && <Tag color="success">工作中</Tag>}
-                        {agent.status === 'resting' && <Tag color="warning">休息中</Tag>}
-                      </div>
-                    </div>
-                  </div>
-                </Card>
-              ))}
-            </Space>
-          </div>
-        </div>
       </div>
+
+
+      {/* Agent Detail Drawer */}
+      <Drawer
+        title={
+          <div className="detail-drawer-header">
+            <RobotOutlined style={{ 
+              fontSize: 28, 
+              color: detailAgent ? `#${detailAgent.color.toString(16).padStart(6, '0')}` : '#58A6FF',
+              filter: 'drop-shadow(0 0 8px rgba(88, 166, 255, 0.4))'
+            }} />
+            <div className="title-area">
+              <div className="agent-name">{detailAgent?.name || 'Agent 详情'}</div>
+              <Tag color={
+                detailAgent?.status === 'working' ? 'success' : 
+                detailAgent?.status === 'walking' ? 'processing' : 'default'
+              }>
+                {detailAgent?.status === 'working' ? '正在工作中' : 
+                 detailAgent?.status === 'walking' ? '正在移动' : 
+                 detailAgent?.status === 'resting' ? '正在休息' : '空闲待命'}
+              </Tag>
+            </div>
+          </div>
+        }
+        placement="right"
+        onClose={() => setDetailVisible(false)}
+        open={detailVisible}
+        width={400}
+        className="simulation-detail-drawer"
+      >
+        {detailAgent && (
+          <div className="detail-content">
+            <div className="section">
+              <div className="section-title">核心信息</div>
+              <div className="info-grid">
+                <div className="grid-item">
+                  <span className="label">状态</span>
+                  <span className="value" style={{ 
+                    color: detailAgent.status === 'working' ? '#3FB950' : 
+                           detailAgent.status === 'walking' ? '#58A6FF' : 
+                           detailAgent.status === 'resting' ? '#D29922' : '#8B949E'
+                  }}>
+                    {detailAgent.status === 'working' ? '工作中' : 
+                     detailAgent.status === 'walking' ? '移动中' : 
+                     detailAgent.status === 'resting' ? '休息中' : '待命'}
+                  </span>
+                </div>
+                <div className="grid-item">
+                  <span className="label">标识符</span>
+                  <span className="value">#{detailAgent.id.substring(0, 8)}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="section">
+              <div className="section-title">工作目录</div>
+              <div className="path-display">
+                {detailAgent.workingDirectory}
+              </div>
+            </div>
+
+            <div className="section">
+              <div className="section-title">活跃任务 / 状态</div>
+              <div className="prompt-display">
+                {detailAgent.status === 'working' 
+                  ? (detailAgent.latestTaskPrompt || '任务载入中...')
+                  : getFunnyIdleMessage(detailAgent.id)}
+              </div>
+            </div>
+
+            <div className="drawer-footer-actions">
+              <Button 
+                type="primary" 
+                block 
+                size="large"
+                icon={<MessageOutlined />}
+                onClick={() => jumpToConsole('output')}
+                className="action-btn chat-btn"
+              >
+                跳转到控制台对话框
+              </Button>
+              <Button 
+                block 
+                size="large"
+                icon={<CodeOutlined />}
+                onClick={() => jumpToConsole('terminal')}
+                className="action-btn terminal-btn"
+              >
+                跳转到控制台终端
+              </Button>
+            </div>
+          </div>
+        )}
+      </Drawer>
     </div>
   );
 };

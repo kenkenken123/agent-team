@@ -126,7 +126,37 @@ public class TasksController(
         db.Tasks.Remove(task);
         await db.SaveChangesAsync();
 
-        return Ok(new { message = "删除成功" });
+        return Ok(new { message = "删除任务成功" });
+    }
+
+    [HttpDelete("session")]
+    public async Task<IActionResult> DeleteSession([FromQuery] string? sessionId, [FromQuery] Guid? taskId)
+    {
+        if (string.IsNullOrEmpty(sessionId) && (!taskId.HasValue))
+            return BadRequest(new { error = "必须提供 sessionId 或 taskId" });
+
+        List<AgentTask> tasksToDelete;
+        if (!string.IsNullOrEmpty(sessionId))
+        {
+            tasksToDelete = await db.Tasks.Where(t => t.ClaudeSessionId == sessionId).ToListAsync();
+        }
+        else
+        {
+            tasksToDelete = await db.Tasks.Where(t => t.Id == taskId && t.ClaudeSessionId == null).ToListAsync();
+        }
+
+        foreach (var task in tasksToDelete)
+        {
+            if (task.Status == AgentTeam.Api.Models.TaskStatus.Running)
+            {
+                await claudeService.CancelTaskAsync(task.Id);
+            }
+            outputFileService.Delete(task.Id);
+            db.Tasks.Remove(task);
+        }
+
+        await db.SaveChangesAsync();
+        return Ok(new { message = "会话已删除", count = tasksToDelete.Count });
     }
 
 

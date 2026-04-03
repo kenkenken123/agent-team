@@ -195,8 +195,29 @@ export function OfficeCanvas({
       const prevHovered = officeState.hoveredAgentId;
       officeState.hoveredAgentId = hitId;
       
-      if (hitId !== prevHovered || hitId !== null) {
-          if (onHover) onHover(hitId, e.clientX, e.clientY);
+      if (hitId !== null) {
+          const ch = officeState.characters.get(hitId);
+          if (ch) {
+              const dpr = window.devicePixelRatio || 1;
+              const canvas = canvasRef.current;
+              if (canvas) {
+                const layout = officeState.getLayout();
+                const mapW = layout.cols * TILE_SIZE * zoom;
+                const mapH = layout.rows * TILE_SIZE * zoom;
+                const offsetX = Math.floor((canvas.width - mapW) / 2) + Math.round(panRef.current.x);
+                const offsetY = Math.floor((canvas.height - mapH) / 2) + Math.round(panRef.current.y);
+
+                const charScreenX = (ch.x * zoom + offsetX) / dpr;
+                const charScreenY = (ch.y * zoom + offsetY) / dpr;
+                
+                // Offset to head
+                const headY = charScreenY - (28 * zoom / dpr);
+                
+                if (onHover) onHover(hitId, charScreenX, headY);
+              }
+          }
+      } else {
+          if (hitId !== prevHovered && onHover) onHover(null);
       }
     },
     [

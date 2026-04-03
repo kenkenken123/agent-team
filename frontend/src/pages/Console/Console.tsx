@@ -226,16 +226,18 @@ const ConsolePage: React.FC = () => {
     loadTasks();
   };
 
-  const handleDelete = async (taskId: string) => {
+  const handleDeleteSession = async (task: AgentTask) => {
     try {
-      await taskApi.delete(taskId);
-      message.success('任务已删除');
-      if (selectedTask?.id === taskId) {
+      await taskApi.deleteSession(task.claudeSessionId || undefined, !task.claudeSessionId ? task.id : undefined);
+      message.success('会话已彻底删除');
+      
+      // 如果删除的是当前选中的会话下的任务，清空选中
+      if (selectedTask?.claudeSessionId === task.claudeSessionId || selectedTask?.id === task.id) {
         setSelectedTask(null);
       }
       loadTasks();
     } catch (e: any) {
-      message.error(e?.response?.data?.error ?? '删除失败');
+      message.error(e?.response?.data?.error ?? '删除会话失败');
     }
   };
 
@@ -283,7 +285,7 @@ const ConsolePage: React.FC = () => {
             />
           </div>
           <div className="task-sider-title">
-            <Text style={{ color: '#8B949E', fontSize: 12 }}>任务历史 ({totalTasks})</Text>
+            <Text style={{ color: '#8B949E', fontSize: 12 }}>会话历史 ({siderTasks.length})</Text>
             {selectedAgent && (
               <Tooltip title="新增会话">
                 <Button 
@@ -311,7 +313,9 @@ const ConsolePage: React.FC = () => {
                     <div className="task-item-header">
                       <Space size={6}>
                         {taskStatusIcon(task.status)}
-                        <Text strong style={{ color: '#C9D1D9', fontSize: 13 }}>#{task.id.substring(0, 6)}</Text>
+                        <Text strong style={{ color: '#C9D1D9', fontSize: 13 }}>
+                          {task.claudeSessionId ? `会话 #${task.claudeSessionId.substring(0, 6)}` : `任务 #${task.id.substring(0, 6)}`}
+                        </Text>
                       </Space>
                       <Space size={4}>
                         {task.status === 'Running' && (
@@ -327,10 +331,10 @@ const ConsolePage: React.FC = () => {
                           />
                         )}
                         <Popconfirm
-                          title={task.status === 'Running' ? "任务正在运行，确定要强制终止并删除吗？" : "确定删除此任务？"}
-                          onConfirm={(e) => { e?.stopPropagation(); handleDelete(task.id); }}
+                          title={task.status === 'Running' ? "会话中仍有任务在运行，确定要强制终止并删除整个会话吗？" : "确定删除此会话及其所有历史记录？"}
+                          onConfirm={(e) => { e?.stopPropagation(); handleDeleteSession(task); }}
                           onCancel={(e) => e?.stopPropagation()}
-                          okText="删除"
+                          okText="彻底删除"
                           cancelText="取消"
                           okButtonProps={{ danger: true }}
                         >
@@ -339,6 +343,7 @@ const ConsolePage: React.FC = () => {
                             size="small"
                             icon={<DeleteOutlined />}
                             onClick={(e) => e.stopPropagation()}
+                            title="删除会话"
                           />
                         </Popconfirm>
                       </Space>
@@ -346,7 +351,7 @@ const ConsolePage: React.FC = () => {
 
                     </div>
                     <div className="task-prompt-preview">
-                      {task.claudeSessionId ? `会话最新追踪: ${task.prompt}` : task.prompt}
+                      {task.claudeSessionId ? `最新: ${task.prompt}` : task.prompt}
                     </div>
                   </div>
                 </List.Item>

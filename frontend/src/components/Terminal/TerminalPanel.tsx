@@ -15,6 +15,7 @@ import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 
+import { useAppStore } from '../../stores/appStore';
 import { useTerminal } from '../../hooks/useTerminal';
 import { useTaskWebSocket } from '../../hooks/useTaskWebSocket';
 import type { AgentTask, WsMessage } from '../../types';
@@ -41,6 +42,15 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ task, onStatusChange }) =
   const containerRef = useRef<HTMLDivElement>(null);
   const [isExpanded, setIsExpanded] = useState(false);
   const [showMarkdown, setShowMarkdown] = useState(true);
+  const { initialConsoleTab, setInitialConsoleTab } = useAppStore();
+
+  useEffect(() => {
+    if (initialConsoleTab) {
+      setActiveTab(initialConsoleTab);
+      // Wait a bit then clear it so it doesn't keep switching
+      setInitialConsoleTab(null);
+    }
+  }, [initialConsoleTab, setInitialConsoleTab]);
 
   // 提取预览内容的辅助函数 (简单展示一些核心输出内容)
   const [previewContent, setPreviewContent] = useState<string>('');
