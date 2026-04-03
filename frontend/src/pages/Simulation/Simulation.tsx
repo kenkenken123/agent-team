@@ -116,11 +116,7 @@ const SimulationPage: React.FC = () => {
       }
     });
 
-    // Auto-follow first agent if none selected
-    if (os.cameraFollowId === null && agents.length > 0) {
-      const firstId = guidToNumericMap.get(agents[0].id) || 1;
-      os.cameraFollowId = firstId;
-    }
+
   }, [agents, assetsLoaded, guidToNumericMap]);
 
   const { setPage, setSelectedAgentId } = useAppStore();

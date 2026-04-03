@@ -92,30 +92,7 @@ export function OfficeCanvas({
         const w = canvas.width;
         const h = canvas.height;
 
-        // Camera follow
-        if (officeState.cameraFollowId !== null) {
-          const followCh = officeState.characters.get(officeState.cameraFollowId);
-          if (followCh) {
-            const layout = officeState.getLayout();
-            const mapW = layout.cols * TILE_SIZE * zoom;
-            const mapH = layout.rows * TILE_SIZE * zoom;
-            const targetX = mapW / 2 - followCh.x * zoom;
-            const targetY = mapH / 2 - followCh.y * zoom;
-            const dx = targetX - panRef.current.x;
-            const dy = targetY - panRef.current.y;
-            if (
-              Math.abs(dx) < CAMERA_FOLLOW_SNAP_THRESHOLD &&
-              Math.abs(dy) < CAMERA_FOLLOW_SNAP_THRESHOLD
-            ) {
-              panRef.current = { x: targetX, y: targetY };
-            } else {
-              panRef.current = {
-                x: panRef.current.x + dx * CAMERA_FOLLOW_LERP,
-                y: panRef.current.y + dy * CAMERA_FOLLOW_LERP,
-              };
-            }
-          }
-        }
+
 
         const selectionRender: SelectionRenderState = {
           selectedAgentId: officeState.selectedAgentId,
@@ -237,7 +214,7 @@ export function OfficeCanvas({
       unlockAudio();
       if (e.button === 1) {
         e.preventDefault();
-        officeState.cameraFollowId = null;
+
         isPanningRef.current = true;
         panStartRef.current = {
           mouseX: e.clientX,
@@ -275,10 +252,9 @@ export function OfficeCanvas({
         officeState.dismissBubble(hitId);
         if (officeState.selectedAgentId === hitId) {
           officeState.selectedAgentId = null;
-          officeState.cameraFollowId = null;
+
         } else {
           officeState.selectedAgentId = hitId;
-          officeState.cameraFollowId = hitId;
         }
         onClick(hitId);
         return;
@@ -296,20 +272,18 @@ export function OfficeCanvas({
                 if (selectedCh.seatId === seatId) {
                   officeState.sendToSeat(officeState.selectedAgentId);
                   officeState.selectedAgentId = null;
-                  officeState.cameraFollowId = null;
-                  return;
+                  officeState.selectedAgentId = null;
                 } else if (!seat.assigned) {
                   officeState.reassignSeat(officeState.selectedAgentId, seatId);
                   officeState.selectedAgentId = null;
-                  officeState.cameraFollowId = null;
-                  return;
+                  officeState.selectedAgentId = null;
                 }
               }
             }
           }
         }
         officeState.selectedAgentId = null;
-        officeState.cameraFollowId = null;
+        officeState.selectedAgentId = null;
       }
     },
     [officeState, onClick, screenToWorld, screenToTile],
@@ -349,8 +323,10 @@ export function OfficeCanvas({
           }
         }
       } else {
+        // panRef.current = ... (keep wheel zoom, but maybe disable wheel pan or just keep it)
+        // User said "fixed in middle", so maybe disable wheel pan?
+        // But wheel pan is often useful. Let's keep it but remove the auto-follow reset.
         const dpr = window.devicePixelRatio || 1;
-        officeState.cameraFollowId = null;
         panRef.current = clampPan(
           panRef.current.x - e.deltaX * dpr,
           panRef.current.y - e.deltaY * dpr,
