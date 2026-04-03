@@ -34,6 +34,9 @@ public record AgentDto(
     string Model,
     int? MaxTurns,
     bool IsEnabled,
+    string Status, // 'idle', 'working', etc.
+    string? LatestTaskPrompt,
+    Guid? LatestTaskId,
     DateTime CreatedAt,
     DateTime UpdatedAt
 );

@@ -11,12 +11,11 @@ import AgentsPage from '../../pages/Agents/Agents';
 import ConsolePage from '../../pages/Console/Console';
 import HistoryPage from '../../pages/History/History';
 import SimulationPage from '../../pages/Simulation/Simulation';
+import { useAppStore, PageKey } from '../../stores/appStore';
 import './AppLayout.css';
 
 const { Sider, Content } = Layout;
 const { Text } = Typography;
-
-type PageKey = 'dashboard' | 'agents' | 'console' | 'history' | 'simulation';
 
 const PAGE_MAP: Record<PageKey, React.ReactNode> = {
   dashboard: <Dashboard />,
@@ -27,7 +26,7 @@ const PAGE_MAP: Record<PageKey, React.ReactNode> = {
 };
 
 const AppLayout: React.FC = () => {
-  const [currentPage, setCurrentPage] = useState<PageKey>('dashboard');
+  const { currentPage, setPage } = useAppStore();
   const [collapsed, setCollapsed] = useState(false);
 
   return (

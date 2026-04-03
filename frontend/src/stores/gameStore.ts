@@ -14,6 +14,7 @@ export interface Agent {
   targetY: number;
   pixelX: number;
   pixelY: number;
+  workingDirectory?: string; // For hover detail
 }
 
 interface GameState {
@@ -27,6 +28,7 @@ interface GameState {
   updateAgentPixelPosition: (agentId: string, x: number, y: number) => void;
   arriveAtTarget: (agentId: string) => void;
   setAgentStatus: (agentId: string, status: AgentStatus) => void;
+  refreshAgents: () => Promise<void>;
 }
 
 const TILE_SIZE = 48;
@@ -76,14 +78,9 @@ const INITIAL_AGENTS: Agent[] = [
 
 export const useGameStore = create<GameState>((set) => ({
   companyMap: INITIAL_MAP,
-  agents: INITIAL_AGENTS,
-  workstations: [
-    { x: 2, y: 2 }, { x: 11, y: 2 },
-    { x: 2, y: 7 }, { x: 11, y: 7 }
-  ],
-  restSpots: [
-    { x: 9, y: 9 }, { x: 10, y: 9 }
-  ],
+  agents: [],
+  workstations: [],
+  restSpots: [],
 
   moveAgent: (agentId, targetX, targetY) => set((state) => ({
     agents: state.agents.map((a) =>
@@ -116,5 +113,59 @@ export const useGameStore = create<GameState>((set) => ({
     agents: state.agents.map((a) =>
       a.id === agentId ? { ...a, status } : a
     )
-  }))
+  })),
+
+  refreshAgents: async () => {
+    try {
+      const response = await fetch('http://localhost:5501/api/agents');
+      if (!response.ok) throw new Error('Fetch failed');
+      const backendAgents = await response.json();
+
+      set((state) => {
+        const updatedAgents = backendAgents.map((ba: any) => {
+          const existing = state.agents.find(a => a.id === ba.id);
+          
+          // Determine status from backend if it's 'working', otherwise keep existing or 'idle'
+          // If the agent is currently walking, keep it walking until it arrives
+          let status: AgentStatus = ba.status as AgentStatus;
+          if (existing?.status === 'walking') {
+            status = 'walking';
+          }
+
+          if (existing) {
+            // Keep current positions, only update status and info
+            return { 
+              ...existing, 
+              name: ba.name, 
+              workingDirectory: ba.workingDirectory,
+              status: ba.status as AgentStatus
+            };
+          } else {
+            // New agent
+            const color = [0x58A6FF, 0xBC8CFF, 0x3FB950, 0xD29922, 0xF85149, 0x8B949E][state.agents.length % 6];
+            const x = 2 + (state.agents.length % 10);
+            const y = 4;
+            
+            return {
+              id: ba.id,
+              name: ba.name,
+              status: ba.status as AgentStatus,
+              color: color,
+              gridX: x,
+              gridY: y,
+              targetX: x,
+              targetY: y,
+              pixelX: x * TILE_SIZE,
+              pixelY: y * TILE_SIZE,
+              workingDirectory: ba.workingDirectory
+            };
+          }
+        });
+
+        return { agents: updatedAgents };
+      });
+    } catch (err) {
+      console.error('Failed to refresh agents:', err);
+    }
+  }
 }));

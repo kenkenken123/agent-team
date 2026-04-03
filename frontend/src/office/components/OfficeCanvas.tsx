@@ -20,6 +20,7 @@ import { TILE_SIZE } from '../types.js';
 interface OfficeCanvasProps {
   officeState: OfficeState;
   onClick: (agentId: number) => void;
+  onHover?: (agentId: number | null, x?: number, y?: number) => void;
   zoom: number;
   onZoomChange: (zoom: number) => void;
   panRef: React.MutableRefObject<{ x: number; y: number }>;
@@ -28,6 +29,7 @@ interface OfficeCanvasProps {
 export function OfficeCanvas({
   officeState,
   onClick,
+  onHover,
   zoom,
   onZoomChange,
   panRef,
@@ -213,7 +215,12 @@ export function OfficeCanvas({
         }
         canvas.style.cursor = cursor;
       }
+      const prevHovered = officeState.hoveredAgentId;
       officeState.hoveredAgentId = hitId;
+      
+      if (hitId !== prevHovered || hitId !== null) {
+          if (onHover) onHover(hitId, e.clientX, e.clientY);
+      }
     },
     [
       officeState,
@@ -221,6 +228,7 @@ export function OfficeCanvas({
       screenToTile,
       panRef,
       clampPan,
+      onHover
     ],
   );
 
@@ -311,7 +319,8 @@ export function OfficeCanvas({
     isPanningRef.current = false;
     officeState.hoveredAgentId = null;
     officeState.hoveredTile = null;
-  }, [officeState]);
+    if (onHover) onHover(null);
+  }, [officeState, onHover]);
 
   const handleContextMenu = useCallback(
     (e: React.MouseEvent) => {
