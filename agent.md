@@ -1,0 +1,143 @@
+# agent.md — Agent Team 开发协作指南
+
+本文档用于帮助后续开发者与 AI Agent 快速理解 **Agent Team** 项目结构、运行方式与常见开发约定。
+
+## 1. 项目定位
+
+Agent Team 是一个“多 Agent 控制台 + 赛博像素办公模拟器”项目：
+
+- 前端负责管理界面、终端 UI 和像素场景渲染。
+- 后端提供 Agent/Task/模板等 REST API，并通过 WebSocket 推送任务状态与输出。
+- PTY 服务负责终端桥接（`node-pty`），支持交互式命令行体验。
+
+## 2. 目录总览
+
+- `frontend/`：React + TypeScript + Vite + PixiJS 前端。
+- `backend/AgentTeam.Api/`：ASP.NET Core Web API（SQLite 持久化、WebSocket 管理、Claude 任务编排）。
+- `pty-server/`：Node.js + `ws` + `node-pty` 的 PTY 桥接服务。
+- `screenshot/`：README 展示截图。
+- 根目录启动脚本：`start-all.bat`、`run-backend.bat`、`run-frontend.bat`、`run-pty.bat`。
+
+## 3. 技术栈
+
+- 前端：React、TypeScript、Vite、Ant Design、PixiJS、xterm.js。
+- 后端：.NET（ASP.NET Core）、Entity Framework Core、SQLite。
+- 终端桥接：Node.js、WebSocket、node-pty。
+- 通信模式：REST + WebSocket（后端任务输出流式推送）。
+
+## 4. 本地开发启动
+
+## 4.1 前置条件
+
+- Node.js >= 18
+- .NET SDK >= 10
+- 已安装并登录可用的 Claude CLI（若要真实执行 Agent 任务）
+
+## 4.2 一键启动（Windows）
+
+在仓库根目录执行：
+
+```bat
+start-all.bat
+```
+
+默认访问：
+
+- 前端：`http://localhost:5502`
+- 后端：`http://localhost:5501`
+
+## 4.3 分服务启动（跨平台建议）
+
+### 前端
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+### 后端
+
+```bash
+cd backend/AgentTeam.Api
+dotnet restore
+dotnet run
+```
+
+### PTY 服务
+
+```bash
+cd pty-server
+npm install
+npm run dev
+```
+
+## 5. 关键运行机制
+
+### 5.1 后端数据与文件
+
+后端启动时会自动创建：
+
+- `backend/AgentTeam.Api/data/agent-team.db`（SQLite）
+- `backend/AgentTeam.Api/data/outputs/`（任务输出）
+- `backend/AgentTeam.Api/data/sessions/`（会话数据）
+
+### 5.2 WebSocket 路由
+
+任务流式输出 WebSocket 路由：
+
+- `ws://<host>/ws/task/{taskId}`
+
+后端会将任务输出与状态变化广播到对应 task channel。
+
+### 5.3 CORS（开发环境）
+
+后端默认允许以下前端开发源：
+
+- `http://localhost:5502`
+- `http://localhost:5173`
+- `http://localhost:3000`
+
+## 6. 开发建议（给后续 Agent）
+
+1. **优先小步迭代**：一次只改一个模块（例如仅改 API 或仅改 UI），减少联调复杂度。
+2. **先接口后交互**：新增前端功能前，先确认后端 DTO 与返回字段。
+3. **保持事件一致性**：任务输出/状态字段变更时，前后端与 WebSocket 消息结构要同步。
+4. **避免破坏默认端口**：除非有充分理由，保持 5501/5502 与现有脚本一致。
+5. **提交前检查**：至少执行一次前端构建或 lint，以及后端构建，确保主干可运行。
+
+## 7. 常用命令速查
+
+### 前端
+
+```bash
+cd frontend
+npm run dev
+npm run build
+npm run lint
+```
+
+### 后端
+
+```bash
+cd backend/AgentTeam.Api
+dotnet run
+dotnet build
+```
+
+### PTY
+
+```bash
+cd pty-server
+npm run dev
+npm run start
+```
+
+---
+
+如果后续需要扩展本文件，建议新增章节：
+
+- API 约定与错误码
+- 前端状态管理（store）说明
+- 任务生命周期时序图
+- 发布与部署流程
