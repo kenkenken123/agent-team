@@ -61,6 +61,22 @@ graph TD
 
 ---
 
+## 📸 Screenshots
+
+### The Modern Cyber Hub & Dashboards
+![Main Hub Screenshot](screenshot/1.png)
+
+<p align="center">
+  <img src="screenshot/2.png" width="48%" alt="Side view 1" />
+  <img src="screenshot/3.png" width="48%" alt="Side view 2" />
+</p>
+<p align="center">
+  <img src="screenshot/4.png" width="48%" alt="Side view 3" />
+  <img src="screenshot/5.png" width="48%" alt="Side view 4" />
+</p>
+
+---
+
 ## 🚀 Quick Start
 
 ### Prerequisites
@@ -74,8 +90,8 @@ Run the following from the root directory:
 start-all.bat
 ```
 Then visit:
-- **Web Interface**: `http://localhost:5173`
-- **Backend API**: `http://localhost:5000`
+- **Web Interface**: `http://localhost:5502`
+- **Backend API**: `http://localhost:5501`
 
 ---
 

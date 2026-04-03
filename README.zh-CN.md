@@ -61,6 +61,22 @@ graph TD
 
 ---
 
+## 📸 预览 (Screenshots)
+
+### 核心界面: 赛博办公模拟与多 Agent 控制台
+![Main Interface](screenshot/1.png)
+
+<p align="center">
+  <img src="screenshot/2.png" width="48%" alt="Details 1" />
+  <img src="screenshot/3.png" width="48%" alt="Details 2" />
+</p>
+<p align="center">
+  <img src="screenshot/4.png" width="48%" alt="Details 3" />
+  <img src="screenshot/5.png" width="48%" alt="Details 4" />
+</p>
+
+---
+
 ## 🚀 快速开始
 
 ### 前置要求
@@ -74,8 +90,8 @@ graph TD
 start-all.bat
 ```
 随后访问：
-- **Web 界面**: `http://localhost:5173`
-- **API 文档**: `http://localhost:5000`
+- **Web 界面**: `http://localhost:5502`
+- **后端 API/文档**: `http://localhost:5501`
 
 ---
 
