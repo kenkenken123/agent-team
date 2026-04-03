@@ -48,7 +48,7 @@ export function useTerminal(
       fontSize: 13,
       lineHeight: 1.5,
       cursorBlink: true,
-      scrollback: 5000,
+      scrollback: 20000,
       allowProposedApi: true,
       disableStdin: true,
     });
@@ -65,7 +65,6 @@ export function useTerminal(
     term.loadAddon(fitAddon);
     term.loadAddon(webLinksAddon);
     
-    // 自定义按键处理器：允许 Ctrl+C / Cmd+C 复制纯文本
     term.attachCustomKeyEventHandler((e) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'c' && term.hasSelection()) {
         navigator.clipboard.writeText(term.getSelection());
@@ -83,7 +82,7 @@ export function useTerminal(
     if (bufferRef.current) {
       const initLines = (bufferRef.current.match(/\n/g) || []).length;
       rowsCountRef.current = Math.max(5, initLines + 2);
-      term.resize(term.cols, Math.min(rowsCountRef.current, 40));
+      term.resize(term.cols, Math.min(rowsCountRef.current, 60));
       
       term.write(bufferRef.current.replace(/\n/g, '\r\n'));
       bufferRef.current = '';
@@ -99,23 +98,28 @@ export function useTerminal(
     while (queueRef.current.length > 0 && termRef.current) {
       const L = queueRef.current.length;
       let chunkLength = 1;
-      if (L > 2000) chunkLength = 30;
-      else if (L > 500) chunkLength = 10;
-      else if (L > 100) chunkLength = 5;
-      else chunkLength = 2; // 默认每次打出2个字符
+      let delay = 15;
+
+      if (L > 10000) { chunkLength = 500; delay = 0; }
+      else if (L > 2000) { chunkLength = 100; delay = 2; }
+      else if (L > 500) { chunkLength = 30; delay = 5; }
+      else if (L > 50) { chunkLength = 10; delay = 10; }
+      else { chunkLength = 2; delay = 15; }
 
       const chunk = queueRef.current.slice(0, chunkLength);
       queueRef.current = queueRef.current.slice(chunkLength);
       
-      rowsCountRef.current += (chunk.match(/\n/g) || []).length;
-      const targetRows = Math.min(Math.max(rowsCountRef.current, 5), 40);
-      if (termRef.current.rows !== targetRows) {
-        termRef.current.resize(termRef.current.cols, targetRows);
+      const newLines = (chunk.match(/\n/g) || []).length;
+      if (newLines > 0) {
+        rowsCountRef.current += newLines;
+        const targetRows = Math.min(Math.max(rowsCountRef.current, 5), 60);
+        if (termRef.current.rows !== targetRows) {
+          termRef.current.resize(termRef.current.cols, targetRows);
+        }
       }
 
       termRef.current.write(chunk);
-      
-      await new Promise(r => setTimeout(r, 15));
+      if (delay > 0) await new Promise(r => setTimeout(r, delay));
     }
 
     typingRef.current = false;
@@ -125,8 +129,9 @@ export function useTerminal(
     const formatted = text.replace(/\n/g, '\r\n');
     if (termRef.current) {
       if (instant) {
-        rowsCountRef.current += (formatted.match(/\n/g) || []).length;
-        const targetRows = Math.min(Math.max(rowsCountRef.current, 5), 40);
+        const lines = (formatted.match(/\n/g) || []).length;
+        rowsCountRef.current += lines;
+        const targetRows = Math.min(Math.max(rowsCountRef.current, 5), 60);
         if (termRef.current.rows !== targetRows) {
           termRef.current.resize(termRef.current.cols, targetRows);
         }

@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useGameStore } from '../../stores/gameStore';
 import { Card, Typography, Tag, Space, Spin } from 'antd';
 import { RobotOutlined } from '@ant-design/icons';
@@ -10,6 +10,7 @@ import { setFloorSprites } from '../../office/floorTiles.js';
 import { setWallSprites } from '../../office/wallTiles.js';
 import { buildDynamicCatalog } from '../../office/layout/furnitureCatalog.js';
 import { CharacterState } from '../../office/types.js';
+import { useAppStore } from '../../stores/appStore';
 import './Simulation.css';
 
 const SimulationPage: React.FC = () => {
@@ -122,9 +123,23 @@ const SimulationPage: React.FC = () => {
     }
   }, [agents, assetsLoaded, guidToNumericMap]);
 
+  const { setPage, setSelectedAgentId } = useAppStore();
+
   const handleAgentClick = (id: number) => {
-    console.log('Clicked agent:', id);
+    const guid = numericToGuidMap.current.get(id);
+    if (guid) {
+      setSelectedAgentId(guid);
+      setPage('console');
+    }
   };
+
+  // Funny idle messages
+  const getFunnyIdleMessage = useCallback((agentId: string) => {
+    const messages = ["摸鱼ing", "抽根烟", "在玩黑神话", "发呆中...", "偷看股票", "刷短视频", "思考人生", "正在喝咖啡", "蹲厕所中"];
+    // Deterministic random based on ID hash
+    const hash = agentId.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+    return messages[hash % messages.length];
+  }, []);
 
   const handleHover = (id: number | null, x?: number, y?: number) => {
     if (id === null) {
@@ -199,6 +214,14 @@ const SimulationPage: React.FC = () => {
                     {currentHoveredAgent.workingDirectory}
                   </div>
                 </div>
+                <div className="info-item">
+                  <span className="label">最新进度:</span>
+                  <div className="progress-text" style={{ color: '#58A6FF', fontSize: 12, marginTop: 4 }}>
+                    {currentHoveredAgent.status === 'working' 
+                      ? (currentHoveredAgent.latestTaskPrompt ? (currentHoveredAgent.latestTaskPrompt.length > 50 ? currentHoveredAgent.latestTaskPrompt.substring(0, 47) + '...' : currentHoveredAgent.latestTaskPrompt) : '同步中...')
+                      : getFunnyIdleMessage(currentHoveredAgent.id)}
+                  </div>
+                </div>
               </div>
             </div>
           )}
@@ -211,7 +234,16 @@ const SimulationPage: React.FC = () => {
           <div className="agents-list-scroll">
             <Space direction="vertical" style={{ width: '100%' }} size="large">
               {agents.map(agent => (
-                <Card key={agent.id} className="agent-control-card" size="small">
+                <Card 
+                  key={agent.id} 
+                  className="agent-control-card" 
+                  size="small"
+                  onClick={() => {
+                    setSelectedAgentId(agent.id);
+                    setPage('console');
+                  }}
+                  style={{ cursor: 'pointer' }}
+                >
                   <div className="agent-info">
                     <RobotOutlined style={{ fontSize: 24, color: `#${agent.color.toString(16).padStart(6, '0')}` }} />
                     <div className="name-status">

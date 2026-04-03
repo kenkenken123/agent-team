@@ -24,6 +24,9 @@ public class AgentTask
     /// <summary>执行当前任务时所选的模型</summary>
     public string? Model { get; set; }
 
+    /// <summary>任务执行时所在的工作目录</summary>
+    public string? WorkingDirectory { get; set; }
+
     /// <summary>终端类型：cmd / powershell / bash</summary>
     public string TerminalType { get; set; } = "powershell";
 

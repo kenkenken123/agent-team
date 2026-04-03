@@ -14,7 +14,9 @@ export interface Agent {
   targetY: number;
   pixelX: number;
   pixelY: number;
-  workingDirectory?: string; // For hover detail
+  workingDirectory?: string;
+  latestTaskPrompt?: string; 
+  latestTaskId?: string;
 }
 
 interface GameState {
@@ -138,7 +140,9 @@ export const useGameStore = create<GameState>((set) => ({
               ...existing, 
               name: ba.name, 
               workingDirectory: ba.workingDirectory,
-              status: ba.status as AgentStatus
+              status: ba.status as AgentStatus,
+              latestTaskPrompt: ba.latestTaskPrompt,
+              latestTaskId: ba.latestTaskId,
             };
           } else {
             // New agent
@@ -157,7 +161,9 @@ export const useGameStore = create<GameState>((set) => ({
               targetY: y,
               pixelX: x * TILE_SIZE,
               pixelY: y * TILE_SIZE,
-              workingDirectory: ba.workingDirectory
+              workingDirectory: ba.workingDirectory,
+              latestTaskPrompt: ba.latestTaskPrompt,
+              latestTaskId: ba.latestTaskId,
             };
           }
         });

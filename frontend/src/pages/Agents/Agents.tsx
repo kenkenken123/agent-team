@@ -12,11 +12,12 @@ import {
 import type { ColumnsType } from 'antd/es/table';
 import { agentApi } from '../../api/agentApi';
 import { agentTemplateApi } from '../../api/agentTemplateApi';
+import { commonPathApi } from '../../api/commonPathApi';
 import { statsApi } from '../../api/taskApi';
-import type { Agent, AgentTemplate, CreateAgentRequest, UpdateAgentRequest, CreateAgentTemplateRequest, UpdateAgentTemplateRequest } from '../../types';
+import type { Agent, AgentTemplate, CommonPath, CreateAgentRequest, UpdateAgentRequest, CreateAgentTemplateRequest, UpdateAgentTemplateRequest, CreateCommonPathRequest } from '../../types';
 import './Agents.css';
 
-const { Title } = Typography;
+const { Title, Text } = Typography;
 const { TextArea } = Input;
 const { TabPane } = Tabs;
 
@@ -36,10 +37,12 @@ const AgentsPage: React.FC = () => {
   
   const [agents, setAgents] = useState<Agent[]>([]);
   const [templates, setTemplates] = useState<AgentTemplate[]>([]);
+  const [commonPaths, setCommonPaths] = useState<CommonPath[]>([]);
   const [loading, setLoading] = useState(false);
 
   const [agentDrawerOpen, setAgentDrawerOpen] = useState(false);
   const [templateDrawerOpen, setTemplateDrawerOpen] = useState(false);
+  const [commonPathDrawerOpen, setCommonPathDrawerOpen] = useState(false);
 
   const [editingAgent, setEditingAgent] = useState<Agent | null>(null);
   const [editingTemplate, setEditingTemplate] = useState<AgentTemplate | null>(null);
@@ -48,14 +51,19 @@ const AgentsPage: React.FC = () => {
 
   const [agentForm] = Form.useForm();
   const [templateForm] = Form.useForm();
+  const [commonPathForm] = Form.useForm();
 
   const loadAll = async () => {
     setLoading(true);
     try {
-      const ts = await agentTemplateApi.getAll();
+      const [ts, as, ps] = await Promise.all([
+        agentTemplateApi.getAll(),
+        agentApi.getAll(),
+        commonPathApi.getAll()
+      ]);
       setTemplates(ts);
-      const as = await agentApi.getAll();
       setAgents(as);
+      setCommonPaths(ps);
     } finally {
       setLoading(false);
     }
@@ -101,14 +109,18 @@ const AgentsPage: React.FC = () => {
     setEditingAgent(null);
     setDirValid(null);
     agentForm.resetFields();
-    agentForm.setFieldsValue({ model: 'claude-3-7-sonnet-20250219', isEnabled: true });
+    agentForm.setFieldsValue({ allowedModels: ['claude-3-7-sonnet-20250219'], isEnabled: true });
     setAgentDrawerOpen(true);
   };
 
   const openEditAgent = (agent: Agent) => {
     setEditingAgent(agent);
-    setDirValid(true);
-    agentForm.setFieldsValue({ ...agent, templateId: agent.templateId });
+    setDirValid(agent.workingDirectory ? true : null);
+    agentForm.setFieldsValue({ 
+      ...agent, 
+      templateId: agent.templateId,
+      allowedModels: agent.allowedModels?.split(',') || ['claude-3-7-sonnet-20250219']
+    });
     setAgentDrawerOpen(true);
   };
 
@@ -122,7 +134,7 @@ const AgentsPage: React.FC = () => {
     const values = await agentForm.validateFields();
     const submitData = {
       ...values,
-      model: Array.isArray(values.model) ? values.model[0] : values.model,
+      allowedModels: Array.isArray(values.allowedModels) ? values.allowedModels.join(',') : values.allowedModels,
     };
 
     if (editingAgent) {
@@ -133,6 +145,26 @@ const AgentsPage: React.FC = () => {
       message.success('Agent 已创建');
     }
     setAgentDrawerOpen(false);
+    loadAll();
+  };
+
+  // -- Common Path Handlers --
+  const openCreateCommonPath = () => {
+    commonPathForm.resetFields();
+    setCommonPathDrawerOpen(true);
+  };
+
+  const handleDeleteCommonPath = async (id: string) => {
+    await commonPathApi.delete(id);
+    message.success('路径已从常用列表移除');
+    loadAll();
+  };
+
+  const handleSaveCommonPath = async () => {
+    const values = await commonPathForm.validateFields();
+    await commonPathApi.create(values as CreateCommonPathRequest);
+    message.success('路径已保存到常用列表');
+    setCommonPathDrawerOpen(false);
     loadAll();
   };
 
@@ -219,10 +251,14 @@ const AgentsPage: React.FC = () => {
       ),
     },
     {
-      title: '模型',
-      dataIndex: 'model',
-      key: 'model',
-      render: (model) => <Tag color="purple">{model}</Tag>,
+      title: '模型范围',
+      dataIndex: 'allowedModels',
+      key: 'allowedModels',
+      render: (models: string) => (
+        <Space size={[0, 4]} wrap>
+          {models.split(',').map(m => <Tag key={m} color="purple">{m}</Tag>)}
+        </Space>
+      ),
     },
     {
       title: '操作',
@@ -251,7 +287,9 @@ const AgentsPage: React.FC = () => {
         tabBarExtraContent={
           activeTab === 'agents' 
             ? <Button type="primary" icon={<PlusOutlined />} onClick={openCreateAgent}>新建 Agent 实例</Button>
-            : <Button type="primary" icon={<PlusOutlined />} onClick={openCreateTemplate}>新建 模板</Button>
+            : activeTab === 'templates'
+              ? <Button type="primary" icon={<PlusOutlined />} onClick={openCreateTemplate}>新建 模板</Button>
+              : <Button type="primary" icon={<PlusOutlined />} onClick={openCreateCommonPath}>添加常用目录</Button>
         }
       >
         <TabPane tab="Agent 实例" key="agents">
@@ -259,6 +297,27 @@ const AgentsPage: React.FC = () => {
         </TabPane>
         <TabPane tab="Agent 模板" key="templates">
           <Table className="agents-table" columns={templateColumns} dataSource={templates} rowKey="id" loading={loading} pagination={{ pageSize: 15 }} />
+        </TabPane>
+        <TabPane tab="常用目录" key="common-paths">
+          <Table 
+            className="agents-table" 
+            dataSource={commonPaths}
+            rowKey="id"
+            columns={[
+              { title: '目录全路径', dataIndex: 'path', key: 'path', render: p => <code>{p}</code> },
+              { title: '别名/说明', dataIndex: 'name', key: 'name' },
+              { title: '添加时间', dataIndex: 'createdAt', key: 'createdAt', render: d => new Date(d).toLocaleString() },
+              { 
+                title: '操作', 
+                key: 'actions', 
+                render: (_, r) => (
+                  <Popconfirm title="移除常用路径？" onConfirm={() => handleDeleteCommonPath(r.id)}>
+                    <Button type="text" icon={<DeleteOutlined />} danger size="small" />
+                  </Popconfirm>
+                ) 
+              }
+            ]}
+          />
         </TabPane>
       </Tabs>
 
@@ -309,15 +368,14 @@ const AgentsPage: React.FC = () => {
           </Form.Item>
           <Form.Item
             name="workingDirectory"
-            label="操作目录"
-            rules={[{ required: true, message: '请输入操作目录路径' }]}
+            label={<span>操作目录 <Tooltip title="留空则表示每次启动任务时手动选择"><Text type="secondary" style={{ fontSize: 12 }}>(可选)</Text></Tooltip></span>}
             validateStatus={dirValid === false ? 'error' : dirValid === true ? 'success' : undefined}
-            help={dirValid === false ? '目录不存在' : dirValid === true ? '目录有效' : undefined}
+            help={dirValid === false ? '目录不存在' : dirValid === true ? '目录有效' : (<span>留空则运行任务时再指定</span>)}
           >
-            <Input.Search placeholder="D:\projects\my-app" enterButton={<><FolderOpenOutlined /> 验证</>} onSearch={validateDir} />
+            <Input.Search placeholder="例如 D:\projects\my-app" enterButton={<><FolderOpenOutlined /> 验证</>} onSearch={validateDir} />
           </Form.Item>
-          <Form.Item name="model" label="默认模型" rules={[{ required: true, message: '请选择模型' }]}>
-            <Select mode="tags" placeholder="选择使用的模型" options={MODELS.map(m => ({ label: m, value: m }))} maxCount={1} />
+          <Form.Item name="allowedModels" label="允许选用的模型范围" rules={[{ required: true, message: '请至少选择一个模型' }]}>
+            <Select mode="multiple" placeholder="选择使用的模型" options={MODELS.map(m => ({ label: m, value: m }))} />
           </Form.Item>
           <Form.Item name="maxTurns" label="最大对话轮数">
             <InputNumber min={1} max={100} placeholder="不限制" style={{ width: '100%' }} />
@@ -327,6 +385,25 @@ const AgentsPage: React.FC = () => {
               <Switch />
             </Form.Item>
           )}
+        </Form>
+      </Drawer>
+
+      {/* --- 常用目录 Drawer --- */}
+      <Drawer
+        title="添加常用目录"
+        open={commonPathDrawerOpen}
+        onClose={() => setCommonPathDrawerOpen(false)}
+        width={400}
+        extra={<Button type="primary" onClick={handleSaveCommonPath}>保存</Button>}
+        styles={{ body: { background: '#0D1117' }, header: { background: '#161B22', borderBottom: '1px solid #21262D' } }}
+      >
+        <Form form={commonPathForm} layout="vertical" className="agent-form">
+          <Form.Item name="path" label="目录全路径" rules={[{ required: true, message: '请输入路径' }]}>
+            <Input placeholder="D:\projects\work" />
+          </Form.Item>
+          <Form.Item name="name" label="别名/说明" rules={[{ required: true, message: '请输入描述' }]}>
+            <Input placeholder="我的主工作区" />
+          </Form.Item>
         </Form>
       </Drawer>
     </div>

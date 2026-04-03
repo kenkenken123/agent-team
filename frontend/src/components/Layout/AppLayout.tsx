@@ -11,7 +11,8 @@ import AgentsPage from '../../pages/Agents/Agents';
 import ConsolePage from '../../pages/Console/Console';
 import HistoryPage from '../../pages/History/History';
 import SimulationPage from '../../pages/Simulation/Simulation';
-import { useAppStore, PageKey } from '../../stores/appStore';
+import { useAppStore } from '../../stores/appStore';
+import type { PageKey } from '../../stores/appStore';
 import './AppLayout.css';
 
 const { Sider, Content } = Layout;
@@ -54,7 +55,7 @@ const AppLayout: React.FC = () => {
           className="app-menu"
           mode="inline"
           selectedKeys={[currentPage]}
-          onClick={({ key }) => setCurrentPage(key as PageKey)}
+          onClick={({ key }) => setPage(key as PageKey)}
           items={[
             {
               key: 'dashboard',

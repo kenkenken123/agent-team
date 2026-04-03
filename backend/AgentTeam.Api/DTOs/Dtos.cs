@@ -30,8 +30,8 @@ public record AgentDto(
     string Name,
     Guid TemplateId,
     AgentTemplateDto? Template,
-    string WorkingDirectory,
-    string Model,
+    string? WorkingDirectory,
+    string AllowedModels,
     int? MaxTurns,
     bool IsEnabled,
     string Status, // 'idle', 'working', etc.
@@ -44,18 +44,37 @@ public record AgentDto(
 public record CreateAgentRequest(
     string Name,
     Guid TemplateId,
-    string WorkingDirectory,
-    string Model,
+    string? WorkingDirectory,
+    string AllowedModels,
     int? MaxTurns
 );
 
 public record UpdateAgentRequest(
     string Name,
     Guid TemplateId,
-    string WorkingDirectory,
-    string Model,
+    string? WorkingDirectory,
+    string AllowedModels,
     int? MaxTurns,
     bool IsEnabled
+);
+
+// ───── Common Path DTOs ─────
+
+public record CommonPathDto(
+    Guid Id,
+    string Path,
+    string Name,
+    DateTime CreatedAt
+);
+
+public record CreateCommonPathRequest(
+    string Path,
+    string Name
+);
+
+public record UpdateCommonPathRequest(
+    string Path,
+    string Name
 );
 
 // ───── Task DTOs ─────
@@ -87,7 +106,8 @@ public record CreateTaskRequest(
     /// <summary>是否强制开启新会话（即便有历史 Session 也不续写）</summary>
     bool ForceNewSession = false,
     string? Model = null,
-    string TerminalType = "powershell"
+    string TerminalType = "powershell",
+    string? WorkingDirectory = null
 );
 
 // ───── Stats DTOs ─────

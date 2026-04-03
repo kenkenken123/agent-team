@@ -69,7 +69,7 @@ public class ClaudeCodeService(
             {
                 FileName = fileName,
                 Arguments = arguments,
-                WorkingDirectory = agent.WorkingDirectory,
+                WorkingDirectory = task.WorkingDirectory ?? agent.WorkingDirectory,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 UseShellExecute = false,
@@ -190,8 +190,8 @@ public class ClaudeCodeService(
         // 无论是否恢复，都应该尝试应用该任务指定的模型和配置
         // 注意：--print 必须加上以防陷入交互模式
         args.Append("--print ");
-        
-        var effectiveModel = task.Model ?? agent.Model;
+
+        var effectiveModel = task.Model ?? agent.AllowedModels.Split(',')[0];
         if (!string.IsNullOrEmpty(effectiveModel))
             args.Append($"--model {effectiveModel} ");
 
@@ -226,7 +226,9 @@ public class ClaudeCodeService(
     {
         while (await reader.ReadLineAsync() is { } line)
         {
-            logger.LogInformation("[Task {TaskId}] Received: {Line}", taskId, line);
+            // 截取前200个字符，防止输出过长
+            var logLine = line.Length > 200 ? line.Substring(0, 200) + "..." : line;
+            logger.LogInformation("[Task {TaskId}] Received: {Line}", taskId, logLine);
 
             // 尝试解析 JSON 提取 session_id 和 token，以及需要展示的文本
             bool isJson = TryParseClaudeJson(line, taskId, out var extractedText);
@@ -266,36 +268,17 @@ public class ClaudeCodeService(
             var root = doc.RootElement;
 
             // ===== 提取 usage / token 统计 =====
-            JsonElement? usageEl = null;
-            if (root.TryGetProperty("usage", out var u1)) usageEl = u1;
-            else if (root.TryGetProperty("message", out var m) && m.TryGetProperty("usage", out var u2)) usageEl = u2;
-
-            if (usageEl.HasValue)
+            if (root.TryGetProperty("usage", out var usageEl))
             {
                 int inputTokens = 0, outputTokens = 0;
-                if (usageEl.Value.ValueKind == JsonValueKind.Object)
-                {
-                    if (usageEl.Value.TryGetProperty("input_tokens", out var inEl) && inEl.ValueKind == JsonValueKind.Number)
-                        inputTokens = inEl.GetInt32();
-                    if (usageEl.Value.TryGetProperty("output_tokens", out var outEl) && outEl.ValueKind == JsonValueKind.Number)
-                        outputTokens = outEl.GetInt32();
+                if (usageEl.TryGetProperty("input_tokens", out var inEl) && inEl.ValueKind == JsonValueKind.Number)
+                    inputTokens = inEl.GetInt32();
+                if (usageEl.TryGetProperty("output_tokens", out var outEl) && outEl.ValueKind == JsonValueKind.Number)
+                    outputTokens = outEl.GetInt32();
 
-                    if (inputTokens > 0 || outputTokens > 0)
-                    {
-                        _ = Task.Run(async () =>
-                        {
-                            using var scope = scopeFactory.CreateScope();
-                            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-                            var t = await db.Tasks.FindAsync(taskId);
-                            if (t != null)
-                            {
-                                t.InputTokens = (t.InputTokens ?? 0) + inputTokens;
-                                t.OutputTokens = (t.OutputTokens ?? 0) + outputTokens;
-                                t.TokensUsed = t.InputTokens + t.OutputTokens;
-                                await db.SaveChangesAsync();
-                            }
-                        });
-                    }
+                if (inputTokens > 0 || outputTokens > 0)
+                {
+                    UpdateTaskUsage(taskId, inputTokens, outputTokens);
                 }
             }
 
@@ -303,116 +286,132 @@ public class ClaudeCodeService(
             if (root.TryGetProperty("type", out var typeEl))
             {
                 var type = typeEl.GetString();
-                if (type == "assistant" && root.TryGetProperty("message", out var msgEl))
+
+                // 1. 助手消息或其 Delta
+                if (type == "assistant" || type == "message" || type == "content_block_delta")
                 {
-                    if (msgEl.TryGetProperty("type", out var msgTypeEl))
+                    // 处理 content_block_delta (流式常用)
+                    if (root.TryGetProperty("delta", out var deltaEl))
                     {
-                        var msgType = msgTypeEl.GetString();
-                        if (msgType == "message" && msgEl.TryGetProperty("content", out var contentList) && contentList.ValueKind == JsonValueKind.Array)
+                        if (deltaEl.TryGetProperty("type", out var det) && det.GetString() == "text_delta")
                         {
-                            var sb = new System.Text.StringBuilder();
-                            foreach (var item in contentList.EnumerateArray())
-                            {
-                                if (item.TryGetProperty("type", out var itemTypeEl))
-                                {
-                                    var itemType = itemTypeEl.GetString();
-                                    if (itemType == "text" && item.TryGetProperty("text", out var textEl))
-                                    {
-                                        sb.Append(textEl.GetString());
-                                    }
-                                    else if (itemType == "tool_use" && item.TryGetProperty("name", out var nameEl))
-                                    {
-                                        var toolName = nameEl.GetString();
-                                        var detail = string.Empty;
-                                        if (item.TryGetProperty("input", out var inputEl))
-                                        {
-                                            if (toolName == "Grep" || toolName == "grep_search")
-                                                detail = inputEl.TryGetProperty("query", out var query) ? $": {query.GetString()}" : "";
-                                            else if (toolName == "Bash" || toolName == "run_command")
-                                                detail = inputEl.TryGetProperty("command", out var cmd) ? $": {cmd.GetString()}" : "";
-                                            else if (toolName == "Read" || toolName == "view_file")
-                                                detail = inputEl.TryGetProperty("path", out var path) ? $": {Path.GetFileName(path.GetString())}" : "";
-                                            else if (toolName == "Write" || toolName == "write_to_file")
-                                                detail = inputEl.TryGetProperty("path", out var wpath) ? $": {Path.GetFileName(wpath.GetString())}" : "";
-                                        }
-                                        sb.Append($"\r\n\x1b[36m[Claude 正在调用工具: {toolName}{detail}]\x1b[0m\r\n");
-                                    }
-                                    else if (itemType == "thinking" && item.TryGetProperty("thinking", out var thinkingEl))
-                                    {
-                                        // 思考过程以灰色显示
-                                        sb.Append($"\x1b[90m[思考: {thinkingEl.GetString()}]\x1b[0m\r\n");
-                                    }
-                                }
-                            }
-                            extractedText = sb.ToString();
-                            if (string.IsNullOrEmpty(extractedText))
-                            {
-                                extractedText = null;
-                            }
+                            extractedText = deltaEl.TryGetProperty("text", out var t) ? t.GetString() : null;
+                        }
+                        else if (deltaEl.TryGetProperty("type", out var det2) && det2.GetString() == "thought_delta")
+                        {
+                            var thought = deltaEl.TryGetProperty("thought", out var th) ? th.GetString() : null;
+                            if (thought != null) extractedText = $"\x1b[90m[思考: {thought}]\x1b[0m\r\n";
                         }
                     }
+                    // 处理完整 message 内容
+                    else if (root.TryGetProperty("message", out var msgEl) && msgEl.TryGetProperty("content", out var contentList) && contentList.ValueKind == JsonValueKind.Array)
+                    {
+                        var sb = new System.Text.StringBuilder();
+                        foreach (var item in contentList.EnumerateArray())
+                        {
+                            if (item.TryGetProperty("type", out var itemTypeEl))
+                            {
+                                var itemType = itemTypeEl.GetString();
+                                if (itemType == "text" && item.TryGetProperty("text", out var textEl))
+                                    sb.Append(textEl.GetString());
+                                else if (itemType == "tool_use")
+                                    sb.Append(ParseToolUse(item));
+                                else if (itemType == "thought" && item.TryGetProperty("thought", out var thEl))
+                                    sb.Append($"\x1b[90m[思考: {thEl.GetString()}]\x1b[0m\r\n");
+                            }
+                        }
+                        extractedText = sb.ToString();
+                    }
+                }
+                // 2. 思考过程 (独立事件)
+                else if (type == "thought" && root.TryGetProperty("thought", out var thEl))
+                {
+                    extractedText = $"\x1b[90m[思考: {thEl.GetString()}]\x1b[0m\r\n";
+                }
+                // 3. 进度/系统 消息
+                else if (type == "progress" && root.TryGetProperty("message", out var pmsgEl))
+                {
+                    extractedText = $"\x1b[94m[进度: {pmsgEl.GetString()}]\x1b[0m\r\n";
                 }
                 else if (type == "system" && root.TryGetProperty("subtype", out var subtypeEl))
                 {
                     var subtype = subtypeEl.GetString();
                     if (subtype == "init" && root.TryGetProperty("session_id", out var sidEl))
                     {
-                        var sessionId = sidEl.GetString();
-                        if (!string.IsNullOrEmpty(sessionId))
-                        {
-                            _ = Task.Run(async () =>
-                            {
-                                using var scope = scopeFactory.CreateScope();
-                                var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-                                var t = await db.Tasks.FindAsync(taskId);
-                                if (t != null && t.ClaudeSessionId != sessionId)
-                                {
-                                    t.ClaudeSessionId = sessionId;
-                                    await db.SaveChangesAsync();
-                                }
-                            });
-                        }
+                        UpdateTaskSession(taskId, sidEl.GetString());
                     }
                 }
+                // 4. 执行结果
                 else if (type == "result" && root.TryGetProperty("subtype", out var resSubtypeEl) && resSubtypeEl.GetString() == "success")
                 {
                     extractedText = "\x1b[32m[回合执行完成]\x1b[0m\r\n";
                 }
+
                 return true;
             }
 
             // ===== 兼容老版普通 json 输出模式 =====
-            // 提取 session_id
             if (root.TryGetProperty("session_id", out var oldSessionIdEl))
-            {
-                var sessionId = oldSessionIdEl.GetString();
-                if (!string.IsNullOrEmpty(sessionId))
-                {
-                    _ = Task.Run(async () =>
-                    {
-                        using var scope = scopeFactory.CreateScope();
-                        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-                        var t = await db.Tasks.FindAsync(taskId);
-                        if (t != null && t.ClaudeSessionId != sessionId)
-                        {
-                            t.ClaudeSessionId = sessionId;
-                            await db.SaveChangesAsync();
-                        }
-                    });
-                }
-            }
+                UpdateTaskSession(taskId, oldSessionIdEl.GetString());
 
-
-            
-            // 提取 result 输出给前端
             if (root.TryGetProperty("result", out var resultEl) && resultEl.ValueKind == JsonValueKind.String)
-            {
                 extractedText = resultEl.GetString();
-            }
-            
+
             return true;
         }
         catch { return false; }
+    }
+
+    private string ParseToolUse(JsonElement item)
+    {
+        if (!item.TryGetProperty("name", out var nameEl)) return string.Empty;
+        var toolName = nameEl.GetString();
+        var detail = string.Empty;
+        if (item.TryGetProperty("input", out var inputEl))
+        {
+            if (toolName == "Grep" || toolName == "grep_search")
+                detail = inputEl.TryGetProperty("query", out var query) ? $": {query.GetString()}" : "";
+            else if (toolName == "Bash" || toolName == "run_command")
+                detail = inputEl.TryGetProperty("command", out var cmd) ? $": {cmd.GetString()}" : "";
+            else if (toolName == "Read" || toolName == "view_file")
+                detail = inputEl.TryGetProperty("path", out var path) ? $": {Path.GetFileName(path.GetString())}" : "";
+            else if (toolName == "Write" || toolName == "write_to_file")
+                detail = inputEl.TryGetProperty("path", out var wpath) ? $": {Path.GetFileName(wpath.GetString())}" : "";
+        }
+        return $"\r\n\x1b[36m[Claude 正在调用工具: {toolName}{detail}]\x1b[0m\r\n";
+    }
+
+    private void UpdateTaskUsage(Guid taskId, int input, int output)
+    {
+        _ = Task.Run(async () =>
+        {
+            using var scope = scopeFactory.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var t = await db.Tasks.FindAsync(taskId);
+            if (t != null)
+            {
+                t.InputTokens = (t.InputTokens ?? 0) + input;
+                t.OutputTokens = (t.OutputTokens ?? 0) + output;
+                t.TokensUsed = t.InputTokens + t.OutputTokens;
+                await db.SaveChangesAsync();
+            }
+        });
+    }
+
+    private void UpdateTaskSession(Guid taskId, string? sessionId)
+    {
+        if (string.IsNullOrEmpty(sessionId)) return;
+        _ = Task.Run(async () =>
+        {
+            using var scope = scopeFactory.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var t = await db.Tasks.FindAsync(taskId);
+            if (t != null && t.ClaudeSessionId != sessionId)
+            {
+                t.ClaudeSessionId = sessionId;
+                await db.SaveChangesAsync();
+            }
+        });
     }
 
 

@@ -70,6 +70,10 @@ public class TasksController(
             }
         }
 
+        var workingDirectory = req.WorkingDirectory ?? agent.WorkingDirectory;
+        if (string.IsNullOrEmpty(workingDirectory))
+            return BadRequest(new { error = "未指定工作目录，且该 Agent 未设置固定目录" });
+
         var task = new AgentTask
         {
             AgentId = req.AgentId,
@@ -77,7 +81,8 @@ public class TasksController(
             Prompt = req.Prompt,
             ClaudeSessionId = sessionId,
             TerminalType = req.TerminalType,
-            Model = req.Model ?? agent.Model // 优先使用请求指定的模型
+            WorkingDirectory = workingDirectory,
+            Model = req.Model ?? agent.AllowedModels.Split(',')[0] // 优先使用请求指定的模型
         };
 
         db.Tasks.Add(task);
@@ -111,6 +116,8 @@ public class TasksController(
         if (task.Status == AgentTeam.Api.Models.TaskStatus.Running)
         {
             await claudeService.CancelTaskAsync(id);
+            // 给进程释放文件留一点时间
+            await Task.Delay(200);
         }
 
         // 删除磁盘日志文件
@@ -137,7 +144,7 @@ public class TasksController(
         t.Id,
         t.AgentId,
         t.Agent?.Name ?? "",
-        t.Agent?.WorkingDirectory,
+        t.WorkingDirectory,
         t.Prompt,
         t.Status.ToString(),
         t.ClaudeSessionId,

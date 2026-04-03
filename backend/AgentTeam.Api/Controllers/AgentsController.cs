@@ -38,7 +38,7 @@ public class AgentsController(AppDbContext db) : ControllerBase
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] CreateAgentRequest req)
     {
-        if (!Directory.Exists(req.WorkingDirectory))
+        if (!string.IsNullOrEmpty(req.WorkingDirectory) && !Directory.Exists(req.WorkingDirectory))
             return BadRequest(new { error = $"工作目录不存在: {req.WorkingDirectory}" });
 
         var template = await db.AgentTemplates.FindAsync(req.TemplateId);
@@ -50,7 +50,7 @@ public class AgentsController(AppDbContext db) : ControllerBase
             TemplateId = req.TemplateId,
             Template = template,
             WorkingDirectory = req.WorkingDirectory,
-            Model = req.Model,
+            AllowedModels = req.AllowedModels,
             MaxTurns = req.MaxTurns
         };
         db.Agents.Add(agent);
@@ -64,7 +64,7 @@ public class AgentsController(AppDbContext db) : ControllerBase
         var agent = await db.Agents.Include(a => a.Template).Include(a => a.Tasks).FirstOrDefaultAsync(a => a.Id == id);
         if (agent == null) return NotFound();
 
-        if (!Directory.Exists(req.WorkingDirectory))
+        if (!string.IsNullOrEmpty(req.WorkingDirectory) && !Directory.Exists(req.WorkingDirectory))
             return BadRequest(new { error = $"工作目录不存在: {req.WorkingDirectory}" });
 
         var template = await db.AgentTemplates.FindAsync(req.TemplateId);
@@ -74,7 +74,7 @@ public class AgentsController(AppDbContext db) : ControllerBase
         agent.TemplateId = req.TemplateId;
         agent.Template = template;
         agent.WorkingDirectory = req.WorkingDirectory;
-        agent.Model = req.Model;
+        agent.AllowedModels = req.AllowedModels;
         agent.MaxTurns = req.MaxTurns;
         agent.IsEnabled = req.IsEnabled;
         agent.UpdatedAt = DateTime.UtcNow;
@@ -94,13 +94,13 @@ public class AgentsController(AppDbContext db) : ControllerBase
 
     private static AgentDto ToDto(Agent a)
     {
-        var status = a.Tasks.Any(t => t.Status == Models.TaskStatus.Running) ? "working" : "idle";
+        var status = a.Tasks?.Any(t => t.Status == Models.TaskStatus.Running) ?? false ? "working" : "idle";
         var latestTask = a.Tasks?.OrderByDescending(t => t.CreatedAt).FirstOrDefault();
         
         return new AgentDto(
             a.Id, a.Name, a.TemplateId, 
             a.Template == null ? null : new AgentTemplateDto(a.Template.Id, a.Template.Name, a.Template.Description, a.Template.SystemPrompt, a.Template.IsEnabled, a.Template.CreatedAt, a.Template.UpdatedAt), 
-            a.WorkingDirectory, a.Model, a.MaxTurns, a.IsEnabled, 
+            a.WorkingDirectory, a.AllowedModels, a.MaxTurns, a.IsEnabled, 
             status,
             latestTask?.Prompt,
             latestTask?.Id,

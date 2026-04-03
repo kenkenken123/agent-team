@@ -24,8 +24,8 @@ export interface Agent {
   name: string;
   templateId: string;
   template?: AgentTemplate;
-  workingDirectory: string;
-  model: string;
+  workingDirectory?: string;
+  allowedModels: string;
   maxTurns?: number;
   isEnabled: boolean;
   createdAt: string;
@@ -35,13 +35,26 @@ export interface Agent {
 export interface CreateAgentRequest {
   name: string;
   templateId: string;
-  workingDirectory: string;
-  model: string;
+  workingDirectory?: string;
+  allowedModels: string;
   maxTurns?: number;
 }
 
 export interface UpdateAgentRequest extends CreateAgentRequest {
   isEnabled: boolean;
+}
+
+// Common Path 类型
+export interface CommonPath {
+  id: string;
+  path: string;
+  name: string;
+  createdAt: string;
+}
+
+export interface CreateCommonPathRequest {
+  path: string;
+  name: string;
 }
 
 // Task 类型
@@ -59,6 +72,7 @@ export interface AgentTask {
   tokensUsed?: number;
   inputTokens?: number;
   outputTokens?: number;
+  model?: string;
   startedAt?: string;
   completedAt?: string;
   exitCode?: number;
@@ -68,6 +82,8 @@ export interface AgentTask {
 export interface CreateTaskRequest {
   agentId: string;
   prompt: string;
+  model?: string;
+  workingDirectory?: string;
   resumeSessionId?: string;
   forceNewSession?: boolean;
   terminalType?: string;

@@ -58,11 +58,11 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ task, onStatusChange }) =
     let match;
     let lastIdx = 0;
     
-    // 累积原始输出以供预览
+    // 累积内容用于 Markdown 预览模式 (增加上限至 50万字符，避免截断长分析)
     setPreviewContent(prev => {
       const combined = prev + text;
-      // 限制预览长度，避免性能问题
-      return combined.length > 5000 ? combined.substring(combined.length - 5000) : combined;
+      const MAX_PREVIEW = 500000;
+      return combined.length > MAX_PREVIEW ? combined.substring(combined.length - MAX_PREVIEW) : combined;
     });
 
     while ((match = thinkingPattern.exec(text)) !== null) {
@@ -113,66 +113,78 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ task, onStatusChange }) =
 
   // 记录已经加载过输出的 task 状态，避免重复加载
   const loadedStatusRef = useRef<string | null>(null);
+  const taskId = task?.id;
+  const taskStatus = task?.status;
 
-  // 任务切换时，重置终端
   useEffect(() => {
+    // 初始化或状态变更时的处理
     if (!task) return;
-    
-    // 切换到新任务时，重置全部状态
-    if (task.id !== loadedTaskIdRef.current) {
-      loadedTaskIdRef.current = task.id;
-      loadedStatusRef.current = null;
-      clear();
-      setThinkingLogs([]);
-      setPreviewContent('');
-      thinkingCountRef.current = 0;
-
-      write(`\x1b[34m┌─ Agent: ${task.agentName}\x1b[0m\r\n`, true);
-      write(`\x1b[34m│  Task ID: ${task.id}\x1b[0m\r\n`, true);
-      write(`\x1b[34m│  Prompt: ${task.prompt}\x1b[0m\r\n`, true);
-      write(`\x1b[34m└─ Status: ${task.status}\x1b[0m\r\n\r\n`, true);
-    }
-
-    // 只有在任务完成/失败后，才从 API 拉取历史输出（补全 WebSocket 可能遗漏的内容）
-    // 对于 Running 状态，由 WebSocket 实时推送
     const terminalStatus = task.status;
+    const isFinished = (terminalStatus === 'Completed' || terminalStatus === 'Failed' || terminalStatus === 'Cancelled');
+    
+    // 如果是切换了任务，或者任务从未加载过，或者任务刚完成，我们需要拉取历史/补全历史
     if (
-      (terminalStatus === 'Completed' || terminalStatus === 'Failed' || terminalStatus === 'Cancelled') &&
-      loadedStatusRef.current !== terminalStatus
+      task.id !== loadedTaskIdRef.current || 
+      (isFinished && loadedStatusRef.current !== terminalStatus) ||
+      (!loadedStatusRef.current && terminalStatus === 'Running')
     ) {
+      const isNewTask = task.id !== loadedTaskIdRef.current;
+      loadedTaskIdRef.current = task.id;
       loadedStatusRef.current = terminalStatus;
-      // 先清空再重新加载完整的历史输出
-      clear();
-      setThinkingLogs([]);
-      setPreviewContent('');
-      thinkingCountRef.current = 0;
-      write(`\x1b[34m┌─ Agent: ${task.agentName}\x1b[0m\r\n`, true);
-      write(`\x1b[34m│  Task ID: ${task.id}\x1b[0m\r\n`, true);
-      write(`\x1b[34m│  Prompt: ${task.prompt}\x1b[0m\r\n`, true);
-      write(`\x1b[34m└─ Status: ${task.status}\x1b[0m\r\n\r\n`, true);
+
+      if (isNewTask) {
+        clear();
+        setThinkingLogs([]);
+        setPreviewContent('');
+        thinkingCountRef.current = 0;
+        write(`\x1b[34m┌─ Agent: ${task.agentName}\x1b[0m\r\n`, true);
+        write(`\x1b[34m│  Task ID: ${task.id}\x1b[0m\r\n`, true);
+        write(`\x1b[34m│  Prompt: ${task.prompt}\x1b[0m\r\n`, true);
+        write(`\x1b[34m└─ Status: ${task.status}\x1b[0m\r\n\r\n`, true);
+      }
+
+      // 拉取当前已有的所有输出
       taskApi.getOutput(task.id).then(content => {
-        if (content) processOutput(content, true);
-        else write('\x1b[90m[暂无历史输出]\x1b[0m\r\n', true);
+        if (content) {
+          // 如果是重新拉取完成态的任务，或者初始化 Running 任务，直接覆盖/补全
+          if (isFinished || isNewTask) {
+            clear();
+            setThinkingLogs([]);
+            setPreviewContent('');
+            thinkingCountRef.current = 0;
+            write(`\x1b[34m┌─ Agent: ${task.agentName}\x1b[0m\r\n`, true);
+            write(`\x1b[34m│  Task ID: ${task.id}\x1b[0m\r\n`, true);
+            write(`\x1b[34m│  Prompt: ${task.prompt}\x1b[0m\r\n`, true);
+            write(`\x1b[34m└─ Status: ${task.status}\x1b[0m\r\n\r\n`, true);
+            processOutput(content, true);
+          }
+        } else if (isNewTask) {
+           write('\x1b[90m[等待实时输出流...]\x1b[0m\r\n', true);
+        }
       }).catch(err => {
-        console.error('加载输出失败', err);
+        console.error('加载历史输出失败', err);
       });
     }
-  }, [task?.id, task?.status, clear, processOutput, write]);
+  }, [taskId, taskStatus, clear, processOutput, write]);
 
 
   const handleWsMessage = useCallback((msg: WsMessage) => {
-    if (msg.type === 'output') {
-      processOutput(msg.content);
-    } else if (msg.type === 'status') {
-      const colors: Record<string, string> = {
-        Running: '\x1b[33m',
-        Completed: '\x1b[32m',
-        Failed: '\x1b[31m',
-        Cancelled: '\x1b[90m',
-      };
-      const color = colors[msg.status] ?? '\x1b[0m';
-      write(`\r\n${color}[状态变更: ${msg.status}]\x1b[0m\r\n`);
-      onStatusChange?.(msg.taskId, msg.status);
+    switch (msg.type) {
+      case 'output':
+        processOutput(msg.content);
+        break;
+      case 'status': {
+        const colors: Record<string, string> = {
+          Running: '\x1b[33m',
+          Completed: '\x1b[32m',
+          Failed: '\x1b[31m',
+          Cancelled: '\x1b[90m',
+        };
+        const color = colors[msg.status] ?? '\x1b[0m';
+        write(`\r\n${color}[状态变更: ${msg.status}]\x1b[0m\r\n`);
+        onStatusChange?.(msg.taskId, msg.status);
+        break;
+      }
     }
   }, [write, onStatusChange, processOutput]);
 

@@ -68,15 +68,17 @@ var wsManager = app.Services.GetRequiredService<TaskWebSocketManager>();
 var claudeService = app.Services.GetRequiredService<ClaudeCodeService>();
 
 // 绑定 ClaudeCodeService 事件 → WebSocket 广播
+var jsonOptions = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
+
 claudeService.OnOutput += async (taskId, content) =>
 {
-    var msg = JsonSerializer.Serialize(new { type = "output", taskId, content });
+    var msg = JsonSerializer.Serialize(new { type = "output", taskId, content }, jsonOptions);
     await wsManager.BroadcastAsync(taskId, msg);
 };
 
 claudeService.OnStatusChanged += async (taskId, status) =>
 {
-    var msg = JsonSerializer.Serialize(new { type = "status", taskId, status });
+    var msg = JsonSerializer.Serialize(new { type = "status", taskId, status }, jsonOptions);
     await wsManager.BroadcastAsync(taskId, msg);
 };
 

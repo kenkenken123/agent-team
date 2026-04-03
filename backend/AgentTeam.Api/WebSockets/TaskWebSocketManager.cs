@@ -9,12 +9,12 @@ namespace AgentTeam.Api.WebSockets;
 /// </summary>
 public class TaskWebSocketManager
 {
-    // taskId -> 连接集合
-    private readonly ConcurrentDictionary<Guid, ConcurrentBag<WebSocket>> _connections = new();
+    // taskId -> (WebSocket -> dummy byte)
+    private readonly ConcurrentDictionary<Guid, ConcurrentDictionary<WebSocket, byte>> _connections = new();
 
     public void Add(Guid taskId, WebSocket socket)
     {
-        _connections.GetOrAdd(taskId, _ => []).Add(socket);
+        _connections.GetOrAdd(taskId, _ => new ConcurrentDictionary<WebSocket, byte>()).TryAdd(socket, 0);
     }
 
     public async Task BroadcastAsync(Guid taskId, string message)
@@ -24,8 +24,7 @@ public class TaskWebSocketManager
         var bytes = Encoding.UTF8.GetBytes(message);
         var buffer = new ArraySegment<byte>(bytes);
 
-        var deadSockets = new List<WebSocket>();
-        foreach (var socket in sockets)
+        foreach (var (socket, _) in sockets)
         {
             if (socket.State == WebSocketState.Open)
             {
@@ -35,18 +34,14 @@ public class TaskWebSocketManager
                 }
                 catch
                 {
-                    deadSockets.Add(socket);
+                    sockets.TryRemove(socket, out _);
                 }
             }
             else
             {
-                deadSockets.Add(socket);
+                sockets.TryRemove(socket, out _);
             }
         }
-
-        // 清理关闭的连接
-        foreach (var dead in deadSockets)
-            sockets.TryTake(out _);
     }
 
     public async Task HandleAsync(Guid taskId, WebSocket socket)

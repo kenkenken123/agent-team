@@ -13,7 +13,9 @@ import { Upload, Mentions } from 'antd';
 
 import { agentApi } from '../../api/agentApi';
 import { taskApi } from '../../api/taskApi';
-import type { Agent, AgentTask } from '../../types';
+import { commonPathApi } from '../../api/commonPathApi';
+import type { Agent, AgentTask, CommonPath } from '../../types';
+import { useAppStore } from '../../stores/appStore';
 import TerminalPanel from '../../components/Terminal/TerminalPanel';
 import './Console.css';
 
@@ -23,14 +25,17 @@ const { Text } = Typography;
 
 
 const ConsolePage: React.FC = () => {
+  const { selectedAgentId, setSelectedAgentId } = useAppStore();
   const [agents, setAgents] = useState<Agent[]>([]);
-  const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
   const [tasks, setTasks] = useState<AgentTask[]>([]);
   const [selectedTask, setSelectedTask] = useState<AgentTask | null>(null);
   const [prompt, setPrompt] = useState('');
   const [launching, setLaunching] = useState(false);
   const [loadingTasks, setLoadingTasks] = useState(false);
   const [continueSession, setContinueSession] = useState<string | null>(null);
+  const [commonPaths, setCommonPaths] = useState<CommonPath[]>([]);
+  const [selectedModel, setSelectedModel] = useState<string | undefined>(undefined);
+  const [selectedWorkingDirectory, setSelectedWorkingDirectory] = useState<string | undefined>(undefined);
   const pollRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const prevSessionTaskCountRef = useRef(0);
@@ -99,17 +104,21 @@ const ConsolePage: React.FC = () => {
 
 
 
-  // 加载 Agent 列表
+  // 加载 Agent 列表和常用路径
   useEffect(() => {
-    agentApi.getAll().then(data => {
-      const activeAgents = data.filter(a => a.isEnabled);
+    Promise.all([
+      agentApi.getAll(),
+      commonPathApi.getAll()
+    ]).then(([agentsData, pathsData]) => {
+      const activeAgents = agentsData.filter(a => a.isEnabled);
       setAgents(activeAgents);
+      setCommonPaths(pathsData);
       // 如果当前没选，且有可用的 Agent，自动选第一个
       if (!selectedAgentId && activeAgents.length > 0) {
         setSelectedAgentId(activeAgents[0].id);
       }
     }).catch(err => {
-      message.error('加载 Agent 列表失败');
+      message.error('加载基础数据失败');
       console.error(err);
     });
   }, []);
@@ -166,6 +175,14 @@ const ConsolePage: React.FC = () => {
 
   const selectedAgent = agents.find(a => a.id === selectedAgentId);
 
+  useEffect(() => {
+    if (selectedAgent) {
+      const models = selectedAgent.allowedModels?.split(',') || [];
+      setSelectedModel(models[0]);
+      setSelectedWorkingDirectory(selectedAgent.workingDirectory);
+    }
+  }, [selectedAgent]);
+
   const handleLaunch = async () => {
     if (!selectedAgentId || !prompt.trim()) {
       message.warning('请选择 Agent 并输入任务指令');
@@ -181,7 +198,9 @@ const ConsolePage: React.FC = () => {
         agentId: selectedAgentId,
         prompt: prompt.trim(),
         resumeSessionId: activeSessionId || undefined,
-        forceNewSession: !activeSessionId // 关键：如果没有指定 Session，强制新开
+        forceNewSession: !activeSessionId, // 关键：如果没有指定 Session，强制新开
+        model: selectedModel,
+        workingDirectory: selectedWorkingDirectory || undefined
       });
       
       message.success('任务已启动' + (activeSessionId ? ' (续写上下文)' : ''));
@@ -376,34 +395,43 @@ const ConsolePage: React.FC = () => {
 
           <div className="chat-input-wrapper">
             {selectedAgent && (
-              <div style={{ padding: '0 16px', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
-                <Text style={{ color: '#8B949E', fontSize: 12 }}>当前模型:</Text>
-                <Select
-                  size="small"
-                  value={selectedAgent.model}
-                  onChange={async (newModel) => {
-                    if (!newModel) return;
-                    try {
-                      await agentApi.update(selectedAgent.id, {
-                        name: selectedAgent.name,
-                        templateId: selectedAgent.templateId,
-                        workingDirectory: selectedAgent.workingDirectory,
-                        model: newModel,
-                        maxTurns: selectedAgent.maxTurns,
-                        isEnabled: selectedAgent.isEnabled
-                      });
-                      message.success('已切换模型');
-                      agentApi.getAll().then(data => {
-                        const activeAgents = data.filter(a => a.isEnabled);
-                        setAgents(activeAgents);
-                      });
-                    } catch (e: any) {
-                      message.error('修改模型失败');
-                    }
-                  }}
-                  style={{ width: 220, fontSize: 12 }}
-                  options={MODELS.map(m => ({ label: m, value: m }))}
-                />
+              <div style={{ padding: '0 16px', marginBottom: 8, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '16px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <Text style={{ color: '#8B949E', fontSize: 12 }}>执行模型:</Text>
+                  <Select
+                    size="small"
+                    value={selectedModel}
+                    onChange={setSelectedModel}
+                    style={{ width: 180, fontSize: 12 }}
+                    options={(selectedAgent.allowedModels?.split(',') || []).map(m => ({ label: m, value: m }))}
+                  />
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <Text style={{ color: '#8B949E', fontSize: 12 }}>工作目录:</Text>
+                  <Select
+                    size="small"
+                    value={selectedWorkingDirectory}
+                    onChange={setSelectedWorkingDirectory}
+                    style={{ width: 280, fontSize: 12 }}
+                    placeholder="选择工作目录"
+                    showSearch
+                    dropdownRender={(menu) => (
+                      <>
+                        {menu}
+                        <div style={{ padding: '4px 8px', borderTop: '1px solid #30363D', color: '#8B949E', fontSize: 11 }}>
+                          可在 Agent 管理页面预设常用目录
+                        </div>
+                      </>
+                    )}
+                    options={[
+                      ...(selectedAgent.workingDirectory ? [{ label: `默认: ${selectedAgent.workingDirectory}`, value: selectedAgent.workingDirectory }] : []),
+                      ...commonPaths.map(p => ({ label: `${p.name} (${p.path})`, value: p.path }))
+                    ]}
+                  />
+                  {!selectedWorkingDirectory && !selectedAgent.workingDirectory && (
+                    <Text type="danger" style={{ fontSize: 11 }}>* 必须指定目录才能启动</Text>
+                  )}
+                </div>
               </div>
             )}
             <div className="chat-input-bar">
@@ -479,7 +507,7 @@ const ConsolePage: React.FC = () => {
                     icon={<PlayCircleOutlined />}
                     loading={launching}
                     onClick={handleLaunch}
-                    disabled={!selectedAgentId || !prompt.trim()}
+                    disabled={!selectedAgentId || !prompt.trim() || !selectedWorkingDirectory}
                   >
                     发送 [Ctrl+Enter]
                   </Button>
