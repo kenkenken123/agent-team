@@ -52,6 +52,10 @@ using (var scope = app.Services.CreateScope())
     Directory.CreateDirectory(Path.Combine(app.Environment.ContentRootPath, "data", "outputs"));
     Directory.CreateDirectory(Path.Combine(app.Environment.ContentRootPath, "data", "sessions"));
     dbCtx.Database.Migrate();
+
+    // 清理上次非正常关闭导致卡住的任务
+    var claudeServiceStartup = scope.ServiceProvider.GetRequiredService<ClaudeCodeService>();
+    await claudeServiceStartup.CleanupStuckTasksAsync();
 }
 
 // ─── 中间件与路由 ──────────────────────────────────────────────

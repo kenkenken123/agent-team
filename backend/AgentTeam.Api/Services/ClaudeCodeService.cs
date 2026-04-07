@@ -57,6 +57,31 @@ public class ClaudeCodeService(
         }
     }
 
+    /// <summary>
+    /// 清理启动时状态为 Running 的任务（解决进程被强杀导致的卡死）
+    /// </summary>
+    public async Task CleanupStuckTasksAsync()
+    {
+        using var scope = scopeFactory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+        var stuckTasks = await db.Tasks
+            .Where(t => t.Status == Models.TaskStatus.Running)
+            .ToListAsync();
+
+        if (stuckTasks.Count > 0)
+        {
+            logger.LogInformation("检测到 {Count} 个卡在执行中的任务，正在重置...", stuckTasks.Count);
+            foreach (var task in stuckTasks)
+            {
+                task.Status = Models.TaskStatus.Failed;
+                task.CompletedAt = DateTime.UtcNow;
+                await NotifyStatusAsync(task.Id, "Failed");
+            }
+            await db.SaveChangesAsync();
+        }
+    }
+
     private async Task ExecuteProcessAsync(AgentTask task, Agent agent, string outputPath)
     {
         // 构建命令
@@ -190,6 +215,9 @@ public class ClaudeCodeService(
         // 无论是否恢复，都应该尝试应用该任务指定的模型和配置
         // 注意：--print 必须加上以防陷入交互模式
         args.Append("--print ");
+
+        // 赋予执行权限
+        args.Append("--permission-mode bypassPermissions ");
 
         var effectiveModel = task.Model ?? agent.AllowedModels.Split(',')[0];
         if (!string.IsNullOrEmpty(effectiveModel))
