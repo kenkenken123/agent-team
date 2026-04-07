@@ -1,0 +1,40 @@
+.butler-page {
+  max-width: 1000px;
+  margin: 0 auto;
+}
+
+.butler-input-card {
+  background: #0d1117 !important;
+  border: 1px solid #30363d !important;
+  border-radius: 12px !important;
+}
+
+.butler-input-card .ant-input-textarea {
+  background: #161b22;
+  border-color: #30363d;
+  color: #c9d1d9;
+}
+
+.butler-input-card .ant-input-textarea:focus {
+  border-color: #58a6ff;
+  box-shadow: none;
+}
+
+.routing-result-box {
+  animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.msg-history-list .ant-list-item-meta-title {
+  margin-bottom: 0 !important;
+}

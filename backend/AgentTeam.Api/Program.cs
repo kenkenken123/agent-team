@@ -13,7 +13,6 @@ builder.Logging.SetMinimumLevel(LogLevel.Debug);
 
 // ─── 服务注册 ─────────────────────────────────────────────────
 
-
 builder.Services.AddControllers()
     .AddJsonOptions(o =>
     {
@@ -22,17 +21,21 @@ builder.Services.AddControllers()
 
 builder.Services.AddOpenApi();
 
+// HttpClient
+builder.Services.AddHttpClient();
+
 // SQLite
 builder.Services.AddDbContext<AppDbContext>(opts =>
     opts.UseSqlite($"Data Source={Path.Combine(builder.Environment.ContentRootPath, "data", "agent-team.db")}"));
 
-// 核心服务
+// 核心服务 - 使用显式注入
 builder.Services.AddSingleton<OutputFileService>();
 builder.Services.AddSingleton<ClaudeCodeService>();
 builder.Services.AddSingleton<TaskWebSocketManager>();
+builder.Services.AddScoped<MessageRouterService>();
+builder.Services.AddScoped<MessageIngestionService>();
 
-
-// CORS（开发时允许前端新端口 5502）
+// CORS
 builder.Services.AddCors(opts =>
     opts.AddDefaultPolicy(p =>
         p.WithOrigins("http://localhost:5502", "http://localhost:5173", "http://localhost:3000")
@@ -46,28 +49,21 @@ var app = builder.Build();
 using (var scope = app.Services.CreateScope())
 {
     var dbCtx = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    // 确保 data 目录存在
     Directory.CreateDirectory(Path.Combine(app.Environment.ContentRootPath, "data", "outputs"));
     Directory.CreateDirectory(Path.Combine(app.Environment.ContentRootPath, "data", "sessions"));
-    dbCtx.Database.EnsureCreated();
+    dbCtx.Database.Migrate();
 }
 
-// ─── 中间件 ────────────────────────────────────────────────────
+// ─── 中间件与路由 ──────────────────────────────────────────────
 
 if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 
 app.UseCors();
-
-// WebSocket 支持
 app.UseWebSockets(new WebSocketOptions { KeepAliveInterval = TimeSpan.FromSeconds(30) });
-
-// ─── WebSocket 路由：ws://host/ws/task/{taskId} ──────────────────
 
 var wsManager = app.Services.GetRequiredService<TaskWebSocketManager>();
 var claudeService = app.Services.GetRequiredService<ClaudeCodeService>();
-
-// 绑定 ClaudeCodeService 事件 → WebSocket 广播
 var jsonOptions = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
 
 claudeService.OnOutput += async (taskId, content) =>
@@ -89,12 +85,9 @@ app.Map("/ws/task/{taskId:guid}", async (HttpContext context, Guid taskId) =>
         context.Response.StatusCode = 400;
         return;
     }
-
     var socket = await context.WebSockets.AcceptWebSocketAsync();
     await wsManager.HandleAsync(taskId, socket);
 });
-
-
 
 app.MapControllers();
 Console.WriteLine("Backend is running...");

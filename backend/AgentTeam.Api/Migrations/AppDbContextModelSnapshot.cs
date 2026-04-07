@@ -23,6 +23,12 @@ namespace AgentTeam.Api.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("AllowedModels")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("claude-3-7-sonnet-20250219");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("TEXT");
 
@@ -31,12 +37,6 @@ namespace AgentTeam.Api.Migrations
 
                     b.Property<int?>("MaxTurns")
                         .HasColumnType("INTEGER");
-
-                    b.Property<string>("Model")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
-                        .HasDefaultValue("claude-3-7-sonnet-20250219");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -50,7 +50,6 @@ namespace AgentTeam.Api.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<string>("WorkingDirectory")
-                        .IsRequired()
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
@@ -84,6 +83,9 @@ namespace AgentTeam.Api.Migrations
                     b.Property<int?>("InputTokens")
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("Model")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("OutputFilePath")
                         .HasColumnType("TEXT");
 
@@ -107,6 +109,9 @@ namespace AgentTeam.Api.Migrations
 
                     b.Property<int?>("TokensUsed")
                         .HasColumnType("INTEGER");
+
+                    b.Property<string>("WorkingDirectory")
+                        .HasColumnType("TEXT");
 
                     b.HasKey("Id");
 
@@ -146,6 +151,94 @@ namespace AgentTeam.Api.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("AgentTemplates");
+                });
+
+            modelBuilder.Entity("AgentTeam.Api.Models.CommonPath", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Path")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("CommonPaths");
+                });
+
+            modelBuilder.Entity("AgentTeam.Api.Models.IncomingMessage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ParsedText")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RawContent")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RouterReason")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SourceMessageId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("TriggeredAgentId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("TriggeredTaskId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("IncomingMessages");
+                });
+
+            modelBuilder.Entity("AgentTeam.Api.Models.SystemSetting", b =>
+                {
+                    b.Property<string>("Key")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Value")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Key");
+
+                    b.ToTable("SystemSettings");
                 });
 
             modelBuilder.Entity("AgentTeam.Api.Models.Agent", b =>

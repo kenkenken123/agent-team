@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-export type PageKey = 'dashboard' | 'agents' | 'console' | 'history' | 'simulation';
+export type PageKey = 'dashboard' | 'agents' | 'console' | 'history' | 'simulation' | 'settings' | 'butler';
 
 interface AppState {
   currentPage: PageKey;

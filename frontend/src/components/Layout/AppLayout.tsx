@@ -5,12 +5,16 @@ import {
   RobotOutlined,
   CodeOutlined,
   HistoryOutlined,
+  SettingOutlined,
+  CustomerServiceOutlined,
 } from '@ant-design/icons';
 import Dashboard from '../../pages/Dashboard/Dashboard';
 import AgentsPage from '../../pages/Agents/Agents';
 import ConsolePage from '../../pages/Console/Console';
 import HistoryPage from '../../pages/History/History';
 import SimulationPage from '../../pages/Simulation/Simulation';
+import SettingsPage from '../../pages/Settings/Settings';
+import ButlerPage from '../../pages/Butler/Butler';
 import { useAppStore } from '../../stores/appStore';
 import type { PageKey } from '../../stores/appStore';
 import './AppLayout.css';
@@ -24,6 +28,8 @@ const PAGE_MAP: Record<PageKey, React.ReactNode> = {
   console: <ConsolePage />,
   history: <HistoryPage />,
   simulation: <SimulationPage />,
+  settings: <SettingsPage />,
+  butler: <ButlerPage />,
 };
 
 const AppLayout: React.FC = () => {
@@ -58,6 +64,11 @@ const AppLayout: React.FC = () => {
           onClick={({ key }) => setPage(key as PageKey)}
           items={[
             {
+              key: 'butler',
+              icon: <CustomerServiceOutlined />,
+              label: '管家',
+            },
+            {
               key: 'dashboard',
               icon: <DashboardOutlined />,
               label: '仪表盘',
@@ -81,6 +92,11 @@ const AppLayout: React.FC = () => {
               key: 'simulation',
               icon: <RobotOutlined />,
               label: '赛博世界',
+            },
+            {
+              key: 'settings',
+              icon: <SettingOutlined />,
+              label: '系统设置',
             },
           ]}
         />

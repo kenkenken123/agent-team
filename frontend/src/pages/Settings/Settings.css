@@ -1,0 +1,29 @@
+.settings-page {
+    padding: 24px;
+    max-width: 900px;
+    margin: 0 auto;
+}
+
+.settings-page .ant-card {
+    background-color: #161B22;
+    border: 1px solid #30363D;
+    color: #C9D1D9;
+}
+
+.settings-page .ant-card-head {
+    border-bottom: 1px solid #30363D;
+    color: #F0F6FC;
+}
+
+.settings-page .ant-form-item-label > label {
+    color: #8B949E;
+}
+
+.msg-history-list .ant-list-item {
+    border-bottom: 1px solid #30363D;
+    padding: 12px 0;
+}
+
+.msg-history-list .ant-list-item:last-child {
+    border-bottom: none;
+}
