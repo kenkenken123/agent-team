@@ -235,7 +235,13 @@ public class ClaudeCodeService(
         // 追加 --output-format stream-json --verbose 以便解析流式的事件与 session_id
         args.Append("--output-format stream-json --verbose ");
 
-        var escapedUserPrompt = task.Prompt.Replace("\"", "\\\"");
+        var finalPrompt = task.Prompt;
+        if (!string.IsNullOrEmpty(task.ImageUrls))
+        {
+            var images = task.ImageUrls.Split(';');
+            finalPrompt += "\n[附图: " + string.Join(", ", images) + "]";
+        }
+        var escapedUserPrompt = finalPrompt.Replace("\"", "\\\"");
         args.Append($"\"{escapedUserPrompt}\"");
 
         var executable = System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Windows)

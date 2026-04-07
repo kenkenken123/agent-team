@@ -13,7 +13,7 @@ public class MessageIngestController(
     AppDbContext db,
     MessageIngestionService ingestionService) : ControllerBase
 {
-    public record IngestRequest(string Text);
+    public record IngestRequest(string Text, Guid? AgentId = null, string[]? ImageUrls = null);
 
     [HttpPost("ingest")]
     public async Task<IActionResult> Ingest([FromBody] IngestRequest req)
@@ -24,7 +24,9 @@ public class MessageIngestController(
         var parsed = new ParsedMessage
         {
             SourceName = "WebPage",
-            Text = req.Text
+            Text = req.Text,
+            AgentId = req.AgentId,
+            ImageUrls = req.ImageUrls != null ? string.Join(";", req.ImageUrls) : null
         };
 
         var result = await ingestionService.IngestAsync(parsed);

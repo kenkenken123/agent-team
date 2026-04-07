@@ -20,7 +20,8 @@ public class MessageIngestionService(
             Source = message.SourceName,
             ParsedText = message.Text,
             RawContent = System.Text.Json.JsonSerializer.Serialize(message),
-            Status = MessageStatus.Pending
+            Status = MessageStatus.Pending,
+            ImageUrls = message.ImageUrls
         };
 
         db.IncomingMessages.Add(incoming);
@@ -28,7 +29,23 @@ public class MessageIngestionService(
 
         try
         {
-            var (agentId, reason, extractedPath) = await router.RouteMessageAsync(message.Text);
+            Guid? agentId;
+            string reason;
+            string? extractedPath = null;
+
+            if (message.AgentId.HasValue)
+            {
+                agentId = message.AgentId;
+                reason = "用户手动指定 Agent";
+            }
+            else
+            {
+                var routingResult = await router.RouteMessageAsync(message.Text);
+                agentId = routingResult.agentId;
+                reason = routingResult.reason;
+                extractedPath = routingResult.extractedPath;
+            }
+            
             incoming.RouterReason = reason;
 
             if (agentId.HasValue)
@@ -47,7 +64,8 @@ public class MessageIngestionService(
                         Prompt = message.Text,
                         WorkingDirectory = agent.WorkingDirectory ?? extractedPath,
                         Model = agent.AllowedModels.Split(',')[0],
-                        TerminalType = "powershell" // 默认
+                        TerminalType = "powershell", // 默认
+                        ImageUrls = message.ImageUrls
                     };
 
                     // 寻找最近的 SessionId 供上下文继承 (可选逻辑)

@@ -26,6 +26,48 @@ import './Terminal.css';
 
 const { Text } = Typography;
 
+const CollapsibleCodeBlock = ({ language, code }: { language: string, code: string }) => {
+  const [expanded, setExpanded] = useState(false);
+  
+  if (!expanded) {
+    return (
+      <div 
+        className="rounded-md my-2 cursor-pointer" 
+        style={{ background: '#1C2128', padding: '12px 16px', border: '1px dashed #30363D', color: '#8B949E', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
+        onClick={() => setExpanded(true)}
+        title="点击展开代码"
+      >
+        <Space>
+          <CodeOutlined />
+          <span>代码片段 ({language || 'text'}) - {code.split('\n').length} 行</span>
+        </Space>
+        <ExpandAltOutlined />
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ position: 'relative' }}>
+        <Button 
+            type="text" 
+            size="small" 
+            icon={<ShrinkOutlined />} 
+            onClick={() => setExpanded(false)}
+            style={{ position: 'absolute', top: 4, right: 4, zIndex: 10, color: '#C9D1D9', background: 'rgba(0,0,0,0.5)' }}
+            title="折叠代码"
+        />
+        <SyntaxHighlighter
+          style={oneDark}
+          language={language}
+          PreTag="div"
+          className="rounded-md my-2"
+        >
+          {code}
+        </SyntaxHighlighter>
+    </div>
+  );
+};
+
 interface TerminalPanelProps {
   task: AgentTask | null;
   onStatusChange?: (taskId: string, status: string) => void;
@@ -215,15 +257,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ task, onStatusChange }) =
     code({ node, inline, className, children, ...props }: any) {
       const match = /language-(\w+)/.exec(className || '');
       return !inline && match ? (
-        <SyntaxHighlighter
-          style={oneDark}
-          language={match[1]}
-          PreTag="div"
-          className="rounded-md my-2"
-          {...props}
-        >
-          {String(children).replace(/\n$/, '')}
-        </SyntaxHighlighter>
+        <CollapsibleCodeBlock language={match[1]} code={String(children).replace(/\n$/, '')} />
       ) : (
         <code className={className} {...props}>
           {children}

@@ -76,6 +76,7 @@ export interface AgentTask {
   startedAt?: string;
   completedAt?: string;
   exitCode?: number;
+  imageUrls?: string;
   createdAt: string;
 }
 

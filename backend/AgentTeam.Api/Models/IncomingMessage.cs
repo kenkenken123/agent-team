@@ -20,6 +20,7 @@ public class IncomingMessage
     public Guid? TriggeredTaskId { get; set; }
     public Guid? TriggeredAgentId { get; set; }
     public string? RouterReason { get; set; }
+    public string? ImageUrls { get; set; }
     
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;

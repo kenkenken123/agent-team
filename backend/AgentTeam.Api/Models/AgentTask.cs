@@ -41,5 +41,6 @@ public class AgentTask
     public DateTime? StartedAt { get; set; }
     public DateTime? CompletedAt { get; set; }
     public int? ExitCode { get; set; }
+    public string? ImageUrls { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }

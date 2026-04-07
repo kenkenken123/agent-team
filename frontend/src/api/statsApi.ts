@@ -2,8 +2,8 @@ import api from './request';
 import type { OverviewStats } from '../types';
 
 export const statsApi = {
-  getOverview: async (): Promise<OverviewStats> => {
-    const res = await api.get<OverviewStats>('/api/stats/overview');
+  getOverview: async (date?: string): Promise<OverviewStats> => {
+    const res = await api.get<OverviewStats>('/api/stats/overview', { params: { date } });
     return res.data;
   },
   

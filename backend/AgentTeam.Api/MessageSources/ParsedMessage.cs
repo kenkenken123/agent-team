@@ -7,4 +7,6 @@ public class ParsedMessage
     public string? SenderId { get; set; }
     public string? ChannelId { get; set; }
     public Dictionary<string, string> Metadata { get; set; } = new();
+    public Guid? AgentId { get; set; }
+    public string? ImageUrls { get; set; }
 }

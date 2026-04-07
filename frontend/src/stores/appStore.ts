@@ -14,7 +14,7 @@ interface AppState {
 }
 
 export const useAppStore = create<AppState>((set) => ({
-  currentPage: 'dashboard',
+  currentPage: 'butler',
   selectedAgentId: null,
   initialConsoleTab: null,
 

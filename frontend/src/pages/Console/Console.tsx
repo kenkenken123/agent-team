@@ -9,7 +9,7 @@ import {
   RobotOutlined, ClockCircleOutlined, CheckCircleOutlined,
   CloseCircleOutlined, ExclamationCircleOutlined, DeleteOutlined, PictureOutlined
 } from '@ant-design/icons';
-import { Upload, Mentions } from 'antd';
+import { Upload, Mentions, AutoComplete } from 'antd';
 
 import { agentApi } from '../../api/agentApi';
 import { taskApi } from '../../api/taskApi';
@@ -413,25 +413,19 @@ const ConsolePage: React.FC = () => {
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <Text style={{ color: '#8B949E', fontSize: 12 }}>工作目录:</Text>
-                  <Select
+                  <AutoComplete
                     size="small"
                     value={selectedWorkingDirectory}
                     onChange={setSelectedWorkingDirectory}
                     style={{ width: 280, fontSize: 12 }}
-                    placeholder="选择工作目录"
-                    showSearch
-                    dropdownRender={(menu) => (
-                      <>
-                        {menu}
-                        <div style={{ padding: '4px 8px', borderTop: '1px solid #30363D', color: '#8B949E', fontSize: 11 }}>
-                          可在 Agent 管理页面预设常用目录
-                        </div>
-                      </>
-                    )}
+                    placeholder="输入或选择工作目录"
                     options={[
                       ...(selectedAgent.workingDirectory ? [{ label: `默认: ${selectedAgent.workingDirectory}`, value: selectedAgent.workingDirectory }] : []),
                       ...commonPaths.map(p => ({ label: `${p.name} (${p.path})`, value: p.path }))
                     ]}
+                    filterOption={(inputValue, option) =>
+                      option?.label?.toString().toUpperCase().indexOf(inputValue.toUpperCase()) !== -1
+                    }
                   />
                   {!selectedWorkingDirectory && !selectedAgent.workingDirectory && (
                     <Text type="danger" style={{ fontSize: 11 }}>* 必须指定目录才能启动</Text>
@@ -461,6 +455,33 @@ const ConsolePage: React.FC = () => {
                   if (e.key === 'Enter' && e.ctrlKey) {
                     e.preventDefault();
                     handleLaunch();
+                  }
+                }}
+                onPaste={async (e) => {
+                  const items = e.clipboardData.items;
+                  for (let i = 0; i < items.length; i++) {
+                    if (items[i].type.indexOf('image') !== -1) {
+                      const file = items[i].getAsFile();
+                      if (file) {
+                        message.loading({ content: '正在上传粘粘的图片...', key: 'paste-upload' });
+                        const formData = new FormData();
+                        formData.append('file', file);
+                        if (selectedAgentId) formData.append('agentId', selectedAgentId);
+                        
+                        try {
+                          const res = await fetch('http://localhost:5501/api/Upload', {
+                            method: 'POST', body: formData
+                          });
+                          const data = await res.json();
+                          if (data.url) {
+                            message.success({ content: '粘贴的图片已上传！', key: 'paste-upload' });
+                            setPrompt(prev => prev ? `${prev}\n请查看这张图片并分析: ${data.url}` : `请查看这张图片并分析: ${data.url}`);
+                          }
+                        } catch (error) {
+                          message.error({ content: '粘贴上传失败', key: 'paste-upload' });
+                        }
+                      }
+                    }
                   }
                 }}
                 disabled={!selectedAgentId}

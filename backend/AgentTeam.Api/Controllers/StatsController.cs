@@ -10,17 +10,18 @@ namespace AgentTeam.Api.Controllers;
 public class StatsController(AppDbContext db) : ControllerBase
 {
     [HttpGet("overview")]
-    public async Task<IActionResult> Overview()
+    public async Task<IActionResult> Overview([FromQuery] DateTime? date = null)
     {
-        var today = DateTime.UtcNow.Date;
+        var targetDate = date?.Date ?? DateTime.UtcNow.Date;
+        var nextDay = targetDate.AddDays(1);
 
         var totalAgents = await db.Agents.CountAsync(a => a.IsEnabled);
         var runningTasks = await db.Tasks.CountAsync(t =>
             t.Status == AgentTeam.Api.Models.TaskStatus.Running);
-        var todayTasks = await db.Tasks.CountAsync(t => t.CreatedAt >= today);
+        var todayTasks = await db.Tasks.CountAsync(t => t.CreatedAt >= targetDate && t.CreatedAt < nextDay);
 
         var todayTokens = await db.Tasks
-            .Where(t => t.CreatedAt >= today)
+            .Where(t => t.CreatedAt >= targetDate && t.CreatedAt < nextDay)
             .Select(t => new { t.InputTokens, t.OutputTokens })
             .ToListAsync();
 
