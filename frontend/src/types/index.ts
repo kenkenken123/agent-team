@@ -112,4 +112,29 @@ export interface WsStatusMessage {
   status: TaskStatus;
 }
 
-export type WsMessage = WsOutputMessage | WsStatusMessage;
+export type RiskLevel = 'Low' | 'Medium' | 'High';
+
+export interface WsPermissionRequestMessage {
+  type: 'permission_request';
+  taskId: string;
+  requestId: string;
+  toolName: string;
+  inputDisplay: string;  // 格式化后的操作摘要
+  rawInput: string;      // 完整的原始 JSON 输入
+  riskLevel: RiskLevel;
+  createdAt: string;
+}
+
+export interface WsPermissionResolvedMessage {
+  type: 'permission_resolved';
+  taskId: string;
+  requestId: string;
+  decision: 'allow' | 'deny';
+}
+
+export type WsMessage =
+  | WsOutputMessage
+  | WsStatusMessage
+  | WsPermissionRequestMessage
+  | WsPermissionResolvedMessage;
+

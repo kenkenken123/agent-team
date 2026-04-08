@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "PermissionHook": [
+      {
+        "matcher": "permission_prompt",
+        "hooks": [
+          {
+            "type": "http",
+            "url": "http://localhost:5501/api/permission-hook"
+          }
+        ]
+      }
+    ]
+  }
+}

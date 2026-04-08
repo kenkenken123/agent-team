@@ -178,7 +178,7 @@ const ConsolePage: React.FC = () => {
   useEffect(() => {
     if (selectedAgent) {
       const models = selectedAgent.allowedModels?.split(',') || [];
-      setSelectedModel(models[0]);
+      setSelectedModel(''); // 默认使用系统缺省
       setSelectedWorkingDirectory(selectedAgent.workingDirectory);
     }
   }, [selectedAgent]);
@@ -408,7 +408,10 @@ const ConsolePage: React.FC = () => {
                     value={selectedModel}
                     onChange={setSelectedModel}
                     style={{ width: 180, fontSize: 12 }}
-                    options={(selectedAgent.allowedModels?.split(',') || []).map(m => ({ label: m, value: m }))}
+                    options={[
+                      { label: '系统默认 (本地配置)', value: '' },
+                      ...(selectedAgent.allowedModels?.split(',') || []).map(m => ({ label: m, value: m }))
+                    ]}
                   />
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>

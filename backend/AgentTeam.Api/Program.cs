@@ -32,6 +32,7 @@ builder.Services.AddDbContext<AppDbContext>(opts =>
 builder.Services.AddSingleton<OutputFileService>();
 builder.Services.AddSingleton<ClaudeCodeService>();
 builder.Services.AddSingleton<TaskWebSocketManager>();
+builder.Services.AddSingleton<AgentTeam.Api.Services.PermissionHookService>();
 builder.Services.AddScoped<MessageRouterService>();
 builder.Services.AddScoped<MessageIngestionService>();
 

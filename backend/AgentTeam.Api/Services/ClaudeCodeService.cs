@@ -103,6 +103,7 @@ public class ClaudeCodeService(
             EnableRaisingEvents = true
         };
 
+
         try
         {
             process.Start();
@@ -216,12 +217,12 @@ public class ClaudeCodeService(
         // 注意：--print 必须加上以防陷入交互模式
         args.Append("--print ");
 
-        // 赋予执行权限
-        args.Append("--permission-mode bypassPermissions ");
+        // 权限模式：使用 default（允许 Hook 拦截），而非 bypassPermissions
+        // Hook 配置已通过 ~/.claude/settings.json 的 hooks.permission_prompt 完成
+        args.Append("--permission-mode default ");
 
-        var effectiveModel = task.Model ?? agent.AllowedModels.Split(',')[0];
-        if (!string.IsNullOrEmpty(effectiveModel))
-            args.Append($"--model {effectiveModel} ");
+        if (!string.IsNullOrEmpty(task.Model))
+            args.Append($"--model {task.Model} ");
 
         if (agent.Template != null && !string.IsNullOrWhiteSpace(agent.Template.SystemPrompt))
         {

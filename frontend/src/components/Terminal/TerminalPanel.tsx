@@ -18,9 +18,10 @@ import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { useAppStore } from '../../stores/appStore';
 import { useTerminal } from '../../hooks/useTerminal';
 import { useTaskWebSocket } from '../../hooks/useTaskWebSocket';
-import type { AgentTask, WsMessage } from '../../types';
+import type { AgentTask, WsMessage, WsPermissionRequestMessage } from '../../types';
 import { taskApi } from '../../api/taskApi';
 import RealTerminal from './RealTerminal';
+import PermissionDialog from './PermissionDialog';
 import '@xterm/xterm/css/xterm.css';
 import './Terminal.css';
 
@@ -85,6 +86,9 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ task, onStatusChange }) =
   const [isExpanded, setIsExpanded] = useState(false);
   const [showMarkdown, setShowMarkdown] = useState(true);
   const { initialConsoleTab, setInitialConsoleTab } = useAppStore();
+
+  // ─── 授权请求列表 ───────────────────────────────────────────────
+  const [pendingPermissions, setPendingPermissions] = useState<WsPermissionRequestMessage[]>([]);
 
   useEffect(() => {
     if (initialConsoleTab) {
@@ -237,6 +241,24 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ task, onStatusChange }) =
         onStatusChange?.(msg.taskId, msg.status);
         break;
       }
+      case 'permission_request': {
+        // 将授权请求加入队列，在 UI 中展示对话框
+        setPendingPermissions(prev => {
+          // 避免重复加入
+          if (prev.some(p => p.requestId === msg.requestId)) return prev;
+          return [...prev, msg];
+        });
+        // 同时在终端写入提示文字
+        write(`\r\n\x1b[33m[⏸ Claude 请求授权: ${msg.toolName} - 请在上方对话框中确认]\x1b[0m\r\n`);
+        break;
+      }
+      case 'permission_resolved': {
+        // 授权请求已完成（不论来自用户点击还是超时），从队列移除
+        setPendingPermissions(prev => prev.filter(p => p.requestId !== msg.requestId));
+        const icon = msg.decision === 'allow' ? '\x1b[32m✓' : '\x1b[31m✗';
+        write(`${icon} [授权结果: ${msg.decision === 'allow' ? '已允许' : '已拒绝'}]\x1b[0m\r\n`);
+        break;
+      }
     }
   }, [write, onStatusChange, processOutput]);
 
@@ -252,6 +274,11 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ task, onStatusChange }) =
       setWsStatus('closed');
     },
   });
+
+  // 切换任务时清除遗留的授权请求队列
+  useEffect(() => {
+    setPendingPermissions([]);
+  }, [task?.id]);
 
   const MarkdownComponents = useMemo(() => ({
     code({ node, inline, className, children, ...props }: any) {
@@ -334,6 +361,30 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ task, onStatusChange }) =
           </div>
 
           <div className="terminal-content">
+            {/* ── 授权请求对话框区域 ── */}
+            {pendingPermissions.length > 0 && activeTab === 'output' && (
+              <div style={{ padding: '8px 12px 0' }}>
+                {pendingPermissions.map(req => (
+                  <PermissionDialog
+                    key={req.requestId}
+                    request={req}
+                    onDecide={async (requestId, decision) => {
+                      try {
+                        await fetch(`http://localhost:5501/api/permission-response/${requestId}`, {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ decision }),
+                        });
+                      } catch (e) {
+                        console.error('提交授权决定失败', e);
+                      }
+                    }}
+                    timeoutSeconds={60}
+                  />
+                ))}
+              </div>
+            )}
+
             {/* ── 任务输出 Tab ── */}
             {activeTab === 'output' && (
               <>
