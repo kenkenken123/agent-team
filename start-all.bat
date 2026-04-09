@@ -27,5 +27,3 @@ echo Backend:  5501
 echo Frontend: 5502
 echo PTY:      5503
 echo Wait a few seconds for initialization.
-
-pause

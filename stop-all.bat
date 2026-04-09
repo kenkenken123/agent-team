@@ -17,4 +17,3 @@ for %%p in (5501 5502 5503) do (
 echo.
 echo DONE. All services have been stopped.
 timeout /t 2 /nobreak >nul
-pause

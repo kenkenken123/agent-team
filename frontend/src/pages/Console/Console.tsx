@@ -223,7 +223,7 @@ const ConsolePage: React.FC = () => {
       setSelectedModel(models.length > 0 ? models[0] : '');
       setSelectedWorkingDirectory(selectedAgent.workingDirectory);
     }
-  }, [selectedAgent]);
+  }, [selectedAgentId]); // 仅在切换 Agent 时重置，发送任务更新 lastUsedAt 不再重置状态
 
   const handleLaunch = async () => {
     if (!selectedAgentId || !prompt.trim()) {
@@ -272,7 +272,7 @@ const ConsolePage: React.FC = () => {
     if (sessionTaskLimit >= currentSessionInFullList && selectedAgentId) {
        const newTake = currentTake + 10;
        setCurrentTake(newTake);
-       loadTasks(selectedAgentId, newTake);
+       loadTasks(newTake);
     }
   };
 

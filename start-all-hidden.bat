@@ -36,4 +36,3 @@ echo.
 echo Services are now running in the background.
 echo Check 'backend_err.txt' or 'backend_log.txt' if backend fails to start.
 echo.
-pause

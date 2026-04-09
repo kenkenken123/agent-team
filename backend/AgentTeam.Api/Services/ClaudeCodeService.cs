@@ -113,15 +113,19 @@ public class ClaudeCodeService(
         // 注入配置的环境变量
         if (template != null)
         {
-            process.StartInfo.Environment["ANTHROPIC_API_KEY"] = template.ApiKey;
-            if (!string.IsNullOrEmpty(template.BaseUrl))
+            var trimmedKey = template.ApiKey.Trim();
+            var maskedKey = trimmedKey.Length > 8 
+                ? trimmedKey.Substring(0, 4) + "..." + trimmedKey.Substring(trimmedKey.Length - 4)
+                : "****";
+            var baseUrl = template.BaseUrl?.Trim();
+
+            logger.LogInformation("[Task {TaskId}] 注入环境变量: ANTHROPIC_API_KEY={MaskedKey}, ANTHROPIC_BASE_URL={BaseUrl}", 
+                task.Id, maskedKey, baseUrl ?? "(未设置)");
+
+            process.StartInfo.Environment["ANTHROPIC_API_KEY"] = trimmedKey;
+            if (!string.IsNullOrEmpty(baseUrl))
             {
-                process.StartInfo.Environment["ANTHROPIC_BASE_URL"] = template.BaseUrl;
-            }
-            // 确保 ANTHROPIC_MODEL 也被设置
-            if (!string.IsNullOrEmpty(task.Model))
-            {
-                process.StartInfo.Environment["ANTHROPIC_MODEL"] = task.Model;
+                process.StartInfo.Environment["ANTHROPIC_BASE_URL"] = baseUrl;
             }
         }
 
