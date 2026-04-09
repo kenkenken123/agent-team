@@ -37,6 +37,8 @@ public record AgentDto(
     string Status, // 'idle', 'working', etc.
     string? LatestTaskPrompt,
     Guid? LatestTaskId,
+    bool IsPinned,
+    DateTime? LastUsedAt,
     DateTime CreatedAt,
     DateTime UpdatedAt
 );

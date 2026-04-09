@@ -92,6 +92,16 @@ public class AgentsController(AppDbContext db) : ControllerBase
         return NoContent();
     }
 
+    [HttpPost("{id:guid}/toggle-pin")]
+    public async Task<IActionResult> TogglePin(Guid id)
+    {
+        var agent = await db.Agents.FindAsync(id);
+        if (agent == null) return NotFound();
+        agent.IsPinned = !agent.IsPinned;
+        await db.SaveChangesAsync();
+        return Ok(new { isPinned = agent.IsPinned });
+    }
+
     private static AgentDto ToDto(Agent a)
     {
         var status = a.Tasks?.Any(t => t.Status == Models.TaskStatus.Running) ?? false ? "working" : "idle";
@@ -104,6 +114,8 @@ public class AgentsController(AppDbContext db) : ControllerBase
             status,
             latestTask?.Prompt,
             latestTask?.Id,
+            a.IsPinned,
+            a.LastUsedAt,
             a.CreatedAt, a.UpdatedAt);
     }
 }

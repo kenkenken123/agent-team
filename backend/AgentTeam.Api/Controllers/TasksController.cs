@@ -85,6 +85,7 @@ public class TasksController(
             Model = req.Model ?? agent.AllowedModels.Split(',')[0] // 优先使用请求指定的模型
         };
 
+        agent.LastUsedAt = DateTime.UtcNow;
         db.Tasks.Add(task);
         await db.SaveChangesAsync();
 

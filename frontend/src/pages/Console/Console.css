@@ -34,7 +34,82 @@
 
 .task-list {
   overflow-y: auto;
-  height: calc(100vh - 120px);
+  flex: 1;
+}
+
+.agent-selector-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  padding: 0 4px;
+}
+
+.agent-quick-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.agent-quick-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+  color: #C9D1D9;
+  font-size: 13px;
+}
+
+.agent-quick-item:hover {
+  background: #21262D;
+}
+
+.agent-quick-item.active {
+  background: #262C36;
+  color: #58A6FF;
+}
+
+.agent-name-text {
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-pin-icon {
+  font-size: 11px;
+  color: #484F58;
+  opacity: 0;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.agent-quick-item:hover .agent-pin-icon, .agent-pin-icon.pinned {
+  opacity: 1;
+}
+
+.agent-pin-icon.pinned {
+  color: #D29922;
+}
+
+.agent-pin-icon:hover {
+  transform: scale(1.2);
+}
+
+.agent-list-more {
+  text-align: center;
+  font-size: 11px;
+  color: #58A6FF;
+  padding: 4px;
+  cursor: pointer;
+  margin-top: 4px;
+}
+
+.agent-list-more:hover {
+  text-decoration: underline;
 }
 
 .task-list-item {

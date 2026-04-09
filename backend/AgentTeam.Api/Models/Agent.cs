@@ -13,5 +13,7 @@ public class Agent
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
+    public bool IsPinned { get; set; } = false;
+    public DateTime? LastUsedAt { get; set; }
     public ICollection<AgentTask> Tasks { get; set; } = [];
 }

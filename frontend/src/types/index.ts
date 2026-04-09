@@ -28,6 +28,11 @@ export interface Agent {
   allowedModels: string;
   maxTurns?: number;
   isEnabled: boolean;
+  isPinned: boolean;
+  lastUsedAt?: string;
+  status: string;
+  latestTaskPrompt?: string;
+  latestTaskId?: string;
   createdAt: string;
   updatedAt: string;
 }

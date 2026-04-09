@@ -1,13 +1,14 @@
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import {
   Layout, List, Button, Select, Typography, Space,
-  message, Popconfirm, Badge, Spin, Empty, Tooltip,
+  message, Popconfirm, Badge, Spin, Empty, Tooltip, Input,
 } from 'antd';
 
 import {
   PlayCircleOutlined, StopOutlined, ReloadOutlined, PlusOutlined,
   RobotOutlined, ClockCircleOutlined, CheckCircleOutlined,
-  CloseCircleOutlined, ExclamationCircleOutlined, DeleteOutlined, PictureOutlined
+  CloseCircleOutlined, ExclamationCircleOutlined, DeleteOutlined, PictureOutlined,
+  PushpinOutlined, PushpinFilled, DownOutlined, UpOutlined, SearchOutlined
 } from '@ant-design/icons';
 import { Upload, Mentions, AutoComplete } from 'antd';
 
@@ -43,6 +44,8 @@ const ConsolePage: React.FC = () => {
 
   const [currentTake, setCurrentTake] = useState(5);
   const [totalTasks, setTotalTasks] = useState(0);
+  const [showAllAgents, setShowAllAgents] = useState(false);
+  const [agentSearch, setAgentSearch] = useState('');
 
   // 添加命令状态
   const [availableCommands, setAvailableCommands] = useState<string[]>([]);
@@ -57,19 +60,29 @@ const ConsolePage: React.FC = () => {
       .catch(console.error);
   }, []);
 
+  const [sessionTaskLimit, setSessionTaskLimit] = useState(5);
+
   const currentSessionTasks = useMemo(() => {
     if (!selectedTask) return [];
     
-    // 如果选中的任务有 SessionId，则展示该 Session 下的所有子任务
+    // 如果选中的任务有 SessionId，则展示该 Session 下的子任务
     if (selectedTask.claudeSessionId) {
-      return tasks
+      const filtered = tasks
         .filter(t => t.claudeSessionId === selectedTask.claudeSessionId)
         .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+      
+      return filtered.slice(-sessionTaskLimit);
     }
     
     // 如果选中的任务暂时还没分配 SessionId (刚启动)，则只展示该单条任务
     return [selectedTask];
-  }, [tasks, selectedTask]);
+  }, [tasks, selectedTask, sessionTaskLimit]);
+
+  const hasMoreSessionTasks = useMemo(() => {
+    if (!selectedTask?.claudeSessionId) return false;
+    const count = tasks.filter(t => t.claudeSessionId === selectedTask.claudeSessionId).length;
+    return count > sessionTaskLimit;
+  }, [tasks, selectedTask, sessionTaskLimit]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -153,6 +166,36 @@ const ConsolePage: React.FC = () => {
   }, [loadTasks]);
 
 
+  const sortedAgents = useMemo(() => {
+    let list = [...agents];
+    if (agentSearch) {
+      list = list.filter(a => a.name.toLowerCase().includes(agentSearch.toLowerCase()));
+    }
+    return list.sort((a, b) => {
+      if (a.isPinned !== b.isPinned) return a.isPinned ? -1 : 1;
+      const aTime = a.lastUsedAt ? new Date(a.lastUsedAt).getTime() : 0;
+      const bTime = b.lastUsedAt ? new Date(b.lastUsedAt).getTime() : 0;
+      if (aTime !== bTime) return bTime - aTime;
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    });
+  }, [agents, agentSearch]);
+
+  const displayedAgents = useMemo(() => {
+    if (showAllAgents || agentSearch) return sortedAgents;
+    return sortedAgents.slice(0, 6);
+  }, [sortedAgents, showAllAgents, agentSearch]);
+
+  const handleTogglePin = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      const { isPinned } = await agentApi.togglePin(id);
+      setAgents(prev => prev.map(a => a.id === id ? { ...a, isPinned } : a));
+      message.success(isPinned ? '已置顶' : '已取消置顶');
+    } catch (err) {
+      message.error('操作失败');
+    }
+  };
+
   // 左侧任务列表去重：如果是同一个 claudeSessionId，只保留最新的一条代表该会话
   const siderTasks = useMemo(() => {
     const map = new Map<string, AgentTask>();
@@ -176,8 +219,8 @@ const ConsolePage: React.FC = () => {
 
   useEffect(() => {
     if (selectedAgent) {
-      const models = selectedAgent.allowedModels?.split(',') || [];
-      setSelectedModel(''); // 默认使用系统缺省
+      const models = selectedAgent.allowedModels?.split(',').map(m => m.trim()).filter(m => m !== '') || [];
+      setSelectedModel(models.length > 0 ? models[0] : '');
       setSelectedWorkingDirectory(selectedAgent.workingDirectory);
     }
   }, [selectedAgent]);
@@ -202,13 +245,18 @@ const ConsolePage: React.FC = () => {
         workingDirectory: selectedWorkingDirectory || undefined
       });
       
+      
       message.success('任务已启动' + (activeSessionId ? ' (续写上下文)' : ''));
       setPrompt('');
       // 启动后立即清除用于显示“续写中”的标记，因为任务已经接管了 Session
       setContinueSession(null);
 
+      // 更新最后使用时间以影响排序
+      setAgents(prev => prev.map(a => a.id === selectedAgentId ? { ...a, lastUsedAt: new Date().toISOString() } : a));
+
       // 这里的逻辑：启动后我们把这个新任务设为选中任务，后续的 conversationTasks 过滤就会带上它
       setSelectedTask(task);
+      setSessionTaskLimit(5); // 重置会话限制
       await loadTasks();
     } catch (e: any) {
       message.error(e?.response?.data?.error ?? '启动任务失败');
@@ -217,6 +265,16 @@ const ConsolePage: React.FC = () => {
     }
   };
 
+  const loadMoreSessionTasks = () => {
+    setSessionTaskLimit(prev => prev + 5);
+    // 如果当前可见的 sessionTasks 已经超过了已拉取的 tasks 数量，则触发全局拉取更多
+    const currentSessionInFullList = tasks.filter(t => t.claudeSessionId === selectedTask?.claudeSessionId).length;
+    if (sessionTaskLimit >= currentSessionInFullList && selectedAgentId) {
+       const newTake = currentTake + 10;
+       setCurrentTake(newTake);
+       loadTasks(selectedAgentId, newTake);
+    }
+  };
 
 
   const handleCancel = async (taskId: string) => {
@@ -267,21 +325,41 @@ const ConsolePage: React.FC = () => {
       <Layout className="console-main-layout">
         <Sider className="task-sider" width={280}>
           <div className="task-sider-header">
-            <Select
-              style={{ width: '100%' }}
-              placeholder="选择 Agent"
-              value={selectedAgentId}
-              onChange={setSelectedAgentId}
-              options={agents.map(a => ({
-                label: (
-                  <Space>
-                    <RobotOutlined style={{ color: '#58A6FF' }} />
-                    {a.name}
+            <div className="agent-selector-header">
+              <Text strong style={{ color: '#8B949E', fontSize: 12 }}>我的 Agent</Text>
+              <div style={{ display: 'flex', gap: 4 }}>
+                <Input 
+                  size="small" 
+                  placeholder="搜索..." 
+                  prefix={<SearchOutlined style={{ fontSize: 10 }} />}
+                  value={agentSearch}
+                  onChange={e => setAgentSearch(e.target.value)}
+                  style={{ width: 80, fontSize: 11, background: '#0D1117', border: 'none' }}
+                />
+              </div>
+            </div>
+            <div className="agent-quick-list">
+              {displayedAgents.map(a => (
+                <div 
+                  key={a.id}
+                  className={`agent-quick-item ${selectedAgentId === a.id ? 'active' : ''}`}
+                  onClick={() => setSelectedAgentId(a.id)}
+                >
+                  <Space size={6} style={{ overflow: 'hidden' }}>
+                    <RobotOutlined style={{ color: selectedAgentId === a.id ? '#58A6FF' : '#8B949E', fontSize: 14 }} />
+                    <span className="agent-name-text">{a.name}</span>
                   </Space>
-                ),
-                value: a.id,
-              }))}
-            />
+                  <div className={`agent-pin-icon ${a.isPinned ? 'pinned' : ''}`} onClick={(e) => handleTogglePin(a.id, e)}>
+                    {a.isPinned ? <PushpinFilled /> : <PushpinOutlined />}
+                  </div>
+                </div>
+              ))}
+              {sortedAgents.length > 6 && !agentSearch && (
+                <div className="agent-list-more" onClick={() => setShowAllAgents(!showAllAgents)}>
+                  {showAllAgents ? <><UpOutlined /> 收起</> : <><DownOutlined /> 更多 Agent ({sortedAgents.length - 6})</>}
+                </div>
+              )}
+            </div>
           </div>
           <div className="task-sider-title">
             <Text style={{ color: '#8B949E', fontSize: 12 }}>会话历史 ({siderTasks.length})</Text>
@@ -408,8 +486,8 @@ const ConsolePage: React.FC = () => {
                     onChange={setSelectedModel}
                     style={{ width: 180, fontSize: 12 }}
                     options={[
-                      { label: '系统默认 (本地配置)', value: '' },
-                      ...(selectedAgent.allowedModels?.split(',') || []).map(m => ({ label: m, value: m }))
+                      ...(selectedAgent.allowedModels?.split(',').map(m => m.trim()).filter(m => m !== '') || []).map(m => ({ label: m, value: m })),
+                      { label: '系统默认 (本地配置)', value: '' }
                     ]}
                   />
                 </div>

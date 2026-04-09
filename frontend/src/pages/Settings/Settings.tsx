@@ -54,39 +54,6 @@ const SettingsPage: React.FC = () => {
             </Paragraph>
 
             <Space direction="vertical" size="large" style={{ width: '100%' }}>
-                 <Card 
-                  title={<span><RobotOutlined style={{ marginRight: 8 }} />Claude Agent (Next-Agent) 配置</span>} 
-                  bordered={false}
-                >
-                    <Form
-                        form={settingsForm}
-                        layout="vertical"
-                        onFinish={onSaveSettings}
-                    >
-                        <Form.Item
-                            label="Anthropic (Claude) API Key"
-                            name="ANTHROPIC_API_KEY"
-                            help="用于 Next-Agent 引擎执行 Claude Code 任务"
-                        >
-                            <Input.Password placeholder="sk-ant-..." />
-                        </Form.Item>
-
-                        <Form.Item
-                            label="Anthropic (Claude) Base URL"
-                            name="ANTHROPIC_BASE_URL"
-                            help="中转代理地址 (可选)，例如 https://api.anthropic.com"
-                        >
-                            <Input placeholder="https://api.anthropic.com" />
-                        </Form.Item>
-
-                        <Form.Item>
-                            <Button type="primary" htmlType="submit" icon={<SaveOutlined />} loading={loading}>
-                                保存关键配置
-                            </Button>
-                        </Form.Item>
-                    </Form>
-                </Card>
-
                 <Card 
                   title={<span><RobotOutlined style={{ marginRight: 8 }} />LLM 智能路由配置 (AgentTeam)</span>} 
                   bordered={false}

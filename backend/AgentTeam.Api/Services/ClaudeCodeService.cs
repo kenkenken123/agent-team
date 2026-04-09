@@ -45,8 +45,15 @@ public class ClaudeCodeService(
 
                 try
                 {
+                    // 获取对应的凭证模板
+                    var config = await db.ModelConfigs
+                        .Include(c => c.Template)
+                        .FirstOrDefaultAsync(c => c.ModelId == t.Model);
+
+                    var template = config?.Template ?? await db.CredentialTemplates.FirstOrDefaultAsync(ct => ct.IsDefault);
+
                     // 开始执行
-                    await ExecuteProcessAsync(t, agent, outputPath);
+                    await ExecuteProcessAsync(t, agent, outputPath, template);
                 }
                 catch (Exception ex)
                 {
@@ -82,7 +89,7 @@ public class ClaudeCodeService(
         }
     }
 
-    private async Task ExecuteProcessAsync(AgentTask task, Agent agent, string outputPath)
+    private async Task ExecuteProcessAsync(AgentTask task, Agent agent, string outputPath, CredentialTemplate? template)
     {
         // 构建命令
         var (fileName, arguments) = BuildCommand(task, agent);
@@ -102,6 +109,21 @@ public class ClaudeCodeService(
             },
             EnableRaisingEvents = true
         };
+
+        // 注入配置的环境变量
+        if (template != null)
+        {
+            process.StartInfo.Environment["ANTHROPIC_API_KEY"] = template.ApiKey;
+            if (!string.IsNullOrEmpty(template.BaseUrl))
+            {
+                process.StartInfo.Environment["ANTHROPIC_BASE_URL"] = template.BaseUrl;
+            }
+            // 确保 ANTHROPIC_MODEL 也被设置
+            if (!string.IsNullOrEmpty(task.Model))
+            {
+                process.StartInfo.Environment["ANTHROPIC_MODEL"] = task.Model;
+            }
+        }
 
 
         try
@@ -219,7 +241,7 @@ public class ClaudeCodeService(
 
         // 权限模式：使用 default（允许 Hook 拦截），而非 bypassPermissions
         // Hook 配置已通过 ~/.claude/settings.json 的 hooks.permission_prompt 完成
-        args.Append("--permission-mode default ");
+        args.Append("--dangerously-skip-permissions ");
 
         if (!string.IsNullOrEmpty(task.Model))
             args.Append($"--model {task.Model} ");

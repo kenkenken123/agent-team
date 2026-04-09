@@ -83,6 +83,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ task, onStatusChange }) =
   const thinkingCountRef = useRef<number>(0);
   const [modalIndex, setModalIndex] = useState<number | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const markdownRef = useRef<HTMLDivElement>(null);
   const [isExpanded, setIsExpanded] = useState(false);
   const [showMarkdown, setShowMarkdown] = useState(true);
   const { initialConsoleTab, setInitialConsoleTab } = useAppStore();
@@ -106,6 +107,9 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ task, onStatusChange }) =
     const idxStr = parts[parts.length - 1];
     setModalIndex(parseInt(idxStr, 10));
   });
+
+  const [lineLimit, setLineLimit] = useState(300);
+  const [totalLineCount, setTotalLineCount] = useState(0);
   const loadedTaskIdRef = useRef<string | null>(null);
 
   // 自定义输出处理器，分离提取思考日志
@@ -144,17 +148,38 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ task, onStatusChange }) =
     // 1. 移除 ANSI 转义码
     let clean = previewContent.replace(/\x1b\[[0-9;]*m/g, '');
     
-    // 2. 移除 [思考: ...] 块，因为它们已经在 Modal 中展示了
+    // 2. 移除 [思考: ...] 块
     clean = clean.replace(/\[思考: [\s\S]*?\]\r?\n?/g, '');
     
-    // 3. 移除特定的 Agent 装饰线
-    clean = clean.replace(/[┌│└]─ Agent:.*?\r?\n?/g, '');
-    clean = clean.replace(/[┌│└]─ Task ID:.*?\r?\n?/g, '');
-    clean = clean.replace(/[┌│└]─ Prompt:.*?\r?\n?/g, '');
-    clean = clean.replace(/[┌│└]─ Status:.*?\r?\n?/g, '');
+    // 3. 装饰线移除 (仅移除明确的 Meta 信息行)
+    clean = clean.replace(/^[┌│└]─ Agent:.*?\r?\n?/gm, '');
+    clean = clean.replace(/^[┌│└]─ Task ID:.*?\r?\n?/gm, '');
+    clean = clean.replace(/^[┌│└]─ Prompt:.*?\r?\n?/gm, '');
+    clean = clean.replace(/^[┌│└]─ Status:.*?\r?\n?/gm, '');
 
-    return clean.trim();
-  }, [previewContent, task?.status]);
+    // 4. 截断极长的工具调用描述 (防止 Bash 脚本等撑屏)
+    clean = clean.replace(/\[Claude (正在调用工具|is using tool): ([\s\S]*?)\]/g, (match, p1, p2) => {
+      const content = p2.trim().replace(/\r?\n/g, ' ');
+      if (content.length > 80) {
+        return `[Claude ${p1}: ${content.substring(0, 80)}...]`;
+      }
+      return `[Claude ${p1}: ${content}]`;
+    });
+
+    const lines = clean.trim().split(/\r?\n/);
+    setTotalLineCount(lines.length);
+    
+    // 如果是未展开界面，展示最后 30 行以体现更多“最新信息”
+    if (!isExpanded) {
+      return lines.slice(-30).join('\n');
+    }
+
+    if (lines.length > lineLimit) {
+      return lines.slice(-lineLimit).join('\n');
+    }
+
+    return lines.join('\n');
+  }, [previewContent, task?.status, lineLimit, isExpanded]);
 
   // 初始化终端
   useEffect(() => {
@@ -166,6 +191,17 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ task, onStatusChange }) =
       dispose();
     };
   }, []);
+
+  // 关键优化：点击展开 Markdown 视图时，默认定位到最后一行
+  useEffect(() => {
+    if (isExpanded && showMarkdown) {
+      setTimeout(() => {
+        if (markdownRef.current) {
+          markdownRef.current.scrollTop = markdownRef.current.scrollHeight;
+        }
+      }, 150);
+    }
+  }, [isExpanded, showMarkdown, previewContent]);
 
   // 记录已经加载过输出的 task 状态，避免重复加载
   const loadedStatusRef = useRef<string | null>(null);
@@ -222,6 +258,12 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ task, onStatusChange }) =
       });
     }
   }, [taskId, taskStatus, clear, processOutput, write]);
+
+  // 处理“加载更多”逻辑
+  useEffect(() => {
+    if (showMarkdown) return; // 终端模式下的 Re-write 逻辑
+    // 暂时保持 xterm 完整记录，仅对 Markdown 预览做限制，因为 xterm 自带滚动
+  }, [lineLimit]);
 
 
   const handleWsMessage = useCallback((msg: WsMessage) => {
@@ -407,7 +449,18 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ task, onStatusChange }) =
                 )}
 
                 {isExpanded && showMarkdown && (
-                  <div className="markdown-body expanded-mode">
+                  <div ref={markdownRef} className="markdown-body expanded-mode">
+                    {totalLineCount > lineLimit && (
+                      <div className="load-more-output-bar">
+                        <Button 
+                          type="link" 
+                          size="small" 
+                          onClick={() => setLineLimit(prev => prev + 300)}
+                        >
+                          加载更早的 300 行内容 (剩余 {totalLineCount - lineLimit} 行)
+                        </Button>
+                      </div>
+                    )}
                     <ReactMarkdown remarkPlugins={[remarkGfm]} components={MarkdownComponents}>
                       {renderedPreview}
                     </ReactMarkdown>

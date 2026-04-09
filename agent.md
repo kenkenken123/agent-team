@@ -106,6 +106,7 @@ npm run dev
 4. **避免破坏默认端口**：除非有充分理由，保持 5501/5502 与现有脚本一致。
 5. **提交前检查**：至少执行一次前端构建或 lint，以及后端构建，确保主干可运行。
 6. **JSX 结构与嵌套检查**：在 React 组件（如 `Simulation.tsx`）中添加大型组件或抽屉（Drawer）时，务必仔细检查 `div` 标签的闭合情况。避免在插入代码时冗余闭合标签，导致父级容器提前关闭，进而引发类似 `PARSE_ERROR` 的解析错误。建议在插入大块 JSX 代码后，仔细核对层级缩进。
+7. **数据库变更注意事项**：如果后端修改了 `Models`（实体类）中的数据库结构，**必须**同步执行 Entity Framework 的 `Migrations` 流程。在 `backend/AgentTeam.Api` 目录下运行 `dotnet ef migrations add <Name>` 生成迁移文件。否则，由于后端启动时会执行 `dbCtx.Database.Migrate()`，若检测到模型有挂起的更改却没有迁移记录，程序将抛出 `InvalidOperationException` 并崩溃。
 
 ## 7. 常用命令速查
 
@@ -124,6 +125,9 @@ npm run lint
 cd backend/AgentTeam.Api
 dotnet run
 dotnet build
+
+### 数据库迁移 (如有模型修改)
+dotnet ef migrations add <MigrationName>
 ```
 
 ### PTY

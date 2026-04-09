@@ -8,4 +8,5 @@ export const agentApi = {
   update: (id: string, req: UpdateAgentRequest) =>
     api.put<Agent>(`/api/agents/${id}`, req).then(r => r.data),
   delete: (id: string) => api.delete(`/api/agents/${id}`),
+  togglePin: (id: string) => api.post<{ isPinned: boolean }>(`/api/agents/${id}/toggle-pin`).then(r => r.data),
 };
