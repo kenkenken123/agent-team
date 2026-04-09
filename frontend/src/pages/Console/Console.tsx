@@ -477,7 +477,7 @@ const ConsolePage: React.FC = () => {
 
           <div className="chat-input-wrapper">
             {selectedAgent && (
-              <div style={{ padding: '0 16px', marginBottom: 8, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '16px' }}>
+              <div className="chat-input-options">
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <Text style={{ color: '#8B949E', fontSize: 12 }}>执行模型:</Text>
                   <Select

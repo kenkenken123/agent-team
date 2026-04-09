@@ -22,6 +22,7 @@ public class ClaudeCodeService(
     // WebSocket 推送委托：外部订阅后可实时接收输出
     public event Func<Guid, string, Task>? OnOutput;
     public event Func<Guid, string, Task>? OnStatusChanged;
+    public event Func<Guid, string, string, Task>? OnAskUserQuestion; // taskId, question, requestId
 
     /// <summary>启动 Claude Code 子进程执行任务</summary>
     public async Task StartTaskAsync(AgentTask task, Agent agent)
@@ -102,6 +103,7 @@ public class ClaudeCodeService(
                 FileName = fileName,
                 Arguments = arguments,
                 WorkingDirectory = task.WorkingDirectory ?? agent.WorkingDirectory,
+                RedirectStandardInput = true,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 UseShellExecute = false,
@@ -225,6 +227,23 @@ public class ClaudeCodeService(
     public bool IsRunning(Guid taskId)
     {
         lock (_lock) { return _runningProcesses.ContainsKey(taskId); }
+    }
+
+    /// <summary>发送输入到运行中的任务进程</summary>
+    public async Task SendInputAsync(Guid taskId, string input)
+    {
+        System.Diagnostics.Process? process;
+        lock (_lock)
+        {
+            _runningProcesses.TryGetValue(taskId, out process);
+        }
+
+        if (process != null && !process.HasExited)
+        {
+            logger.LogInformation("[Task {TaskId}] Sending input: {Input}", taskId, input);
+            await process.StandardInput.WriteLineAsync(input);
+            await process.StandardInput.FlushAsync();
+        }
     }
 
     // ─── 内部方法 ─────────────────────────────────────────────
@@ -376,23 +395,28 @@ public class ClaudeCodeService(
                                 if (itemType == "text" && item.TryGetProperty("text", out var textEl))
                                     sb.Append(textEl.GetString());
                                 else if (itemType == "tool_use")
+                                {
                                     sb.Append(ParseToolUse(item));
+                                }
+                                else if (itemType == "AskUserQuestion")
+                                {
+                                    var question = item.TryGetProperty("question", out var qEl) ? qEl.GetString() : "未提供问题内容";
+                                    var requestId = item.TryGetProperty("id", out var rIdEl) ? rIdEl.GetString() : Guid.NewGuid().ToString();
+
+                                    _ = Task.Run(async () =>
+                                    {
+                                        if (OnAskUserQuestion != null)
+                                            await OnAskUserQuestion.Invoke(taskId, question ?? "", requestId!);
+                                    });
+
+                                    sb.Append($"\r\n\x1b[33m[Claude 提问: {question}]\x1b[0m\r\n");
+                                }
                                 else if (itemType == "thought" && item.TryGetProperty("thought", out var thEl))
                                     sb.Append($"\x1b[90m[思考: {thEl.GetString()}]\x1b[0m\r\n");
                             }
                         }
                         extractedText = sb.ToString();
                     }
-                }
-                // 2. 思考过程 (独立事件)
-                else if (type == "thought" && root.TryGetProperty("thought", out var thEl))
-                {
-                    extractedText = $"\x1b[90m[思考: {thEl.GetString()}]\x1b[0m\r\n";
-                }
-                // 3. 进度/系统 消息
-                else if (type == "progress" && root.TryGetProperty("message", out var pmsgEl))
-                {
-                    extractedText = $"\x1b[94m[进度: {pmsgEl.GetString()}]\x1b[0m\r\n";
                 }
                 else if (type == "system" && root.TryGetProperty("subtype", out var subtypeEl))
                 {
@@ -402,10 +426,10 @@ public class ClaudeCodeService(
                         UpdateTaskSession(taskId, sidEl.GetString());
                     }
                 }
-                // 4. 执行结果
+                // 5. 执行结果
                 else if (type == "result" && root.TryGetProperty("subtype", out var resSubtypeEl) && resSubtypeEl.GetString() == "success")
                 {
-                    extractedText = "\x1b[32m[回合执行完成]\x1b[0m\r\n";
+                    extractedText = "\x1b[32m[回答完成]\x1b[0m\r\n";
                 }
 
                 return true;

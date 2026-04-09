@@ -18,11 +18,12 @@ import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { useAppStore } from '../../stores/appStore';
 import { useTerminal } from '../../hooks/useTerminal';
 import { useTaskWebSocket } from '../../hooks/useTaskWebSocket';
-import type { AgentTask, WsMessage, WsPermissionRequestMessage } from '../../types';
+import type { AgentTask, WsMessage, WsPermissionRequestMessage, WsAskUserQuestionMessage } from '../../types';
 import { taskApi } from '../../api/taskApi';
 import { requestNotificationPermission, showNotification } from '../../utils/notification';
 import RealTerminal from './RealTerminal';
 import PermissionDialog from './PermissionDialog';
+import UserQuestionDialog from './UserQuestionDialog';
 import '@xterm/xterm/css/xterm.css';
 import './Terminal.css';
 
@@ -91,6 +92,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ task, onStatusChange }) =
 
   // ─── 授权请求列表 ───────────────────────────────────────────────
   const [pendingPermissions, setPendingPermissions] = useState<WsPermissionRequestMessage[]>([]);
+  const [pendingQuestions, setPendingQuestions] = useState<WsAskUserQuestionMessage[]>([]);
 
   useEffect(() => {
     if (initialConsoleTab) {
@@ -310,13 +312,19 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ task, onStatusChange }) =
         write(`${icon} [授权结果: ${msg.decision === 'allow' ? '已允许' : '已拒绝'}]\x1b[0m\r\n`);
         break;
       }
+      case 'ask_user_question': {
+        setPendingQuestions(prev => {
+          if (prev.some(p => p.requestId === msg.requestId)) return prev;
+          return [...prev, msg];
+        });
+        write(`\r\n\x1b[33m[💬 Claude 正在提问，请在上方对话框中回答]\x1b[0m\r\n`);
+        break;
+      }
     }
   }, [write, onStatusChange, processOutput]);
 
-  // 关键修复：只要有 taskId，就建立 WebSocket 连接（不依赖 status）
-  // 之前的 bug 是只在 Running 时才连，但任务启动初始是 Pending，导致完全接收不到消息
-  useTaskWebSocket(task?.id ?? null, {
-    onMessage: handleWsMessage,
+  const { sendMessage } = useTaskWebSocket(task?.id ?? null, {
+    onMessage: (msg) => handleWsMessage(msg),
     onOpen: () => {
       setWsStatus('open');
       write('\x1b[90m[已连接实时输出流]\x1b[0m\r\n');
@@ -326,9 +334,14 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ task, onStatusChange }) =
     },
   });
 
-  // 切换任务时清除遗留的授权请求队列
+  // 关键修复：只要有 taskId，就建立 WebSocket 连接（不依赖 status）
+  // 之前的 bug 是只在 Running 时才连，但任务启动初始是 Pending，导致完全接收不到消息
+  // useTaskWebSocket 已经在上方调用并解构出 sendMessage
+  
+  // 切换任务时清除遗留的授权请求队列和提问队列
   useEffect(() => {
     setPendingPermissions([]);
+    setPendingQuestions([]);
   }, [task?.id]);
 
   const MarkdownComponents = useMemo(() => ({
@@ -431,6 +444,21 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ task, onStatusChange }) =
                       }
                     }}
                     timeoutSeconds={60}
+                  />
+                ))}
+                {pendingQuestions.map(req => (
+                  <UserQuestionDialog
+                    key={req.requestId}
+                    request={req}
+                    onAnswer={(requestId, answer) => {
+                      sendMessage({ type: 'user_answer', requestId, answer });
+                      // 提交后从 UI 移除 (或者等待后端 confirmation，这里为了交互流畅先移除)
+                      // 但通常这种提问是阻塞的，我们可以保留状态直到进程继续
+                      // 这里选择保留 2 秒再移除，或者干脆由切换任务触发重置
+                      setTimeout(() => {
+                        setPendingQuestions(prev => prev.filter(p => p.requestId !== requestId));
+                      }, 2000);
+                    }}
                   />
                 ))}
               </div>

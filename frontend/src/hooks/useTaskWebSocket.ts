@@ -55,5 +55,11 @@ export function useTaskWebSocket(taskId: string | null, options: UseWebSocketOpt
     wsRef.current?.close();
   }, []);
 
-  return { disconnect };
+  const sendMessage = useCallback((msg: any) => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify(msg));
+    }
+  }, []);
+
+  return { disconnect, sendMessage };
 }

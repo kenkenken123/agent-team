@@ -86,6 +86,12 @@ claudeService.OnStatusChanged += async (taskId, status) =>
     await wsManager.BroadcastAsync(taskId, msg);
 };
 
+claudeService.OnAskUserQuestion += async (taskId, question, requestId) =>
+{
+    var msg = JsonSerializer.Serialize(new { type = "ask_user_question", taskId, question, requestId }, jsonOptions);
+    await wsManager.BroadcastAsync(taskId, msg);
+};
+
 app.Map("/ws/task/{taskId:guid}", async (HttpContext context, Guid taskId) =>
 {
     if (!context.WebSockets.IsWebSocketRequest)

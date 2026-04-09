@@ -137,9 +137,17 @@ export interface WsPermissionResolvedMessage {
   decision: 'allow' | 'deny';
 }
 
+export interface WsAskUserQuestionMessage {
+  type: 'ask_user_question';
+  taskId: string;
+  requestId: string;
+  question: string;
+}
+
 export type WsMessage =
   | WsOutputMessage
   | WsStatusMessage
   | WsPermissionRequestMessage
-  | WsPermissionResolvedMessage;
+  | WsPermissionResolvedMessage
+  | WsAskUserQuestionMessage;
 
