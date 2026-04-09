@@ -20,6 +20,7 @@ import { useTerminal } from '../../hooks/useTerminal';
 import { useTaskWebSocket } from '../../hooks/useTaskWebSocket';
 import type { AgentTask, WsMessage, WsPermissionRequestMessage } from '../../types';
 import { taskApi } from '../../api/taskApi';
+import { requestNotificationPermission, showNotification } from '../../utils/notification';
 import RealTerminal from './RealTerminal';
 import PermissionDialog from './PermissionDialog';
 import '@xterm/xterm/css/xterm.css';
@@ -184,6 +185,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ task, onStatusChange }) =
   // 初始化终端
   useEffect(() => {
     init();
+    requestNotificationPermission();
     const handleResize = () => fit();
     window.addEventListener('resize', handleResize);
     return () => {
@@ -281,6 +283,13 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ task, onStatusChange }) =
         const color = colors[msg.status] ?? '\x1b[0m';
         write(`\r\n${color}[状态变更: ${msg.status}]\x1b[0m\r\n`);
         onStatusChange?.(msg.taskId, msg.status);
+
+        if (msg.status === 'Completed' || msg.status === 'Failed') {
+          showNotification(`任务${msg.status === 'Completed' ? '已完成' : '执行失败'}`, {
+            body: `任务 ID: ${msg.taskId.substring(0, 8)}\n状态: ${msg.status}`,
+            tag: msg.taskId, // 避免重复通知
+          });
+        }
         break;
       }
       case 'permission_request': {

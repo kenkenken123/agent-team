@@ -39,9 +39,12 @@ builder.Services.AddScoped<MessageIngestionService>();
 // CORS
 builder.Services.AddCors(opts =>
     opts.AddDefaultPolicy(p =>
-        p.WithOrigins("http://localhost:5502", "http://localhost:5173", "http://localhost:3000", "http://localhost:5500")
+    {
+        var origins = builder.Configuration.GetSection("AllowedOrigins").Get<string[]>() ?? Array.Empty<string>();
+        p.WithOrigins(origins)
          .AllowAnyHeader()
-         .AllowAnyMethod()));
+         .AllowAnyMethod();
+    }));
 
 var app = builder.Build();
 

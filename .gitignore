@@ -17,3 +17,10 @@ build/
 # Data Directory
 backend/AgentTeam.Api/data/
 data/
+# 数据库文件 (重要!)
+*.db
+*.db-shm
+*.db-wal
+
+# 日志文件
+*.log
