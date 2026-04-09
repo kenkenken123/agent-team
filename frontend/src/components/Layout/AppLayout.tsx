@@ -7,6 +7,7 @@ import {
   HistoryOutlined,
   SettingOutlined,
   CustomerServiceOutlined,
+  KeyOutlined,
 } from '@ant-design/icons';
 import Dashboard from '../../pages/Dashboard/Dashboard';
 import AgentsPage from '../../pages/Agents/Agents';
@@ -15,6 +16,7 @@ import HistoryPage from '../../pages/History/History';
 import SimulationPage from '../../pages/Simulation/Simulation';
 import SettingsPage from '../../pages/Settings/Settings';
 import ButlerPage from '../../pages/Butler/Butler';
+import ConfigManager from '../../pages/Config/ConfigManager';
 import { useAppStore } from '../../stores/appStore';
 import type { PageKey } from '../../stores/appStore';
 import './AppLayout.css';
@@ -30,6 +32,7 @@ const PAGE_MAP: Record<PageKey, React.ReactNode> = {
   simulation: <SimulationPage />,
   settings: <SettingsPage />,
   butler: <ButlerPage />,
+  config: <ConfigManager />,
 };
 
 const AppLayout: React.FC = () => {
@@ -92,6 +95,11 @@ const AppLayout: React.FC = () => {
               key: 'simulation',
               icon: <RobotOutlined />,
               label: '赛博世界',
+            },
+            {
+              key: 'config',
+              icon: <KeyOutlined />,
+              label: 'API 凭据管理',
             },
             {
               key: 'settings',

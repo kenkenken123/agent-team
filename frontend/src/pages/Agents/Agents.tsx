@@ -14,6 +14,7 @@ import { agentApi } from '../../api/agentApi';
 import { agentTemplateApi } from '../../api/agentTemplateApi';
 import { commonPathApi } from '../../api/commonPathApi';
 import { statsApi } from '../../api/taskApi';
+import { getModelConfigs } from '../../api/configApi';
 import type { Agent, AgentTemplate, CommonPath, CreateAgentRequest, UpdateAgentRequest, CreateAgentTemplateRequest, UpdateAgentTemplateRequest, CreateCommonPathRequest } from '../../types';
 import './Agents.css';
 
@@ -21,16 +22,7 @@ const { Title, Text } = Typography;
 const { TextArea } = Input;
 const { TabPane } = Tabs;
 
-export const MODELS = [
-  'claude-3-7-sonnet-20250219',
-  'claude-sonnet-4-5',
-  'claude-opus-4-5',
-  'claude-haiku-4-5',
-  'Doubao-Seed-2.0-pro',
-  'minimax-m2.5',
-  'Kimi-K2.5',
-  'glm-5',
-];
+// 移除了硬编码的 MODELS 数组
 
 const AgentsPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState('agents');
@@ -38,6 +30,7 @@ const AgentsPage: React.FC = () => {
   const [agents, setAgents] = useState<Agent[]>([]);
   const [templates, setTemplates] = useState<AgentTemplate[]>([]);
   const [commonPaths, setCommonPaths] = useState<CommonPath[]>([]);
+  const [availableModels, setAvailableModels] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
 
   const [agentDrawerOpen, setAgentDrawerOpen] = useState(false);
@@ -56,14 +49,16 @@ const AgentsPage: React.FC = () => {
   const loadAll = async () => {
     setLoading(true);
     try {
-      const [ts, as, ps] = await Promise.all([
+      const [ts, as, ps, ms] = await Promise.all([
         agentTemplateApi.getAll(),
         agentApi.getAll(),
-        commonPathApi.getAll()
+        commonPathApi.getAll(),
+        getModelConfigs()
       ]);
       setTemplates(ts);
       setAgents(as);
       setCommonPaths(ps);
+      setAvailableModels(ms.data.map(m => m.modelId));
     } finally {
       setLoading(false);
     }
@@ -375,7 +370,7 @@ const AgentsPage: React.FC = () => {
             <Input.Search placeholder="例如 D:\projects\my-app" enterButton={<><FolderOpenOutlined /> 验证</>} onSearch={validateDir} />
           </Form.Item>
           <Form.Item name="allowedModels" label="允许选用的模型范围" rules={[{ required: true, message: '请至少选择一个模型' }]}>
-            <Select mode="multiple" placeholder="选择使用的模型" options={MODELS.map(m => ({ label: m, value: m }))} />
+            <Select mode="multiple" placeholder="选择使用的模型" options={availableModels.map(m => ({ label: m, value: m }))} />
           </Form.Item>
           <Form.Item name="maxTurns" label="最大对话轮数">
             <InputNumber min={1} max={100} placeholder="不限制" style={{ width: '100%' }} />

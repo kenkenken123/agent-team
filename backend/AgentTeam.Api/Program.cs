@@ -39,7 +39,7 @@ builder.Services.AddScoped<MessageIngestionService>();
 // CORS
 builder.Services.AddCors(opts =>
     opts.AddDefaultPolicy(p =>
-        p.WithOrigins("http://localhost:5502", "http://localhost:5173", "http://localhost:3000")
+        p.WithOrigins("http://localhost:5502", "http://localhost:5173", "http://localhost:3000", "http://localhost:5500")
          .AllowAnyHeader()
          .AllowAnyMethod()));
 
@@ -95,5 +95,5 @@ app.Map("/ws/task/{taskId:guid}", async (HttpContext context, Guid taskId) =>
 });
 
 app.MapControllers();
-Console.WriteLine("Backend is running...");
-app.Run();
+Console.WriteLine("Backend is running on http://0.0.0.0:5501 ...");
+app.Run("http://0.0.0.0:5501");

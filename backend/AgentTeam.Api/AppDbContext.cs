@@ -15,6 +15,8 @@ public class AppDbContext : DbContext
     public DbSet<CommonPath> CommonPaths { get; set; } = null!;
     public DbSet<SystemSetting> SystemSettings { get; set; } = null!;
     public DbSet<IncomingMessage> IncomingMessages { get; set; } = null!;
+    public DbSet<CredentialTemplate> CredentialTemplates { get; set; } = null!;
+    public DbSet<ModelConfig> ModelConfigs { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -60,6 +62,19 @@ public class AppDbContext : DbContext
         {
             e.HasKey(m => m.Id);
             e.Property(m => m.Status).HasConversion<string>();
+        });
+
+        modelBuilder.Entity<CredentialTemplate>(e =>
+        {
+            e.HasKey(t => t.Id);
+            e.Property(t => t.Name).IsRequired().HasMaxLength(100);
+        });
+
+        modelBuilder.Entity<ModelConfig>(e =>
+        {
+            e.HasKey(c => c.Id);
+            e.Property(c => c.ModelId).IsRequired().HasMaxLength(100);
+            e.HasOne(c => c.Template).WithMany().HasForeignKey(c => c.TemplateId);
         });
     }
 }

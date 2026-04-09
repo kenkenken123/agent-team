@@ -19,7 +19,6 @@ import { useAppStore } from '../../stores/appStore';
 import TerminalPanel from '../../components/Terminal/TerminalPanel';
 import './Console.css';
 
-import { MODELS } from '../Agents/Agents.tsx';
 const { Sider, Content } = Layout;
 const { Text } = Typography;
 

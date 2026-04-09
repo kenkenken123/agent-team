@@ -55,6 +55,7 @@ public class SettingsController(AppDbContext db) : ControllerBase
         return Ok(new { message = "设置更新成功" });
     }
 
+
     [HttpGet("{key}")]
     public async Task<IActionResult> Get(string key)
     {
@@ -66,5 +67,13 @@ public class SettingsController(AppDbContext db) : ControllerBase
             : s.Value;
             
         return Ok(new { s.Key, s.Description, Value = val, s.UpdatedAt });
+    }
+
+    [HttpGet("{key}/raw")]
+    public async Task<IActionResult> GetRaw(string key)
+    {
+        var s = await db.SystemSettings.FirstOrDefaultAsync(x => x.Key == key);
+        if (s == null) return NotFound();
+        return Ok(new { s.Key, s.Value });
     }
 }
