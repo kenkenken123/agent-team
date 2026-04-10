@@ -24,6 +24,24 @@ public class MessageIngestionService(
             ImageUrls = message.ImageUrls
         };
 
+        if (message.OptimizePrompt)
+        {
+            try
+            {
+                var optimized = await router.OptimizePromptAsync(message.Text);
+                if (!string.IsNullOrEmpty(optimized))
+                {
+                    message.Text = optimized;
+                    incoming.ParsedText = optimized;
+                    incoming.RouterReason = "Prompt 已由 AI 优化";
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Failed to optimize prompt in Butler");
+            }
+        }
+
         db.IncomingMessages.Add(incoming);
         await db.SaveChangesAsync();
 

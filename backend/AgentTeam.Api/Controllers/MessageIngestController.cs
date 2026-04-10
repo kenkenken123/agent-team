@@ -13,7 +13,7 @@ public class MessageIngestController(
     AppDbContext db,
     MessageIngestionService ingestionService) : ControllerBase
 {
-    public record IngestRequest(string Text, Guid? AgentId = null, string[]? ImageUrls = null);
+    public record IngestRequest(string Text, Guid? AgentId = null, string[]? ImageUrls = null, bool OptimizePrompt = false);
 
     [HttpPost("ingest")]
     public async Task<IActionResult> Ingest([FromBody] IngestRequest req)
@@ -26,7 +26,8 @@ public class MessageIngestController(
             SourceName = "WebPage",
             Text = req.Text,
             AgentId = req.AgentId,
-            ImageUrls = req.ImageUrls != null ? string.Join(";", req.ImageUrls) : null
+            ImageUrls = req.ImageUrls != null ? string.Join(";", req.ImageUrls) : null,
+            OptimizePrompt = req.OptimizePrompt
         };
 
         var result = await ingestionService.IngestAsync(parsed);

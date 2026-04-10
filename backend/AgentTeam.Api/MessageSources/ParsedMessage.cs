@@ -9,4 +9,5 @@ public class ParsedMessage
     public Dictionary<string, string> Metadata { get; set; } = new();
     public Guid? AgentId { get; set; }
     public string? ImageUrls { get; set; }
+    public bool OptimizePrompt { get; set; }
 }

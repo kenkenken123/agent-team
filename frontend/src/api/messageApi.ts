@@ -16,8 +16,8 @@ export interface PagedIncomingMessages {
   total: number;
 }
 
-export const ingestMessage = (text: string, agentId?: string, imageUrls?: string[]) => 
-  request.post<IncomingMessage>('/api/messages/ingest', { text, agentId, imageUrls });
+export const ingestMessage = (text: string, agentId?: string, imageUrls?: string[], optimizePrompt: boolean = false) => 
+  request.post<IncomingMessage>('/api/messages/ingest', { text, agentId, imageUrls, optimizePrompt });
 
 export const getMessages = (skip: number = 0, take: number = 10) => 
   request.get<PagedIncomingMessages>(`/api/messages?skip=${skip}&take=${take}`);

@@ -11,15 +11,22 @@ import { statsApi } from '../../api/statsApi';
 import type { OverviewStats } from '../../types';
 import './Dashboard.css';
 
+const { RangePicker } = DatePicker;
+
 const Dashboard: React.FC = () => {
     const [stats, setStats] = useState<OverviewStats | null>(null);
+    const [agentUsage, setAgentUsage] = useState<import('../../types').AgentUsage[]>([]);
     const [loading, setLoading] = useState(true);
-    const [selectedDate, setSelectedDate] = useState(dayjs());
+    const [dateRange, setDateRange] = useState<[dayjs.Dayjs, dayjs.Dayjs]>([dayjs(), dayjs()]);
 
-    const loadStats = (dateStr?: string) => {
+    const loadStats = (start: string, end: string) => {
         setLoading(true);
-        statsApi.getOverview(dateStr).then(data => {
-            setStats(data);
+        Promise.all([
+            statsApi.getOverview(start, end),
+            statsApi.getAgentUsage(start, end)
+        ]).then(([overview, agents]) => {
+            setStats(overview);
+            setAgentUsage(agents);
             setLoading(false);
         }).catch(err => {
             console.error('Failed to load dashboard stats', err);
@@ -28,42 +35,47 @@ const Dashboard: React.FC = () => {
     };
 
     useEffect(() => {
-        loadStats(selectedDate.format('YYYY-MM-DD'));
-    }, [selectedDate]);
+        loadStats(dateRange[0].format('YYYY-MM-DD'), dateRange[1].format('YYYY-MM-DD'));
+    }, [dateRange]);
 
     const formatNum = (n: number) => new Intl.NumberFormat().format(n);
 
     return (
         <div className="dashboard-container">
-            <div className="dashboard-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <div>
-                    <h1>Agent Team</h1>
-                    <p>Multi-Claude Code Instance Control Center</p>
+            <div className="dashboard-header">
+                <div className="title-section">
+                    <h1>数据看板</h1>
+                    <p>多实例 Claude Code 控制中心，实时掌握系统运行与资源消耗</p>
                 </div>
                 <div className="dashboard-filter">
-                    <Space align="center" style={{ background: '#161B22', padding: '8px 16px', borderRadius: 8, border: '1px solid #30363D' }}>
-                        <span style={{ color: '#8B949E' }}>统计日期:</span>
-                        <DatePicker 
-                            value={selectedDate} 
-                            onChange={(val) => val && setSelectedDate(val)} 
+                    <Space align="center" className="filter-box">
+                        <span className="filter-label">统计范围:</span>
+                        <RangePicker 
+                            value={dateRange} 
+                            onChange={(val) => val && val[0] && val[1] && setDateRange([val[0], val[1]])} 
                             allowClear={false}
-                            style={{ background: '#0D1117', border: '1px solid #30363D', color: '#C9D1D9' }}
+                            className="dark-range-picker"
+                            ranges={{
+                                '今天': [dayjs(), dayjs()],
+                                '最近 7 天': [dayjs().subtract(7, 'day'), dayjs()],
+                                '本月': [dayjs().startOf('month'), dayjs().endOf('month')],
+                            }}
                         />
                     </Space>
                 </div>
             </div>
 
             {loading ? (
-                <div className="dashboard-loading" style={{ height: '300px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-                    <Spin size="large" tip="Loading Stats..." />
+                <div className="dashboard-loading">
+                    <Spin size="large" tip="加载统计数据中..." />
                 </div>
             ) : (
-                <>
-                    {/* 顶栏卡片组 */}
+                <div className="dashboard-content">
+                    {/* 核心指标卡片 */}
                     <div className="stats-grid">
                         <div className="stat-card">
                             <div className="stat-header">
-                                <span className="stat-label">Active Agents</span>
+                                <span className="stat-label">活跃 Agent 总数</span>
                                 <RobotOutlined className="stat-icon" />
                             </div>
                             <div className="stat-value">{stats?.totalAgents ?? 0}</div>
@@ -71,7 +83,7 @@ const Dashboard: React.FC = () => {
 
                         <div className="stat-card">
                             <div className="stat-header">
-                                <span className="stat-label">Running Tasks</span>
+                                <span className="stat-label">当前运行中任务</span>
                                 <ThunderboltOutlined className="stat-icon" style={{color: '#bc8cff'}} />
                             </div>
                             <div className="stat-value">{stats?.runningTasks ?? 0}</div>
@@ -79,39 +91,74 @@ const Dashboard: React.FC = () => {
 
                         <div className="stat-card">
                             <div className="stat-header">
-                                <span className="stat-label">{selectedDate.isSame(dayjs(), 'day') ? "Today's Tasks" : "Tasks on " + selectedDate.format('MM-DD')}</span>
+                                <span className="stat-label">选定期间任务数</span>
                                 <CalendarOutlined className="stat-icon" style={{color: '#ffd33d'}} />
                             </div>
-                            <div className="stat-value">{stats?.todayTasks ?? 0}</div>
+                            <div className="stat-value">{stats?.periodTasks ?? 0}</div>
                         </div>
 
                         <div className="stat-card">
                             <div className="stat-header">
-                                <span className="stat-label">{selectedDate.isSame(dayjs(), 'day') ? "Today's Consumption" : "Consumption on " + selectedDate.format('MM-DD')}</span>
+                                <span className="stat-label">选定期间 Token 消耗</span>
                                 <DeploymentUnitOutlined className="stat-icon" style={{color: '#bc8ff2'}} />
                             </div>
                             <div className="stat-value">
-                                {formatNum((stats?.todayInputTokens ?? 0) + (stats?.todayOutputTokens ?? 0))}
+                                {formatNum((stats?.periodInputTokens ?? 0) + (stats?.periodOutputTokens ?? 0))}
                                 <span className="stat-unit">tokens</span>
                             </div>
                         </div>
                     </div>
 
-                    {/* 详情卡片 */}
-                    <div className="detail-card">
-                        <div className="detail-header">Token Usage Details ({selectedDate.format('YYYY-MM-DD')})</div>
-                        <div className="usage-row">
-                            <div className="usage-item">
-                                <div className="usage-label">Input Tokens</div>
-                                <div className="usage-value input">{formatNum(stats?.todayInputTokens ?? 0)}</div>
+                    <div className="dashboard-detail-row">
+                        {/* 消耗详情 */}
+                        <div className="detail-card token-usage">
+                            <div className="detail-header">Token 消耗详情</div>
+                            <div className="usage-row">
+                                <div className="usage-item">
+                                    <div className="usage-label">输入 (Input)</div>
+                                    <div className="usage-value input">{formatNum(stats?.periodInputTokens ?? 0)}</div>
+                                </div>
+                                <div className="usage-item">
+                                    <div className="usage-label">输出 (Output)</div>
+                                    <div className="usage-value output">{formatNum(stats?.periodOutputTokens ?? 0)}</div>
+                                </div>
                             </div>
-                            <div className="usage-item">
-                                <div className="usage-label">Output Tokens</div>
-                                <div className="usage-value output">{formatNum(stats?.todayOutputTokens ?? 0)}</div>
+                        </div>
+
+                        {/* Agent 统计列表 */}
+                        <div className="detail-card agent-usage-list">
+                            <div className="detail-header">各 Agent 消耗排行</div>
+                            <div className="agent-list-scroll">
+                                {agentUsage.length === 0 ? (
+                                    <div className="empty-list">期间无任务数据</div>
+                                ) : (
+                                    agentUsage.map(agent => (
+                                        <div className="agent-usage-item" key={agent.agentId}>
+                                            <div className="agent-info">
+                                                <div className="agent-name">{agent.agentName}</div>
+                                                <div className="agent-tasks">{agent.taskCount} 个任务</div>
+                                            </div>
+                                            <div className="agent-tokens">
+                                                <div className="token-total">{formatNum(agent.totalTokens)}</div>
+                                                <div className="token-breakdown">
+                                                    In: {formatNum(agent.inputTokens)} | Out: {formatNum(agent.outputTokens)}
+                                                </div>
+                                            </div>
+                                            <div className="usage-progress-bar">
+                                                <div 
+                                                    className="fill" 
+                                                    style={{ 
+                                                        width: `${(agent.totalTokens / (agentUsage[0].totalTokens || 1)) * 100}%` 
+                                                    }} 
+                                                />
+                                            </div>
+                                        </div>
+                                    ))
+                                )}
                             </div>
                         </div>
                     </div>
-                </>
+                </div>
             )}
         </div>
     );

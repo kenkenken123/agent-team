@@ -10,27 +10,64 @@ namespace AgentTeam.Api.Controllers;
 public class StatsController(AppDbContext db) : ControllerBase
 {
     [HttpGet("overview")]
-    public async Task<IActionResult> Overview([FromQuery] DateTime? date = null)
+    public async Task<IActionResult> Overview([FromQuery] DateTime? startDate = null, [FromQuery] DateTime? endDate = null)
     {
-        var targetDate = date?.Date ?? DateTime.UtcNow.Date;
-        var nextDay = targetDate.AddDays(1);
+        var start = startDate?.Date ?? DateTime.UtcNow.Date;
+        var end = endDate?.Date.AddDays(1) ?? start.AddDays(1);
 
         var totalAgents = await db.Agents.CountAsync(a => a.IsEnabled);
         var runningTasks = await db.Tasks.CountAsync(t =>
             t.Status == AgentTeam.Api.Models.TaskStatus.Running);
-        var todayTasks = await db.Tasks.CountAsync(t => t.CreatedAt >= targetDate && t.CreatedAt < nextDay);
+            
+        var periodTasks = await db.Tasks.CountAsync(t => t.CreatedAt >= start && t.CreatedAt < end);
 
-        var todayTokens = await db.Tasks
-            .Where(t => t.CreatedAt >= targetDate && t.CreatedAt < nextDay)
+        var periodTokens = await db.Tasks
+            .Where(t => t.CreatedAt >= start && t.CreatedAt < end)
             .Select(t => new { t.InputTokens, t.OutputTokens })
             .ToListAsync();
 
-        var todayInputTokens = todayTokens.Sum(t => t.InputTokens ?? 0);
-        var todayOutputTokens = todayTokens.Sum(t => t.OutputTokens ?? 0);
+        var periodInputTokens = periodTokens.Sum(t => t.InputTokens ?? 0);
+        var periodOutputTokens = periodTokens.Sum(t => t.OutputTokens ?? 0);
 
         return Ok(new OverviewStats(
-            totalAgents, runningTasks, todayTasks,
-            todayInputTokens, todayOutputTokens));
+            totalAgents, runningTasks, periodTasks,
+            periodInputTokens, periodOutputTokens));
+    }
+
+    [HttpGet("agents")]
+
+    public async Task<IActionResult> AgentUsage([FromQuery] DateTime? startDate = null, [FromQuery] DateTime? endDate = null)
+    {
+        var start = startDate?.Date ?? DateTime.UtcNow.Date;
+        var end = endDate?.Date.AddDays(1) ?? start.AddDays(1);
+
+        var stats = await db.Tasks
+            .Where(t => t.CreatedAt >= start && t.CreatedAt < end)
+            .GroupBy(t => t.AgentId)
+            .Select(g => new
+            {
+                AgentId = g.Key,
+                TaskCount = g.Count(),
+                InputTokens = g.Sum(t => t.InputTokens ?? 0),
+                OutputTokens = g.Sum(t => t.OutputTokens ?? 0)
+            })
+            .ToListAsync();
+
+        var agentIds = stats.Select(s => s.AgentId).ToList();
+        var agents = await db.Agents.Where(a => agentIds.Contains(a.Id)).ToDictionaryAsync(a => a.Id, a => a.Name);
+
+        var result = stats.Select(s => new AgentUsageDto(
+            s.AgentId,
+            agents.TryGetValue(s.AgentId, out var name) ? name : "Unknown",
+            s.TaskCount,
+            s.InputTokens,
+            s.OutputTokens,
+            s.InputTokens + s.OutputTokens
+        ))
+        .OrderByDescending(s => s.TotalTokens)
+        .ToList();
+
+        return Ok(result);
     }
 
     [HttpGet("tokens")]

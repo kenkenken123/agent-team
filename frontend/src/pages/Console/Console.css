@@ -128,11 +128,38 @@
   border-left: 3px solid #58A6FF;
 }
 
+.task-item-content {
+  width: 100%;
+  overflow: hidden;
+}
+
 .task-item-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
   margin-bottom: 6px;
+  width: 100%;
+}
+
+.task-item-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+  margin-left: 8px;
+}
+
+.delete-session-btn {
+  color: #8B949E;
+  transition: all 0.2s;
+}
+
+.delete-session-btn:hover {
+  color: #F85149 !important;
+  background: rgba(248, 81, 73, 0.1) !important;
+}
+
+.task-list-item.active .delete-session-btn {
+  color: #C9D1D9;
 }
 
 .task-prompt-preview {
@@ -222,10 +249,87 @@
   max-width: 800px;
   margin: 0 auto 8px auto;
   display: flex;
+  justify-content: space-between;
+  align-items: center;
   flex-wrap: wrap;
+  gap: 12px;
+  padding: 0 4px;
+}
+
+.options-left, .options-right {
+  display: flex;
   align-items: center;
   gap: 16px;
-  padding: 0 4px; /* 微调以对齐输入框边缘 */
+}
+
+.option-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.option-label {
+  color: #8B949E;
+  font-size: 12px;
+}
+
+.dark-select .ant-select-selector, 
+.dark-autocomplete .ant-select-selector {
+  background: #0D1117 !important;
+  border-color: #30363D !important;
+  color: #C9D1D9 !important;
+  font-size: 12px !important;
+}
+
+.git-btn {
+  background: transparent;
+  border-color: #30363D;
+  color: #8B949E;
+}
+
+.git-btn:hover {
+  color: #58A6FF;
+  border-color: #58A6FF;
+}
+
+.toggle-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(48, 54, 61, 0.2);
+  padding: 4px 10px;
+  border-radius: 20px;
+  border: 1px solid transparent;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.toggle-item:hover {
+  background: rgba(48, 54, 61, 0.4);
+  border-color: rgba(88, 166, 255, 0.2);
+}
+
+.toggle-label {
+  color: #C9D1D9;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: help;
+  white-space: nowrap;
+}
+
+.premium-switch.ant-switch-checked {
+  background-color: #238636;
+}
+
+.optimize-switch.ant-switch-checked {
+  background-color: #8957e5; /* Purple for optimization */
+}
+
+.warning-text {
+  color: #f85149;
+  font-size: 11px;
+  width: 100%;
+  margin-top: 4px;
+  font-weight: 500;
 }
 
 .chat-input-bar {

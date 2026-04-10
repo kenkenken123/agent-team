@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Card, Form, Input, Button, message, Space, Divider, Typography, Tag, List, Badge, Empty, Select, Upload } from 'antd';
+import { Card, Form, Input, Button, message, Space, Divider, Typography, Tag, List, Badge, Empty, Select, Upload, Switch, Tooltip } from 'antd';
 import { 
     SendOutlined, 
     CustomerServiceOutlined, 
@@ -53,7 +53,7 @@ const ButlerPage: React.FC = () => {
         loadAgents();
     }, []);
 
-    const onSendToButler = async (values: { text: string, agentId?: string }) => {
+    const onSendToButler = async (values: { text: string; agentId?: string; optimizePrompt?: boolean }) => {
         setLoading(true);
         try {
             // 获取已上传成功的图片 URL
@@ -61,10 +61,10 @@ const ButlerPage: React.FC = () => {
                 .filter(file => file.status === 'done' && file.response?.url)
                 .map(file => file.response.url);
 
-            const { data } = await ingestMessage(values.text, values.agentId, imageUrls);
+            const { data } = await ingestMessage(values.text, values.agentId, imageUrls, values.optimizePrompt);
             setRoutingResult(data);
             message.success('您的指令已送达，管家正在处理...');
-            msgForm.resetFields();
+            msgForm.resetFields(['text']); // 仅重置文本，保留 Agent 选择和优化选项
             setFileList([]);
             loadMessages();
         } catch (error) {
@@ -104,25 +104,36 @@ const ButlerPage: React.FC = () => {
                         form={msgForm} 
                         layout="vertical" 
                         onFinish={onSendToButler}
-                        initialValues={{ agentId: undefined }}
+                        initialValues={{ agentId: undefined, optimizePrompt: false }}
                     >
-                        <Space style={{ width: '100%', marginBottom: 16 }} direction="vertical">
-                            <Text strong style={{ color: '#F0F6FC' }}>处理者 (Agent):</Text>
-                            <Form.Item name="agentId" style={{ marginBottom: 0 }}>
-                                <Select 
-                                    placeholder="自动识别 (智能路由)" 
-                                    allowClear 
-                                    style={{ width: '100%' }}
-                                    size="large"
-                                >
-                                    {agents.map(agent => (
-                                        <Option key={agent.id} value={agent.id}>
-                                            <RobotOutlined style={{ marginRight: 8 }} />
-                                            {agent.name}
-                                        </Option>
-                                    ))}
-                                </Select>
-                            </Form.Item>
+                        <Space style={{ width: '100%', marginBottom: 16, justifyContent: 'space-between' }} align="center">
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 16, flex: 1 }}>
+                                <Text strong style={{ color: '#F0F6FC', whiteSpace: 'nowrap' }}>处理者 (Agent):</Text>
+                                <Form.Item name="agentId" style={{ marginBottom: 0, flex: 1 }}>
+                                    <Select 
+                                        placeholder="自动识别 (智能路由)" 
+                                        allowClear 
+                                        style={{ width: '100%' }}
+                                        size="large"
+                                    >
+                                        {agents.map(agent => (
+                                            <Option key={agent.id} value={agent.id}>
+                                                <RobotOutlined style={{ marginRight: 8 }} />
+                                                {agent.name}
+                                            </Option>
+                                        ))}
+                                    </Select>
+                                </Form.Item>
+                            </div>
+                            
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(137, 87, 229, 0.1)', padding: '4px 12px', borderRadius: 20, border: '1px solid rgba(137, 87, 229, 0.2)' }}>
+                                <Tooltip title="启用后，管家会使用高级 AI 对您的指令进行优化和补全，以获得更精准的执行效果">
+                                    <Text style={{ color: '#bc8cff', fontSize: 13, fontWeight: 500, cursor: 'help' }}>✨ 优化指令</Text>
+                                </Tooltip>
+                                <Form.Item name="optimizePrompt" valuePropName="checked" style={{ marginBottom: 0 }}>
+                                    <Switch size="small" />
+                                </Form.Item>
+                            </div>
                         </Space>
 
                         <Form.Item

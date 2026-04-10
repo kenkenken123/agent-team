@@ -2,8 +2,13 @@ import api from './request';
 import type { OverviewStats } from '../types';
 
 export const statsApi = {
-  getOverview: async (date?: string): Promise<OverviewStats> => {
-    const res = await api.get<OverviewStats>('/api/stats/overview', { params: { date } });
+  getOverview: async (startDate?: string, endDate?: string): Promise<OverviewStats> => {
+    const res = await api.get<OverviewStats>('/api/stats/overview', { params: { startDate, endDate } });
+    return res.data;
+  },
+  
+  getAgentUsage: async (startDate?: string, endDate?: string): Promise<import('../types').AgentUsage[]> => {
+    const res = await api.get('/api/stats/agents', { params: { startDate, endDate } });
     return res.data;
   },
   

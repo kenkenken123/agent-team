@@ -7,9 +7,12 @@
 
 .dashboard-header {
   margin-bottom: 40px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
 }
 
-.dashboard-header h1 {
+.title-section h1 {
   font-family: 'Outfit', 'Inter', -apple-system, system-ui, sans-serif;
   font-weight: 800;
   font-size: 42px;
@@ -20,10 +23,37 @@
   letter-spacing: -0.5px;
 }
 
-.dashboard-header p {
+.title-section p {
   color: #8b949e;
   font-size: 16px;
   font-weight: 500;
+}
+
+.filter-box {
+  background: rgba(22, 27, 34, 0.6);
+  padding: 8px 16px;
+  border-radius: 12px;
+  border: 1px solid #30363d;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+}
+
+.filter-label {
+  color: #8b949e;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.dark-range-picker {
+  background: #0d1117 !important;
+  border-color: #30363d !important;
+}
+
+.dark-range-picker input {
+  color: #c9d1d9 !important;
+}
+
+.dark-range-picker .ant-picker-range-separator .ant-picker-separator {
+  color: #8b949e !important;
 }
 
 /* 卡片容器：改用 Grid 以实现更现代的布局 */
@@ -31,7 +61,7 @@
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 24px;
-  margin-bottom: 48px;
+  margin-bottom: 32px;
 }
 
 .stat-card {
@@ -45,26 +75,10 @@
   overflow: hidden;
 }
 
-.stat-card::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 2px;
-  background: linear-gradient(90deg, transparent, rgba(88, 166, 255, 0.3), transparent);
-  opacity: 0;
-  transition: opacity 0.3s;
-}
-
 .stat-card:hover {
   transform: translateY(-8px);
   border-color: rgba(88, 166, 255, 0.4);
   box-shadow: 0 12px 30px rgba(0, 0, 0, 0.3);
-}
-
-.stat-card:hover::before {
-  opacity: 1;
 }
 
 .stat-header {
@@ -103,12 +117,20 @@
   margin-left: 4px;
 }
 
+.dashboard-detail-row {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  gap: 24px;
+}
+
 /* 详情卡片 */
 .detail-card {
   background: rgba(22, 27, 34, 0.4);
   border: 1px solid #30363d;
   border-radius: 24px;
   padding: 28px;
+  display: flex;
+  flex-direction: column;
 }
 
 .detail-header {
@@ -122,7 +144,8 @@
 
 .usage-row {
   display: flex;
-  gap: 48px;
+  flex-direction: column;
+  gap: 24px;
 }
 
 .usage-item {
@@ -143,3 +166,84 @@
 
 .usage-value.input { color: #58a6ff; }
 .usage-value.output { color: #3fb950; }
+
+.agent-list-scroll {
+  max-height: 400px;
+  overflow-y: auto;
+  padding-right: 8px;
+}
+
+.agent-list-scroll::-webkit-scrollbar {
+  width: 4px;
+}
+
+.agent-list-scroll::-webkit-scrollbar-thumb {
+  background: #30363d;
+  border-radius: 2px;
+}
+
+.agent-usage-item {
+  padding: 16px;
+  background: rgba(48, 54, 61, 0.2);
+  border-radius: 12px;
+  margin-bottom: 12px;
+  position: relative;
+  overflow: hidden;
+}
+
+.agent-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.agent-name {
+  font-weight: 600;
+  color: #c9d1d9;
+}
+
+.agent-tasks {
+  font-size: 12px;
+  color: #8b949e;
+}
+
+.agent-tokens {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+}
+
+.token-total {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 18px;
+  font-weight: 700;
+  color: #bc8cff;
+}
+
+.token-breakdown {
+  font-size: 11px;
+  color: #8b949e;
+}
+
+.usage-progress-bar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: rgba(48, 54, 61, 0.4);
+}
+
+.usage-progress-bar .fill {
+  height: 100%;
+  background: linear-gradient(90deg, #58a6ff, #bc8cff);
+  border-radius: 0 2px 2px 0;
+}
+
+.empty-list {
+  text-align: center;
+  padding: 40px;
+  color: #8b949e;
+  font-style: italic;
+}

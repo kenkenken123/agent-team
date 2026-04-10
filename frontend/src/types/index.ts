@@ -98,12 +98,21 @@ export interface CreateTaskRequest {
 }
 
 // Stats 类型
+export interface AgentUsage {
+  agentId: string;
+  agentName: string;
+  taskCount: number;
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+}
+
 export interface OverviewStats {
   totalAgents: number;
   runningTasks: number;
-  todayTasks: number;
-  todayInputTokens: number;
-  todayOutputTokens: number;
+  periodTasks: number;
+  periodInputTokens: number;
+  periodOutputTokens: number;
 }
 
 // WebSocket 消息类型

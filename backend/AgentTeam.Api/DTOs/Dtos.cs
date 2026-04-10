@@ -119,7 +119,16 @@ public record CreateTaskRequest(
 public record OverviewStats(
     int TotalAgents,
     int RunningTasks,
-    int TodayTasks,
-    int TodayInputTokens,
-    int TodayOutputTokens
+    int PeriodTasks, // 改名为 Period 以支持区间
+    int PeriodInputTokens,
+    int PeriodOutputTokens
+);
+
+public record AgentUsageDto(
+    Guid AgentId,
+    string AgentName,
+    int TaskCount,
+    int InputTokens,
+    int OutputTokens,
+    int TotalTokens
 );

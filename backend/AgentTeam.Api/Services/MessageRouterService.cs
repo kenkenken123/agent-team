@@ -9,7 +9,7 @@ using Microsoft.Extensions.Logging;
 namespace AgentTeam.Api.Services;
 
 public class MessageRouterService(
-    AppDbContext db, 
+    AppDbContext db,
     IHttpClientFactory httpClientFactory,
     ILogger<MessageRouterService> logger)
 {
@@ -48,8 +48,8 @@ public class MessageRouterService(
             id = a.Id,
             name = a.Name,
             description = a.Template.Description,
-            systemPromptSummary = a.Template.SystemPrompt.Length > 200 
-                ? a.Template.SystemPrompt.Substring(0, 200) + "..." 
+            systemPromptSummary = a.Template.SystemPrompt.Length > 200
+                ? a.Template.SystemPrompt.Substring(0, 200) + "..."
                 : a.Template.SystemPrompt
         });
 
@@ -89,7 +89,7 @@ public class MessageRouterService(
 
             var result = await response.Content.ReadFromJsonAsync<JsonElement>();
             var content = result.GetProperty("choices")[0].GetProperty("message").GetProperty("content").GetString() ?? "";
-            
+
             // 清理可能的 Markdown 格式标记
             if (content.Contains("```"))
             {
@@ -110,6 +110,7 @@ public class MessageRouterService(
             logger.LogError(ex, "Error routing message with LLM");
             return (null, $"内部错误: {ex.Message}", null);
         }
+    }
     public async Task<string> OptimizePromptAsync(string originalPrompt)
     {
         var baseUrlSetting = await db.SystemSettings.FirstOrDefaultAsync(s => s.Key == "router.llm.baseUrl");
@@ -141,10 +142,10 @@ public class MessageRouterService(
             var requestBody = new
             {
                 model = modelId,
-                messages = new[] 
-                { 
+                messages = new[]
+                {
                     new { role = "system", content = systemPrompt },
-                    new { role = "user", content = originalPrompt } 
+                    new { role = "user", content = originalPrompt }
                 }
             };
 
@@ -156,7 +157,7 @@ public class MessageRouterService(
 
             var result = await response.Content.ReadFromJsonAsync<JsonElement>();
             var content = result.GetProperty("choices")[0].GetProperty("message").GetProperty("content").GetString() ?? originalPrompt;
-            
+
             return content.Trim();
         }
         catch (Exception ex)
