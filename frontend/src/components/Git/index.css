@@ -1,0 +1,18 @@
+.git-drawer .ant-drawer-header {
+  border-bottom: 1px solid #30363D;
+  padding: 16px 20px;
+}
+
+.git-drawer .ant-drawer-title {
+  color: #C9D1D9;
+  font-size: 16px;
+}
+
+.git-drawer .ant-list-empty-text {
+  color: #8B949E;
+  padding: 20px;
+}
+
+.git-list-item:hover {
+  background-color: #1C2128;
+}

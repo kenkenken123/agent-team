@@ -105,8 +105,11 @@ npm run dev
 3. **保持事件一致性**：任务输出/状态字段变更时，前后端与 WebSocket 消息结构要同步。
 4. **避免破坏默认端口**：除非有充分理由，保持 5501/5502 与现有脚本一致。
 5. **提交前检查**：至少执行一次前端构建或 lint，以及后端构建，确保主干可运行。
-6. **JSX 结构与嵌套检查**：在 React 组件（如 `Simulation.tsx`）中添加大型组件或抽屉（Drawer）时，务必仔细检查 `div` 标签的闭合情况。避免在插入代码时冗余闭合标签，导致父级容器提前关闭，进而引发类似 `PARSE_ERROR` 的解析错误。建议在插入大块 JSX 代码后，仔细核对层级缩进。
-7. **数据库变更注意事项**：如果后端修改了 `Models`（实体类）中的数据库结构，**必须**同步执行 Entity Framework 的 `Migrations` 流程。在 `backend/AgentTeam.Api` 目录下运行 `dotnet ef migrations add <Name>` 生成迁移文件。否则，由于后端启动时会执行 `dbCtx.Database.Migrate()`，若检测到模型有挂起的更改却没有迁移记录，程序将抛出 `InvalidOperationException` 并崩溃。
+6. **文件编码与 TypeScript 类型导入规范**:
+   - **统一编码格式**：所有新创建或修改的正文文件应确保使用 **UTF-8** 编码，避免使用 PowerShell 默认的 UTF-16 编码，以免导致 Vite 或浏览器在解析 ESM 模块导出时报错（如 `SyntaxError`）。
+   - **规范导入方式**：在导入 TypeScript 纯类型或接口（如 `GitStatusInfo`）时，应优先使用 `import type { ... }` 语法。这符合现代 TypeScript 的 `isolatedModules` 规范，能确保类型信息在编译后被完全剔除，避免在浏览器运行时出现找不到导出的错误。
+7. **JSX 结构与嵌套检查**：在 React 组件（如 `Simulation.tsx`）中添加大型组件或抽屉（Drawer）时，务必仔细检查 `div` 标签的闭合情况。避免在插入代码时冗余闭合标签，导致父级容器提前关闭，进而引发类似 `PARSE_ERROR` 的解析错误。建议在插入大块 JSX 代码后，仔细核对层级缩进。
+8. **数据库变更注意事项**：如果后端修改了 `Models`（实体类）中的数据库结构，**必须**同步执行 Entity Framework 的 `Migrations` 流程。在 `backend/AgentTeam.Api` 目录下运行 `dotnet ef migrations add <Name>` 生成迁移文件。否则，由于后端启动时会执行 `dbCtx.Database.Migrate()`，若检测到模型有挂起的更改却没有迁移记录，程序将抛出 `InvalidOperationException` 并崩溃。
 
 ## 7. 常用命令速查
 

@@ -8,7 +8,7 @@ import {
   PlayCircleOutlined, StopOutlined, ReloadOutlined, PlusOutlined,
   RobotOutlined, ClockCircleOutlined, CheckCircleOutlined,
   CloseCircleOutlined, ExclamationCircleOutlined, DeleteOutlined, PictureOutlined,
-  PushpinOutlined, PushpinFilled, DownOutlined, UpOutlined, SearchOutlined
+  PushpinOutlined, PushpinFilled, DownOutlined, UpOutlined, SearchOutlined, BranchesOutlined
 } from '@ant-design/icons';
 import { Upload, Mentions, AutoComplete } from 'antd';
 
@@ -18,6 +18,7 @@ import { commonPathApi } from '../../api/commonPathApi';
 import type { Agent, AgentTask, CommonPath } from '../../types';
 import { useAppStore } from '../../stores/appStore';
 import TerminalPanel from '../../components/Terminal/TerminalPanel';
+import { GitDrawer } from '../../components/Git';
 import './Console.css';
 
 const { Sider, Content } = Layout;
@@ -36,6 +37,7 @@ const ConsolePage: React.FC = () => {
   const [commonPaths, setCommonPaths] = useState<CommonPath[]>([]);
   const [selectedModel, setSelectedModel] = useState<string | undefined>(undefined);
   const [selectedWorkingDirectory, setSelectedWorkingDirectory] = useState<string | undefined>(undefined);
+  const [gitDrawerVisible, setGitDrawerVisible] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const prevSessionTaskCountRef = useRef(0);
@@ -507,6 +509,15 @@ const ConsolePage: React.FC = () => {
                       option?.label?.toString().toUpperCase().indexOf(inputValue.toUpperCase()) !== -1
                     }
                   />
+                  <Tooltip title="查看 Git 变更">
+                    <Button
+                      size="small"
+                      icon={<BranchesOutlined />}
+                      onClick={() => setGitDrawerVisible(true)}
+                      disabled={!selectedWorkingDirectory}
+                      style={{ background: 'transparent', borderColor: '#30363D', color: '#8B949E' }}
+                    />
+                  </Tooltip>
                   {!selectedWorkingDirectory && !selectedAgent.workingDirectory && (
                     <Text type="danger" style={{ fontSize: 11 }}>* 必须指定目录才能启动</Text>
                   )}
@@ -626,6 +637,12 @@ const ConsolePage: React.FC = () => {
           </div>
         </Content>
       </Layout>
+
+      <GitDrawer
+        visible={gitDrawerVisible}
+        onClose={() => setGitDrawerVisible(false)}
+        workingDirectory={selectedWorkingDirectory || selectedAgent?.workingDirectory}
+      />
     </div>
   );
 };
