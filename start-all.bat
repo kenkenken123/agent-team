@@ -19,8 +19,8 @@ timeout /t 2 /nobreak >nul
 
 echo [2/3] Starting Services
 start "PTY" cmd /c ".\run-pty.bat"
-start "Backend" cmd /c ".\run-backend.bat"
 start "Frontend" cmd /c ".\run-frontend.bat"
+start "Backend" cmd /c ".\run-backend.bat"
 
 echo [3/3] DONE
 echo Backend:  5501
