@@ -110,5 +110,59 @@ public class MessageRouterService(
             logger.LogError(ex, "Error routing message with LLM");
             return (null, $"内部错误: {ex.Message}", null);
         }
+    public async Task<string> OptimizePromptAsync(string originalPrompt)
+    {
+        var baseUrlSetting = await db.SystemSettings.FirstOrDefaultAsync(s => s.Key == "router.llm.baseUrl");
+        var apiKeySetting = await db.SystemSettings.FirstOrDefaultAsync(s => s.Key == "router.llm.apiKey");
+        var modelIdSetting = await db.SystemSettings.FirstOrDefaultAsync(s => s.Key == "router.llm.modelId");
+
+        var baseUrl = baseUrlSetting?.Value ?? "https://api.openai.com/v1";
+        var apiKey = apiKeySetting?.Value;
+        var modelId = modelIdSetting?.Value ?? "gpt-4o-mini";
+
+        if (string.IsNullOrEmpty(apiKey))
+        {
+            return originalPrompt; // 无法优化，返回原值
+        }
+
+        var systemPrompt = @"你是一个 Prompt 优化专家。你的任务是优化用户的指令，使其更清晰、更具体、更容易被 AI Agent 理解。
+保持原始含义的基础上：
+1. 明确任务目标。
+2. 纠正可能的拼写或逻辑模糊。
+3. 如果指令过短或不完整，尝试在合理范围内补全语义。
+4. 始终使用中文返回优化后的内容。
+5. 只返回优化后的字符串，不要有其他前言或 Markdown 标签。";
+
+        try
+        {
+            var client = httpClientFactory.CreateClient();
+            client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", apiKey);
+
+            var requestBody = new
+            {
+                model = modelId,
+                messages = new[] 
+                { 
+                    new { role = "system", content = systemPrompt },
+                    new { role = "user", content = originalPrompt } 
+                }
+            };
+
+            var response = await client.PostAsJsonAsync($"{baseUrl.TrimEnd('/')}/chat/completions", requestBody);
+            if (!response.IsSuccessStatusCode)
+            {
+                return originalPrompt;
+            }
+
+            var result = await response.Content.ReadFromJsonAsync<JsonElement>();
+            var content = result.GetProperty("choices")[0].GetProperty("message").GetProperty("content").GetString() ?? originalPrompt;
+            
+            return content.Trim();
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error optimizing prompt with LLM");
+            return originalPrompt;
+        }
     }
 }

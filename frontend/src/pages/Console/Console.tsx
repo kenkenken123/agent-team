@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import {
   Layout, List, Button, Select, Typography, Space,
-  message, Popconfirm, Badge, Spin, Empty, Tooltip, Input,
+  message, Popconfirm, Badge, Spin, Empty, Tooltip, Input, Switch,
 } from 'antd';
 
 import {
@@ -48,6 +48,9 @@ const ConsolePage: React.FC = () => {
   const [totalTasks, setTotalTasks] = useState(0);
   const [showAllAgents, setShowAllAgents] = useState(false);
   const [agentSearch, setAgentSearch] = useState('');
+
+  const [autoIdentifyAgent, setAutoIdentifyAgent] = useState(false);
+  const [optimizePrompt, setOptimizePrompt] = useState(false);
 
   // 添加命令状态
   const [availableCommands, setAvailableCommands] = useState<string[]>([]);
@@ -239,12 +242,14 @@ const ConsolePage: React.FC = () => {
     setLaunching(true);
     try {
       const task = await taskApi.create({
-        agentId: selectedAgentId,
+        agentId: selectedAgentId || undefined,
         prompt: prompt.trim(),
         resumeSessionId: activeSessionId || undefined,
         forceNewSession: !activeSessionId, // 关键：如果没有指定 Session，强制新开
         model: selectedModel,
-        workingDirectory: selectedWorkingDirectory || undefined
+        workingDirectory: selectedWorkingDirectory || undefined,
+        autoIdentifyAgent,
+        optimizePrompt
       });
       
       
@@ -478,52 +483,83 @@ const ConsolePage: React.FC = () => {
 
 
           <div className="chat-input-wrapper">
-            {selectedAgent && (
-              <div className="chat-input-options">
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <Text style={{ color: '#8B949E', fontSize: 12 }}>执行模型:</Text>
-                  <Select
-                    size="small"
-                    value={selectedModel}
-                    onChange={setSelectedModel}
-                    style={{ width: 180, fontSize: 12 }}
-                    options={[
-                      ...(selectedAgent.allowedModels?.split(',').map(m => m.trim()).filter(m => m !== '') || []).map(m => ({ label: m, value: m })),
-                      { label: '系统默认 (本地配置)', value: '' }
-                    ]}
-                  />
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <Text style={{ color: '#8B949E', fontSize: 12 }}>工作目录:</Text>
-                  <AutoComplete
-                    size="small"
-                    value={selectedWorkingDirectory}
-                    onChange={setSelectedWorkingDirectory}
-                    style={{ width: 280, fontSize: 12 }}
-                    placeholder="输入或选择工作目录"
-                    options={[
-                      ...(selectedAgent.workingDirectory ? [{ label: `默认: ${selectedAgent.workingDirectory}`, value: selectedAgent.workingDirectory }] : []),
-                      ...commonPaths.map(p => ({ label: `${p.name} (${p.path})`, value: p.path }))
-                    ]}
-                    filterOption={(inputValue, option) =>
-                      option?.label?.toString().toUpperCase().indexOf(inputValue.toUpperCase()) !== -1
-                    }
-                  />
-                  <Tooltip title="查看 Git 变更">
-                    <Button
+            <div className="chat-input-options" style={{ flexWrap: 'wrap' }}>
+              {selectedAgent ? (
+                <>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <Text style={{ color: '#8B949E', fontSize: 12 }}>执行模型:</Text>
+                    <Select
                       size="small"
-                      icon={<BranchesOutlined />}
-                      onClick={() => setGitDrawerVisible(true)}
-                      disabled={!selectedWorkingDirectory}
-                      style={{ background: 'transparent', borderColor: '#30363D', color: '#8B949E' }}
+                      value={selectedModel}
+                      onChange={setSelectedModel}
+                      style={{ width: 140, fontSize: 12 }}
+                      options={[
+                        ...(selectedAgent.allowedModels?.split(',').map(m => m.trim()).filter(m => m !== '') || []).map(m => ({ label: m, value: m })),
+                        { label: '系统默认 (本地配置)', value: '' }
+                      ]}
                     />
-                  </Tooltip>
-                  {!selectedWorkingDirectory && !selectedAgent.workingDirectory && (
-                    <Text type="danger" style={{ fontSize: 11 }}>* 必须指定目录才能启动</Text>
-                  )}
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <Text style={{ color: '#8B949E', fontSize: 12 }}>工作目录:</Text>
+                    <AutoComplete
+                      size="small"
+                      value={selectedWorkingDirectory}
+                      onChange={setSelectedWorkingDirectory}
+                      style={{ width: 180, fontSize: 12 }}
+                      placeholder="输入或选择工作目录"
+                      options={[
+                        ...(selectedAgent.workingDirectory ? [{ label: `默认: ${selectedAgent.workingDirectory}`, value: selectedAgent.workingDirectory }] : []),
+                        ...commonPaths.map(p => ({ label: `${p.name} (${p.path})`, value: p.path }))
+                      ]}
+                      filterOption={(inputValue, option) =>
+                        option?.label?.toString().toUpperCase().indexOf(inputValue.toUpperCase()) !== -1
+                      }
+                    />
+                    <Tooltip title="查看 Git 变更">
+                      <Button
+                        size="small"
+                        icon={<BranchesOutlined />}
+                        onClick={() => setGitDrawerVisible(true)}
+                        disabled={!selectedWorkingDirectory}
+                        style={{ background: 'transparent', borderColor: '#30363D', color: '#8B949E' }}
+                      />
+                    </Tooltip>
+                  </div>
+                </>
+              ) : (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <RobotOutlined style={{ color: '#8B949E' }} />
+                  <Text style={{ color: '#8B949E', fontSize: 12 }}>请开启“自动识别”或从侧边栏选择 Agent</Text>
                 </div>
+              )}
+              
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginLeft: 'auto' }}>
+                <Space size={4}>
+                  <Tooltip title="基于 Prompt 内容自动路由到最合适的 Agent">
+                    <Text style={{ color: '#8B949E', fontSize: 11 }}>自动识别 Agent:</Text>
+                  </Tooltip>
+                  <Switch 
+                    size="small" 
+                    checked={autoIdentifyAgent} 
+                    onChange={setAutoIdentifyAgent} 
+                  />
+                </Space>
+                <Space size={4}>
+                  <Tooltip title="使用 LLM 优化和润色输入的 Prompt 以获得更好效果">
+                    <Text style={{ color: '#8B949E', fontSize: 11 }}>优化 Prompt:</Text>
+                  </Tooltip>
+                  <Switch 
+                    size="small" 
+                    checked={optimizePrompt} 
+                    onChange={setOptimizePrompt} 
+                  />
+                </Space>
               </div>
-            )}
+
+              {!selectedWorkingDirectory && (!selectedAgent || !selectedAgent.workingDirectory) && !autoIdentifyAgent && (
+                <Text type="danger" style={{ fontSize: 11, width: '100%', marginTop: 4 }}>* 必须指定目录或开启自动识别才能启动</Text>
+              )}
+            </div>
             <div className="chat-input-bar">
               {continueSession && (
                 <div className="continue-hint-badge">
@@ -575,7 +611,7 @@ const ConsolePage: React.FC = () => {
                     }
                   }
                 }}
-                disabled={!selectedAgentId}
+                disabled={!selectedAgentId && !autoIdentifyAgent}
               />
               <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '8px' }}>
                 <Upload
@@ -599,7 +635,7 @@ const ConsolePage: React.FC = () => {
                   <Button
                     icon={<PictureOutlined />}
                     style={{ marginTop: 4, background: 'transparent', borderColor: '#30363D', color: '#8B949E' }}
-                    disabled={!selectedAgentId}
+                    disabled={!selectedAgentId && !autoIdentifyAgent}
                     title="上传图片供 Claude 分析"
                   />
                 </Upload>
@@ -624,7 +660,7 @@ const ConsolePage: React.FC = () => {
                     icon={<PlayCircleOutlined />}
                     loading={launching}
                     onClick={handleLaunch}
-                    disabled={!selectedAgentId || !prompt.trim() || !selectedWorkingDirectory}
+                    disabled={(!selectedAgentId && !autoIdentifyAgent) || !prompt.trim() || (!selectedWorkingDirectory && !autoIdentifyAgent)}
                   >
                     发送 [Ctrl+Enter]
                   </Button>

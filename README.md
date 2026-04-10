@@ -14,7 +14,8 @@
 ### 1. 📂 Industrial Multi-Agent Management
 - **Centralized Control**: Unified dashboard to configure, launch, and monitor multiple Claude Code instances.
 - **Environment Isolation**: Specify unique working directories, system prompts, and execution parameters for each agent.
-- **Context Continuity**: Seamlessly resume sessions using `session-id` with zero context loss.
+- **Session Persistence**: Seamlessly resume sessions using `session-id` with zero context loss.
+- **Config Isolation Strategy**: Forces project-specific `.claude` configuration directories to prevent credential conflicts.
 
 ### 2. 🎮 Cyber World — Visual Office Simulation
 - **2D Pixel-Art Simulator**: A beautifully rendered Pokémon-style office built with PixiJS.
@@ -27,7 +28,8 @@
 - **Full PTY Support**: Built on `node-pty`, enabling seamless interaction with TUI tools like `vi`, `grep`, and `less`.
 
 ### 4. 🔍 Productivity Enhancements
-- **Multi-Modal Support**: Integrated image upload interface that automatically injections paths into prompts for visual analysis.
+- **Git Diff & Status**: Integrated Git drawer for visualizing live repository changes and file differences.
+- **Deep Multi-Modal Support**: Enhanced images.
 - **History Playback**: Full session persistence with logging and historical replay capabilities.
 
 ---

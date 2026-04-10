@@ -12,7 +12,8 @@ namespace AgentTeam.Api.Controllers;
 public class TasksController(
     AppDbContext db,
     ClaudeCodeService claudeService,
-    OutputFileService outputFileService) : ControllerBase
+    OutputFileService outputFileService,
+    MessageRouterService router) : ControllerBase
 {
     [HttpGet]
     public async Task<IActionResult> GetAll([FromQuery] Guid? agentId, [FromQuery] string? status, [FromQuery] string? sessionId, [FromQuery] int skip = 0, [FromQuery] int take = 5)
@@ -51,9 +52,35 @@ public class TasksController(
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] CreateTaskRequest req)
     {
-        var agent = await db.Agents.Include(a => a.Template).FirstOrDefaultAsync(a => a.Id == req.AgentId);
+        var prompt = req.Prompt;
+        var agentId = req.AgentId;
+        var workingDirectory = req.WorkingDirectory;
+
+        // 1. 自动识别 Agent
+        if (req.AutoIdentifyAgent)
+        {
+            var routingResult = await router.RouteMessageAsync(prompt);
+            if (routingResult.agentId.HasValue)
+            {
+                agentId = routingResult.agentId.Value;
+                if (string.IsNullOrEmpty(workingDirectory))
+                {
+                    workingDirectory = routingResult.extractedPath;
+                }
+            }
+        }
+
+        if (!agentId.HasValue) return BadRequest(new { error = "未选择 Agent 且自动识别失败" });
+
+        var agent = await db.Agents.Include(a => a.Template).FirstOrDefaultAsync(a => a.Id == agentId.Value);
         if (agent == null) return BadRequest(new { error = "Agent 不存在" });
         if (!agent.IsEnabled) return BadRequest(new { error = "Agent 已被禁用" });
+
+        // 2. 优化 Prompt
+        if (req.OptimizePrompt)
+        {
+            prompt = await router.OptimizePromptAsync(prompt);
+        }
 
         // 获取要使用的 SessionId
         string? sessionId = null;
@@ -63,22 +90,22 @@ public class TasksController(
             if (sessionId == null)
             {
                 var lastTask = await db.Tasks
-                    .Where(t => t.AgentId == req.AgentId && t.ClaudeSessionId != null)
+                    .Where(t => t.AgentId == agentId.Value && t.ClaudeSessionId != null)
                     .OrderByDescending(t => t.CreatedAt)
                     .FirstOrDefaultAsync();
                 sessionId = lastTask?.ClaudeSessionId;
             }
         }
 
-        var workingDirectory = req.WorkingDirectory ?? agent.WorkingDirectory;
+        workingDirectory ??= agent.WorkingDirectory;
         if (string.IsNullOrEmpty(workingDirectory))
             return BadRequest(new { error = "未指定工作目录，且该 Agent 未设置固定目录" });
 
         var task = new AgentTask
         {
-            AgentId = req.AgentId,
+            AgentId = agentId.Value,
             Agent = agent,
-            Prompt = req.Prompt,
+            Prompt = prompt,
             ClaudeSessionId = sessionId,
             TerminalType = req.TerminalType,
             WorkingDirectory = workingDirectory,

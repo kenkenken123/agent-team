@@ -101,7 +101,7 @@ public record TaskDto(
 );
 
 public record CreateTaskRequest(
-    Guid AgentId,
+    Guid? AgentId, // 改为可选，因为可能使用自动识别
     string Prompt,
     /// <summary>可选：指定从哪个 Session 继续（留空则尝试自动续写）</summary>
     string? ResumeSessionId = null,
@@ -109,7 +109,9 @@ public record CreateTaskRequest(
     bool ForceNewSession = false,
     string? Model = null,
     string TerminalType = "powershell",
-    string? WorkingDirectory = null
+    string? WorkingDirectory = null,
+    bool AutoIdentifyAgent = false,
+    bool OptimizePrompt = false
 );
 
 // ───── Stats DTOs ─────

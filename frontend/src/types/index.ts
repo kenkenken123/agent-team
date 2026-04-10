@@ -86,13 +86,15 @@ export interface AgentTask {
 }
 
 export interface CreateTaskRequest {
-  agentId: string;
+  agentId?: string;
   prompt: string;
   model?: string;
   workingDirectory?: string;
   resumeSessionId?: string;
   forceNewSession?: boolean;
   terminalType?: string;
+  autoIdentifyAgent?: boolean;
+  optimizePrompt?: boolean;
 }
 
 // Stats 类型
