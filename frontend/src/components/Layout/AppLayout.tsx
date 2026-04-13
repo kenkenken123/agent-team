@@ -8,6 +8,7 @@ import {
   SettingOutlined,
   CustomerServiceOutlined,
   KeyOutlined,
+  AppstoreOutlined,
 } from '@ant-design/icons';
 import Dashboard from '../../pages/Dashboard/Dashboard';
 import AgentsPage from '../../pages/Agents/Agents';
@@ -17,6 +18,7 @@ import SimulationPage from '../../pages/Simulation/Simulation';
 import SettingsPage from '../../pages/Settings/Settings';
 import ButlerPage from '../../pages/Butler/Butler';
 import ConfigManager from '../../pages/Config/ConfigManager';
+import KanbanPage from '../../pages/Kanban/Kanban';
 import { useAppStore } from '../../stores/appStore';
 import type { PageKey } from '../../stores/appStore';
 import './AppLayout.css';
@@ -33,6 +35,7 @@ const PAGE_MAP: Record<PageKey, React.ReactNode> = {
   settings: <SettingsPage />,
   butler: <ButlerPage />,
   config: <ConfigManager />,
+  kanban: <KanbanPage />,
 };
 
 const AppLayout: React.FC = () => {
@@ -66,6 +69,11 @@ const AppLayout: React.FC = () => {
           selectedKeys={[currentPage]}
           onClick={({ key }) => setPage(key as PageKey)}
           items={[
+            {
+              key: 'kanban',
+              icon: <AppstoreOutlined />,
+              label: '会话看板',
+            },
             {
               key: 'butler',
               icon: <CustomerServiceOutlined />,
