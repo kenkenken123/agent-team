@@ -1,14 +1,14 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
-import { 
-  Typography, Space, Select, Button, Modal, Input, 
+import {
+  Typography, Space, Select, Button, Modal, Input,
   message, Popover, Badge, Empty, Spin, Tag, Tooltip
 } from 'antd';
-import { 
-  AppstoreOutlined, PlusOutlined, RobotOutlined, 
+import {
+  AppstoreOutlined, PlusOutlined, RobotOutlined,
   ReloadOutlined, SearchOutlined, MessageOutlined,
   EyeOutlined, UserAddOutlined, ClockCircleOutlined,
-  PlayCircleOutlined, CheckCircleOutlined, CloseCircleOutlined, 
-  ExclamationCircleOutlined 
+  PlayCircleOutlined, CheckCircleOutlined, CloseCircleOutlined,
+  ExclamationCircleOutlined
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
@@ -37,12 +37,12 @@ interface KanbanSession {
 
 const KanbanPage: React.FC = () => {
   const { setPage, setSelectedAgentId } = useAppStore();
-  
+
   const [agents, setAgents] = useState<Agent[]>([]);
   const [tasks, setTasks] = useState<AgentTask[]>([]);
   const [loading, setLoading] = useState(false);
   const [filterAgentIds, setFilterAgentIds] = useState<string[]>([]);
-  
+
   // 弹框状态
   const [isLaunchModalOpen, setIsLaunchModalOpen] = useState(false);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -54,6 +54,9 @@ const KanbanPage: React.FC = () => {
 
   // 内存中维护的占位会话
   const [placeholders, setPlaceholders] = useState<KanbanSession[]>([]);
+
+  // 任务输出缓存：taskId -> 最后一行有意义的输出
+  const [outputCache, setOutputCache] = useState<Record<string, string>>({});
 
   // 加载基础数据
   const loadData = useCallback(async (quiet = false) => {
@@ -82,12 +85,12 @@ const KanbanPage: React.FC = () => {
   // 将任务聚合为会话
   const sessions = useMemo(() => {
     const sessionMap = new Map<string, KanbanSession>();
-    
+
     // 处理真实任务数据
     tasks.forEach(task => {
       const sid = task.claudeSessionId || `single-${task.id}`;
       const existing = sessionMap.get(sid);
-      
+
       if (!existing || dayjs(task.createdAt).isAfter(dayjs(existing.updatedAt))) {
         sessionMap.set(sid, {
           sessionId: task.claudeSessionId || '',
@@ -103,12 +106,12 @@ const KanbanPage: React.FC = () => {
     });
 
     const allSessions = Array.from(sessionMap.values());
-    
+
     // 合并占位会话 (如果没有真实任务覆盖它)
     const filteredPlaceholders = placeholders.filter(p => {
-       // 如果这个 agent 有了真实会话（通常是刚启动后），我们就移除占位
-       // 这里的逻辑比较简单：同一个 agent 的占位如果已有真实会话产生则移除
-       return !allSessions.some(s => s.agentId === p.agentId && !s.isPlaceholder);
+      // 如果这个 agent 有了真实会话（通常是刚启动后），我们就移除占位
+      // 这里的逻辑比较简单：同一个 agent 的占位如果已有真实会话产生则移除
+      return !allSessions.some(s => s.agentId === p.agentId && !s.isPlaceholder);
     });
 
     return [...allSessions, ...filteredPlaceholders];
@@ -122,6 +125,40 @@ const KanbanPage: React.FC = () => {
     }
     return list.sort((a, b) => dayjs(b.updatedAt).unix() - dayjs(a.updatedAt).unix());
   }, [sessions, filterAgentIds]);
+
+  // 加载可见会话的最新输出（Running 每次刷新；已完成命中缓存则跳过）
+  useEffect(() => {
+    const sessionsToLoad = filteredSessions.filter(s => {
+      if (!s.latestTask?.id || s.isPlaceholder) return false;
+      if (s.status === 'Running') return true;          // 运行中每次更新
+      return !outputCache[s.latestTask.id];             // 其他状态只拉一次
+    }).slice(0, 30); // 最多并发 30 个
+
+    if (sessionsToLoad.length === 0) return;
+
+    let cancelled = false;
+    sessionsToLoad.forEach(async session => {
+      const taskId = session.latestTask!.id;
+      try {
+        const raw = await taskApi.getOutput(taskId);
+        if (cancelled) return;
+        // 去除 ANSI 转义码 & 控制字符
+        const clean = (raw ?? '')
+          .replace(/\x1B\[[0-9;]*[a-zA-Z]/g, '')
+          .replace(/[\r\u0000-\u001F\u007F-\u009F]/g, ' ')
+          .replace(/ {2,}/g, ' ');
+        // 取最后一行有意义的文字（至少 3 个字符）
+        const lines = clean.split('\n').map(l => l.trim()).filter(l => l.length >= 3);
+        const lastLine = lines[lines.length - 1] ?? '';
+        setOutputCache(prev => ({ ...prev, [taskId]: lastLine }));
+      } catch {
+        // 忽略错误，保留旧缓存
+      }
+    });
+
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filteredSessions]);
 
   // 分类到三列
   const columns = {
@@ -220,26 +257,26 @@ const KanbanPage: React.FC = () => {
   const renderCard = (session: KanbanSession) => {
     const popoverContent = (
       <div className="card-hover-actions">
-        <Button 
-          type="text" 
-          icon={<MessageOutlined />} 
+        <Button
+          type="text"
+          icon={<MessageOutlined />}
           onClick={() => { setSelectedSession(session); setIsLaunchModalOpen(true); }}
         >
           继续聊天
         </Button>
-        <Button 
-          type="text" 
-          icon={<EyeOutlined />} 
+        <Button
+          type="text"
+          icon={<EyeOutlined />}
           onClick={() => goToDetail(session)}
         >
           查看详情
         </Button>
-        <Button 
-          type="text" 
-          icon={<UserAddOutlined />} 
-          onClick={() => { 
-            setNewAgentId(session.agentId); 
-            setIsAddModalOpen(true); 
+        <Button
+          type="text"
+          icon={<UserAddOutlined />}
+          onClick={() => {
+            setNewAgentId(session.agentId);
+            setIsAddModalOpen(true);
           }}
         >
           在此 Agent 新增会话
@@ -248,10 +285,10 @@ const KanbanPage: React.FC = () => {
     );
 
     return (
-      <Popover 
+      <Popover
         key={session.sessionId || `card-${session.agentId}-${session.updatedAt}`}
-        content={popoverContent} 
-        trigger="hover" 
+        content={popoverContent}
+        trigger="hover"
         placement="rightTop"
         overlayClassName="canvas-popover"
       >
@@ -263,10 +300,12 @@ const KanbanPage: React.FC = () => {
             </div>
             {session.sessionId && <span className="session-id">#{session.sessionId.substring(0, 8)}</span>}
           </div>
-          
+
           <div className="card-content">
             <div className="latest-output">
-              {session.latestTask?.prompt || '等待发起指令...'}
+              {session.latestTask
+                ? (outputCache[session.latestTask.id] || session.latestTask.prompt)
+                : '等待发起指令...'}
             </div>
           </div>
 
@@ -305,9 +344,9 @@ const KanbanPage: React.FC = () => {
               <Select.Option key={a.id} value={a.id}>{a.name}</Select.Option>
             ))}
           </Select>
-          <Button 
-            type="primary" 
-            icon={<PlusOutlined />} 
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
             onClick={() => { setNewAgentId(undefined); setIsAddModalOpen(true); }}
           >
             新增会话
@@ -386,8 +425,8 @@ const KanbanPage: React.FC = () => {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div>
             <Text strong>选择 Agent *</Text>
-            <Select 
-              style={{ width: '100%', marginTop: 8 }} 
+            <Select
+              style={{ width: '100%', marginTop: 8 }}
               placeholder="请选择"
               value={newAgentId}
               onChange={setNewAgentId}
