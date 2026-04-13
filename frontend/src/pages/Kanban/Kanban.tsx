@@ -36,7 +36,7 @@ interface KanbanSession {
 }
 
 const KanbanPage: React.FC = () => {
-  const { setPage, setSelectedAgentId } = useAppStore();
+  const { setPage, setSelectedAgentId, setSelectedSessionId, dataSyncVersion, bumpDataSync } = useAppStore();
 
   const [agents, setAgents] = useState<Agent[]>([]);
   const [tasks, setTasks] = useState<AgentTask[]>([]);
@@ -81,6 +81,13 @@ const KanbanPage: React.FC = () => {
     const timer = setInterval(() => loadData(true), 5000); // 5秒轮询
     return () => clearInterval(timer);
   }, [loadData]);
+
+  // Bug1: 监听其他页面的数据变更通知，即时刷新
+  useEffect(() => {
+    if (dataSyncVersion > 0) {
+      loadData(true);
+    }
+  }, [dataSyncVersion, loadData]);
 
   // 将任务聚合为会话
   const sessions = useMemo(() => {
@@ -143,13 +150,17 @@ const KanbanPage: React.FC = () => {
         const raw = await taskApi.getOutput(taskId);
         if (cancelled) return;
         // 去除 ANSI 转义码 & 控制字符
-        const clean = (raw ?? '')
-          .replace(/\x1B\[[0-9;]*[a-zA-Z]/g, '')
-          .replace(/[\r\u0000-\u001F\u007F-\u009F]/g, ' ')
-          .replace(/ {2,}/g, ' ');
-        // 取最后一行有意义的文字（至少 3 个字符）
-        const lines = clean.split('\n').map(l => l.trim()).filter(l => l.length >= 3);
-        const lastLine = lines[lines.length - 1] ?? '';
+        const rawContent = raw ?? '';
+        // 1. 去除 ANSI 转义码
+        const noAnsi = rawContent.replace(/\x1B\[[0-9;]*[a-zA-Z]/g, '');
+        // 2. 按行分割
+        const allLines = noAnsi.split(/\r?\n/);
+        // 3. 取最后几行中非空且有意义的一行进行清洗显示
+        const processedLines = allLines
+          .map(line => line.replace(/[\u0000-\u001F\u007F-\u009F]/g, ' ').trim())
+          .filter(line => line.length >= 2);
+        
+        const lastLine = processedLines[processedLines.length - 1] ?? '';
         setOutputCache(prev => ({ ...prev, [taskId]: lastLine }));
       } catch {
         // 忽略错误，保留旧缓存
@@ -239,6 +250,7 @@ const KanbanPage: React.FC = () => {
 
   const goToDetail = (session: KanbanSession) => {
     setSelectedAgentId(session.agentId);
+    setSelectedSessionId(session.sessionId || null);
     setPage('console');
     // 注意：这里跳转到 console 还需要某种机制让它选中特定的 sessionId
     // 目前 console 加载逻辑是基于选中的 agentId 加载最新任务

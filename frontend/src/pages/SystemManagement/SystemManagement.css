@@ -1,0 +1,37 @@
+.system-management-page {
+  padding: 24px;
+  max-width: 960px;
+}
+
+.system-management-header {
+  margin-bottom: 24px;
+}
+
+.system-management-header .ant-typography h3 {
+  color: #F0F6FC;
+}
+
+.system-management-card {
+  background: #161B22;
+  border: 1px solid #21262D;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  height: 100%;
+}
+
+.system-management-card:hover {
+  border-color: #58A6FF;
+  box-shadow: 0 0 0 1px #58A6FF22;
+}
+
+.system-management-card .ant-card-body {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 24px;
+}
+
+.system-management-card-content {
+  flex: 1;
+}

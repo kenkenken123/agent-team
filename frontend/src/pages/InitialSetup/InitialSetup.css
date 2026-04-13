@@ -1,0 +1,165 @@
+.initial-setup-page {
+  padding: 24px;
+  max-width: 860px;
+}
+
+/* Header */
+.setup-header {
+  margin-bottom: 28px;
+  text-align: center;
+}
+
+.header-icon {
+  font-size: 36px;
+  color: #F0883E;
+  display: block;
+  margin-bottom: 12px;
+}
+
+.header-title {
+  color: #F0F6FC;
+  margin: 0;
+}
+
+.header-desc {
+  color: #8B949E;
+  font-size: 14px;
+  margin: 8px 0 0 0;
+}
+
+/* Cards */
+.setup-card {
+  background: #161B22;
+  border: 1px solid #21262D;
+  border-radius: 12px;
+}
+
+.setup-card .ant-card-body {
+  padding: 24px;
+}
+
+.setup-done {
+  border-color: #3FB95033;
+  background: linear-gradient(135deg, #161B22, #1a2332);
+}
+
+.done-content {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+/* Card header */
+.setup-card-header {
+  display: flex;
+  gap: 16px;
+}
+
+.step-number {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #58A6FF, #BC8CFF);
+  color: #fff;
+  font-size: 18px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.setup-card-title {
+  flex: 1;
+}
+
+.setup-card-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.phase-title {
+  color: #F0F6FC;
+  font-size: 16px;
+}
+
+.phase-subtitle {
+  color: #8B949E;
+  font-size: 13px;
+  margin-top: 4px;
+}
+
+/* Steps */
+.step-section {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.step-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.step-label {
+  color: #C9D1D9;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.step-desc {
+  color: #8B949E;
+  font-size: 13px;
+  margin: 0;
+  line-height: 1.7;
+}
+
+/* Code block */
+.code-block {
+  display: flex;
+  align-items: center;
+  background: #0D1117;
+  border: 1px solid #30363D;
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin: 4px 0;
+}
+
+.code-text {
+  margin: 0;
+  flex: 1;
+}
+
+.code-text code {
+  font-family: 'SF Mono', 'Consolas', 'Monaco', 'Courier New', monospace;
+  font-size: 13px;
+  color: #C9D1D9;
+}
+
+/* Tips */
+.step-tip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #8B949E;
+  font-size: 12px;
+  padding-left: 4px;
+}
+
+.step-tip .anticon {
+  color: #3FB950;
+}
+
+.china-tip {
+  background: rgba(240, 136, 62, 0.06);
+  border: 1px solid rgba(240, 136, 62, 0.2);
+  border-radius: 8px;
+  padding: 16px;
+}
+
+/* Divider */
+.ant-divider {
+  border-color: #21262D;
+}

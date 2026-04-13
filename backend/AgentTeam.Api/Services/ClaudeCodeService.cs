@@ -46,12 +46,20 @@ public class ClaudeCodeService(
 
                 try
                 {
-                    // 获取对应的凭证模板
-                    var config = await db.ModelConfigs
-                        .Include(c => c.Template)
-                        .FirstOrDefaultAsync(c => c.ModelId == t.Model);
+                    // 仅当使用平台配置时才查找凭证模板并注入环境变量
+                    CredentialTemplate? template = null;
+                    if (t.UsePlatformConfig)
+                    {
+                        var config = await db.ModelConfigs
+                            .Include(c => c.Template)
+                            .FirstOrDefaultAsync(c => c.ModelId == t.Model);
 
-                    var template = config?.Template ?? await db.CredentialTemplates.FirstOrDefaultAsync(ct => ct.IsDefault);
+                        template = config?.Template ?? await db.CredentialTemplates.FirstOrDefaultAsync(ct => ct.IsDefault);
+                    }
+                    else
+                    {
+                        logger.LogInformation("[Task {TaskId}] 未指定模型参数，跳过平台配置注入，使用系统环境变量启动 Claude Code", task.Id);
+                    }
 
                     // 开始执行
                     await ExecuteProcessAsync(t, agent, outputPath, template);

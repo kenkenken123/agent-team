@@ -24,6 +24,11 @@ public class AgentTask
     /// <summary>执行当前任务时所选的模型</summary>
     public string? Model { get; set; }
 
+    /// <summary>是否使用平台配置（model + apikey + baseurl）。
+    /// 当请求显式指定 model 时为 true，此时平台会注入凭据；
+    /// 否则为 false，claude 直接使用系统环境变量。</summary>
+    public bool UsePlatformConfig { get; set; }
+
     /// <summary>任务执行时所在的工作目录</summary>
     public string? WorkingDirectory { get; set; }
 

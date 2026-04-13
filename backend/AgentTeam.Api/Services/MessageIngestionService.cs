@@ -81,7 +81,8 @@ public class MessageIngestionService(
                         Agent = agent,
                         Prompt = message.Text,
                         WorkingDirectory = agent.WorkingDirectory ?? extractedPath,
-                        Model = agent.AllowedModels.Split(',')[0],
+                        Model = agent.AllowedModels.Split(',')[0], // 仅用于展示，不注入平台配置
+                        UsePlatformConfig = false, // 消息触发不使用平台配置，由系统环境变量提供
                         TerminalType = "powershell", // 默认
                         ImageUrls = message.ImageUrls
                     };

@@ -2,13 +2,15 @@ import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import {
   Layout, List, Button, Select, Typography, Space,
   message, Popconfirm, Badge, Spin, Empty, Tooltip, Input, Switch,
+  Modal,
 } from 'antd';
 
 import {
   PlayCircleOutlined, StopOutlined, ReloadOutlined, PlusOutlined,
   RobotOutlined, ClockCircleOutlined, CheckCircleOutlined,
   CloseCircleOutlined, ExclamationCircleOutlined, DeleteOutlined, PictureOutlined,
-  PushpinOutlined, PushpinFilled, DownOutlined, UpOutlined, SearchOutlined, BranchesOutlined
+  PushpinOutlined, PushpinFilled, DownOutlined, UpOutlined, SearchOutlined, BranchesOutlined,
+  SendOutlined,
 } from '@ant-design/icons';
 import { Upload, Mentions, AutoComplete } from 'antd';
 
@@ -26,7 +28,7 @@ const { Text } = Typography;
 
 
 const ConsolePage: React.FC = () => {
-  const { selectedAgentId, setSelectedAgentId } = useAppStore();
+  const { selectedAgentId, setSelectedAgentId, selectedSessionId, setSelectedSessionId, dataSyncVersion, bumpDataSync } = useAppStore();
   const [agents, setAgents] = useState<Agent[]>([]);
   const [tasks, setTasks] = useState<AgentTask[]>([]);
   const [selectedTask, setSelectedTask] = useState<AgentTask | null>(null);
@@ -43,6 +45,10 @@ const ConsolePage: React.FC = () => {
   const prevSessionTaskCountRef = useRef(0);
   const prevSessionIdRef = useRef<string | null>(null);
   const isInitialLoadRef = useRef(true);
+
+  // Bug3: 任务运行中支持输入排队
+  const [pendingPrompt, setPendingPrompt] = useState<string | null>(null);
+  const autoLaunchTaskIdRef = useRef<string | null>(null);
 
   const [currentTake, setCurrentTake] = useState(5);
   const [totalTasks, setTotalTasks] = useState(0);
@@ -69,16 +75,16 @@ const ConsolePage: React.FC = () => {
 
   const currentSessionTasks = useMemo(() => {
     if (!selectedTask) return [];
-    
+
     // 如果选中的任务有 SessionId，则展示该 Session 下的子任务
     if (selectedTask.claudeSessionId) {
       const filtered = tasks
         .filter(t => t.claudeSessionId === selectedTask.claudeSessionId)
         .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
-      
+
       return filtered.slice(-sessionTaskLimit);
     }
-    
+
     // 如果选中的任务暂时还没分配 SessionId (刚启动)，则只展示该单条任务
     return [selectedTask];
   }, [tasks, selectedTask, sessionTaskLimit]);
@@ -150,12 +156,30 @@ const ConsolePage: React.FC = () => {
       const data = await taskApi.getAll({ agentId: selectedAgentId, skip: 0, take });
       setTasks(data.items);
       setTotalTasks(data.total);
-      // 同步更新已选任务的状态
-      setSelectedTask(prev => prev ? data.items.find((t: AgentTask) => t.id === prev.id) ?? prev : null);
+
+      // Bug2: 始终从最新数据中同步 selectedTask 的状态
+      if (selectedSessionId) {
+        // 从看板跳转定位
+        const found = data.items.find(t => t.claudeSessionId === selectedSessionId);
+        if (found) {
+          setSelectedTask(found);
+          setSelectedSessionId(null);
+        } else {
+          setSelectedTask(prev => prev ? data.items.find((t: AgentTask) => t.id === prev.id) ?? prev : null);
+        }
+      } else {
+        // 从最新数据中查找当前选中的任务，更新其状态
+        // 如果找不到（被删除了），清空选中
+        setSelectedTask(prev => {
+          if (!prev) return null;
+          const updated = data.items.find((t: AgentTask) => t.id === prev.id);
+          return updated || null; // 找不到就清空，防止 stale 状态
+        });
+      }
     } finally {
       setLoadingTasks(false);
     }
-  }, [selectedAgentId, currentTake]);
+  }, [selectedAgentId, currentTake, selectedSessionId, setSelectedSessionId]);
 
   useEffect(() => {
     setCurrentTake(5); // 重置选定 Agent 时的默认条数
@@ -228,7 +252,7 @@ const ConsolePage: React.FC = () => {
       setSelectedModel(models.length > 0 ? models[0] : '');
       setSelectedWorkingDirectory(selectedAgent.workingDirectory);
     }
-  }, [selectedAgentId]); // 仅在切换 Agent 时重置，发送任务更新 lastUsedAt 不再重置状态
+  }, [selectedAgentId, selectedAgent]); // 切换 Agent 时重置，agents 加载完成时也需重新赋值
 
   const handleLaunch = async () => {
     if (!selectedAgentId || !prompt.trim()) {
@@ -251,11 +275,11 @@ const ConsolePage: React.FC = () => {
         autoIdentifyAgent,
         optimizePrompt
       });
-      
-      
+
+
       message.success('任务已启动' + (activeSessionId ? ' (续写上下文)' : ''));
       setPrompt('');
-      // 启动后立即清除用于显示“续写中”的标记，因为任务已经接管了 Session
+      // 启动后立即清除用于显示”续写中”的标记，因为任务已经接管了 Session
       setContinueSession(null);
 
       // 更新最后使用时间以影响排序
@@ -265,6 +289,8 @@ const ConsolePage: React.FC = () => {
       setSelectedTask(task);
       setSessionTaskLimit(5); // 重置会话限制
       await loadTasks();
+      // 通知看板等其他页面刷新
+      bumpDataSync();
     } catch (e: any) {
       message.error(e?.response?.data?.error ?? '启动任务失败');
     } finally {
@@ -277,16 +303,21 @@ const ConsolePage: React.FC = () => {
     // 如果当前可见的 sessionTasks 已经超过了已拉取的 tasks 数量，则触发全局拉取更多
     const currentSessionInFullList = tasks.filter(t => t.claudeSessionId === selectedTask?.claudeSessionId).length;
     if (sessionTaskLimit >= currentSessionInFullList && selectedAgentId) {
-       const newTake = currentTake + 10;
-       setCurrentTake(newTake);
-       loadTasks(newTake);
+      const newTake = currentTake + 10;
+      setCurrentTake(newTake);
+      loadTasks(newTake);
     }
   };
 
 
   const handleCancel = async (taskId: string) => {
     await taskApi.cancel(taskId);
-    message.success('已发送取消指令');
+    if (pendingPrompt) {
+      setPendingPrompt(null);
+      message.info('排队消息已取消');
+    } else {
+      message.success('已发送取消指令');
+    }
     loadTasks();
   };
 
@@ -294,12 +325,14 @@ const ConsolePage: React.FC = () => {
     try {
       await taskApi.deleteSession(task.claudeSessionId || undefined, !task.claudeSessionId ? task.id : undefined);
       message.success('会话已彻底删除');
-      
+
       // 如果删除的是当前选中的会话下的任务，清空选中
       if (selectedTask?.claudeSessionId === task.claudeSessionId || selectedTask?.id === task.id) {
         setSelectedTask(null);
       }
       loadTasks();
+      // Bug1: 通知看板刷新
+      bumpDataSync();
     } catch (e: any) {
       message.error(e?.response?.data?.error ?? '删除会话失败');
     }
@@ -314,6 +347,52 @@ const ConsolePage: React.FC = () => {
       prev?.id === taskId ? { ...prev, status: status as AgentTask['status'] } : prev
     );
   }, []);
+
+  // Bug3: 当当前任务完成/失败时，自动发送排队的输入
+  const prevAutoTaskId = useRef<string | null>(null);
+  useEffect(() => {
+    if (!pendingPrompt) return;
+    const st = selectedTask?.status;
+    if (st !== 'Completed' && st !== 'Failed') return;
+    // 防止重复触发
+    if (selectedTask?.id === prevAutoTaskId.current) return;
+    prevAutoTaskId.current = selectedTask?.id || null;
+
+    const queued = pendingPrompt;
+    setPendingPrompt(null);
+
+    // 确保当前会话有 sessionId 可以续写
+    const sessionId = selectedTask?.claudeSessionId;
+    if (!sessionId) {
+      message.warning('排队消息已发送，但无法续写（无有效 SessionId）');
+      setPrompt(queued);
+      return;
+    }
+
+    message.info('排队消息已自动发送');
+    setLaunching(true);
+
+    taskApi.create({
+      agentId: selectedTask.agentId,
+      prompt: queued.trim(),
+      resumeSessionId: sessionId,
+      forceNewSession: false,
+      model: selectedModel,
+      workingDirectory: selectedWorkingDirectory,
+      autoIdentifyAgent,
+      optimizePrompt
+    }).then(task => {
+      setPrompt('');
+      setSelectedTask(task);
+      setAgents(pa => pa.map(a => a.id === selectedTask.agentId ? { ...a, lastUsedAt: new Date().toISOString() } : a));
+      loadTasks();
+    }).catch((e: any) => {
+      message.error(e?.response?.data?.error ?? '排队任务启动失败');
+      setPrompt(queued);
+    }).finally(() => {
+      setLaunching(false);
+    });
+  }, [selectedTask, selectedTask?.status, pendingPrompt]);
 
   const taskStatusIcon = (status: AgentTask['status']) => {
     switch (status) {
@@ -335,9 +414,9 @@ const ConsolePage: React.FC = () => {
             <div className="agent-selector-header">
               <Text strong style={{ color: '#8B949E', fontSize: 12 }}>我的 Agent</Text>
               <div style={{ display: 'flex', gap: 4 }}>
-                <Input 
-                  size="small" 
-                  placeholder="搜索..." 
+                <Input
+                  size="small"
+                  placeholder="搜索..."
                   prefix={<SearchOutlined style={{ fontSize: 10 }} />}
                   value={agentSearch}
                   onChange={e => setAgentSearch(e.target.value)}
@@ -347,7 +426,7 @@ const ConsolePage: React.FC = () => {
             </div>
             <div className="agent-quick-list">
               {displayedAgents.map(a => (
-                <div 
+                <div
                   key={a.id}
                   className={`agent-quick-item ${selectedAgentId === a.id ? 'active' : ''}`}
                   onClick={() => setSelectedAgentId(a.id)}
@@ -372,14 +451,14 @@ const ConsolePage: React.FC = () => {
             <Text style={{ color: '#8B949E', fontSize: 12 }}>会话历史 ({siderTasks.length})</Text>
             {selectedAgent && (
               <Tooltip title="新增会话">
-                <Button 
-                  type="text" 
-                  size="small" 
-                  icon={<PlusOutlined />} 
+                <Button
+                  type="text"
+                  size="small"
+                  icon={<PlusOutlined />}
                   onClick={() => {
                     setSelectedTask(null);
                     setContinueSession(null);
-                  }} 
+                  }}
                 />
               </Tooltip>
             )}
@@ -539,17 +618,17 @@ const ConsolePage: React.FC = () => {
                   </Space>
                 )}
               </div>
-              
+
               <div className="options-right">
                 <Space size={16}>
                   <div className="toggle-item">
                     <Tooltip title="使用 AI 优化指令以获得更精准的执行结果">
                       <span className="toggle-label">优化 Prompt</span>
                     </Tooltip>
-                    <Switch 
-                      size="small" 
-                      checked={optimizePrompt} 
-                      onChange={setOptimizePrompt} 
+                    <Switch
+                      size="small"
+                      checked={optimizePrompt}
+                      onChange={setOptimizePrompt}
                       className="premium-switch optimize-switch"
                       checkedChildren="开"
                       unCheckedChildren="关"
@@ -569,6 +648,12 @@ const ConsolePage: React.FC = () => {
                   <Button type="link" size="small" onClick={() => setContinueSession(null)}>取消</Button>
                 </div>
               )}
+              {pendingPrompt && (
+                <div className="continue-hint-badge" style={{ background: '#1a2733', borderColor: '#58A6FF' }}>
+                  <span style={{ color: '#58A6FF' }}>排队中: {pendingPrompt.substring(0, 30)}{pendingPrompt.length > 30 ? '...' : ''}</span>
+                  <Button type="link" size="small" onClick={() => setPendingPrompt(null)}>取消</Button>
+                </div>
+              )}
               <Mentions
                 className="chat-textarea"
                 value={prompt}
@@ -583,6 +668,14 @@ const ConsolePage: React.FC = () => {
                 onKeyDown={e => {
                   if (e.key === 'Enter' && e.ctrlKey) {
                     e.preventDefault();
+                    // Bug3: 任务运行中，Ctrl+Enter 进入排队
+                    if (selectedTask?.status === 'Running') {
+                      if (!prompt.trim()) return;
+                      setPendingPrompt(prompt.trim());
+                      message.success('消息已加入排队，将在当前任务完成后自动发送');
+                      setPrompt('');
+                      return;
+                    }
                     handleLaunch();
                   }
                 }}
@@ -596,7 +689,7 @@ const ConsolePage: React.FC = () => {
                         const formData = new FormData();
                         formData.append('file', file);
                         if (selectedAgentId) formData.append('agentId', selectedAgentId);
-                        
+
                         try {
                           const res = await fetch('http://localhost:5501/api/Upload', {
                             method: 'POST', body: formData
@@ -604,7 +697,7 @@ const ConsolePage: React.FC = () => {
                           const data = await res.json();
                           if (data.url) {
                             message.success({ content: '粘贴的图片已上传！', key: 'paste-upload' });
-                            setPrompt(prev => prev ? `${prev}\n请查看这张图片并分析: ${data.url}` : `请查看这张图片并分析: ${data.url}`);
+                            setPrompt(prev => prev ? `${prev}\n图片: ${data.url}` : `图片: ${data.url}`);
                           }
                         } catch (error) {
                           message.error({ content: '粘贴上传失败', key: 'paste-upload' });
@@ -628,7 +721,7 @@ const ConsolePage: React.FC = () => {
                     if (info.file.status === 'done') {
                       message.success({ content: '图片已添加！', key: 'uploading' });
                       const path = info.file.response.url;
-                      setPrompt(prev => prev ? `${prev}\n请查看这张图片并分析: ${path}` : `请查看这张图片并分析: ${path}`);
+                      setPrompt(prev => prev ? `${prev}\n图片: ${path}` : `图片: ${path}`);
                     } else if (info.file.status === 'error') {
                       message.error({ content: '图片上传失败', key: 'uploading' });
                     }
@@ -643,18 +736,36 @@ const ConsolePage: React.FC = () => {
                 </Upload>
 
                 {launching || selectedTask?.status === 'Running' ? (
-                  <Button
-                    className="send-button"
-                    type="primary"
-                    danger
-                    icon={<StopOutlined />}
-                    onClick={() => {
-                      if (selectedTask) handleCancel(selectedTask.id);
-                      setLaunching(false);
-                    }}
-                  >
-                    停止任务
-                  </Button>
+                  <>
+                    {pendingPrompt ? (
+                      <Button
+                        className="send-button"
+                        type="primary"
+                        ghost
+                        icon={<SendOutlined />}
+                        onClick={() => {
+                          // 用户主动点击，立即取消排队
+                          setPendingPrompt(null);
+                          message.info('排队已取消');
+                        }}
+                      >
+                        排队中 ({pendingPrompt.length}字) · 点击取消
+                      </Button>
+                    ) : (
+                      <Button
+                        className="send-button"
+                        type="primary"
+                        danger
+                        icon={<StopOutlined />}
+                        onClick={() => {
+                          if (selectedTask) handleCancel(selectedTask.id);
+                          setLaunching(false);
+                        }}
+                      >
+                        停止任务
+                      </Button>
+                    )}
+                  </>
                 ) : (
                   <Button
                     className="send-button"

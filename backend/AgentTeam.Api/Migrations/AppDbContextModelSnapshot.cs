@@ -119,6 +119,9 @@ namespace AgentTeam.Api.Migrations
                     b.Property<int?>("TokensUsed")
                         .HasColumnType("INTEGER");
 
+                    b.Property<bool>("UsePlatformConfig")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("WorkingDirectory")
                         .HasColumnType("TEXT");
 

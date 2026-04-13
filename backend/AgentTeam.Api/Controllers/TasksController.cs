@@ -109,7 +109,8 @@ public class TasksController(
             ClaudeSessionId = sessionId,
             TerminalType = req.TerminalType,
             WorkingDirectory = workingDirectory,
-            Model = req.Model ?? agent.AllowedModels.Split(',')[0] // 优先使用请求指定的模型
+            Model = req.Model, // 仅当请求显式指定时才设置
+            UsePlatformConfig = !string.IsNullOrEmpty(req.Model) // 显式指定 model 时才使用平台配置
         };
 
         agent.LastUsedAt = DateTime.UtcNow;

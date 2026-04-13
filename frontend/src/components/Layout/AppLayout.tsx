@@ -9,6 +9,7 @@ import {
   CustomerServiceOutlined,
   KeyOutlined,
   AppstoreOutlined,
+  ThunderboltOutlined,
 } from '@ant-design/icons';
 import Dashboard from '../../pages/Dashboard/Dashboard';
 import AgentsPage from '../../pages/Agents/Agents';
@@ -19,6 +20,8 @@ import SettingsPage from '../../pages/Settings/Settings';
 import ButlerPage from '../../pages/Butler/Butler';
 import ConfigManager from '../../pages/Config/ConfigManager';
 import KanbanPage from '../../pages/Kanban/Kanban';
+import SystemManagementPage from '../../pages/SystemManagement/SystemManagement';
+import InitialSetupPage from '../../pages/InitialSetup/InitialSetup';
 import { useAppStore } from '../../stores/appStore';
 import type { PageKey } from '../../stores/appStore';
 import './AppLayout.css';
@@ -36,11 +39,17 @@ const PAGE_MAP: Record<PageKey, React.ReactNode> = {
   butler: <ButlerPage />,
   config: <ConfigManager />,
   kanban: <KanbanPage />,
+  system: <SystemManagementPage />,
+  initialSetup: <InitialSetupPage />,
 };
 
 const AppLayout: React.FC = () => {
   const { currentPage, setPage } = useAppStore();
   const [collapsed, setCollapsed] = useState(false);
+
+  // 判断当前页面是否在系统管理子菜单下
+  const isSystemChild = currentPage === 'settings' || currentPage === 'agents' || currentPage === 'config' || currentPage === 'initialSetup';
+  const selectedMainKey = isSystemChild ? 'system' : currentPage;
 
   return (
     <Layout className="app-layout">
@@ -66,38 +75,23 @@ const AppLayout: React.FC = () => {
         <Menu
           className="app-menu"
           mode="inline"
-          selectedKeys={[currentPage]}
+          selectedKeys={[selectedMainKey]}
           onClick={({ key }) => setPage(key as PageKey)}
           items={[
-            {
-              key: 'kanban',
-              icon: <AppstoreOutlined />,
-              label: '会话看板',
-            },
             {
               key: 'butler',
               icon: <CustomerServiceOutlined />,
               label: '管家',
             },
             {
-              key: 'dashboard',
-              icon: <DashboardOutlined />,
-              label: '仪表盘',
-            },
-            {
-              key: 'agents',
-              icon: <RobotOutlined />,
-              label: 'Agent 管理',
+              key: 'kanban',
+              icon: <AppstoreOutlined />,
+              label: '会话看板',
             },
             {
               key: 'console',
               icon: <CodeOutlined />,
-              label: '任务控制台',
-            },
-            {
-              key: 'history',
-              icon: <HistoryOutlined />,
-              label: '任务历史',
+              label: '控制台',
             },
             {
               key: 'simulation',
@@ -105,14 +99,41 @@ const AppLayout: React.FC = () => {
               label: '赛博世界',
             },
             {
-              key: 'config',
-              icon: <KeyOutlined />,
-              label: 'API 凭据管理',
+              key: 'dashboard',
+              icon: <DashboardOutlined />,
+              label: '仪表盘',
             },
             {
-              key: 'settings',
+              key: 'history',
+              icon: <HistoryOutlined />,
+              label: '历史任务',
+            },
+            {
+              key: 'system',
               icon: <SettingOutlined />,
-              label: '系统设置',
+              label: '系统管理',
+              children: [
+                {
+                  key: 'initialSetup',
+                  icon: <ThunderboltOutlined />,
+                  label: '初始环境',
+                },
+                {
+                  key: 'settings',
+                  icon: <SettingOutlined />,
+                  label: '系统设置',
+                },
+                {
+                  key: 'agents',
+                  icon: <RobotOutlined />,
+                  label: 'Agent 管理',
+                },
+                {
+                  key: 'config',
+                  icon: <KeyOutlined />,
+                  label: 'API 凭据管理',
+                },
+              ],
             },
           ]}
         />

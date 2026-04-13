@@ -16,3 +16,290 @@
 .git-list-item:hover {
   background-color: #1C2128;
 }
+
+/* ============ Diff Modal — GitHub Style ============ */
+
+.diff-modal .ant-modal-header {
+  background: #161B22;
+  border-bottom: 1px solid #30363D;
+  padding: 0;
+}
+
+.diff-modal .ant-modal-title {
+  display: none;
+}
+
+.diff-modal .ant-modal-close {
+  color: #8B949E;
+  top: 8px;
+  right: 8px;
+}
+
+.diff-modal .ant-modal-body {
+  padding: 0 !important;
+}
+
+/* File path bar */
+.diff-modal-header {
+  background: #161B22;
+  border-bottom: 1px solid #30363D;
+  padding: 6px 16px;
+  display: flex;
+  align-items: center;
+}
+
+.diff-file-path {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.diff-file-icon {
+  color: #8B949E;
+  font-size: 14px;
+}
+
+.diff-file-name {
+  color: #8B949E;
+  font-size: 13px;
+  font-family: 'SFMono-Regular', 'Consolas', 'Liberation Mono', 'Menlo', monospace;
+}
+
+/* Tab bar */
+.diff-tab-bar {
+  display: flex;
+  align-items: stretch;
+  background: #161B22;
+  border-bottom: 1px solid #30363D;
+  user-select: none;
+}
+
+.diff-tab {
+  flex: 1;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: #8B949E;
+  padding: 8px 12px;
+  background: #0D1117;
+}
+
+.diff-tab-divider {
+  width: 1px;
+  background: #30363D;
+}
+
+/* ============ Side-by-side diff: two panels with synced scroll ============ */
+
+.side-by-side-diff {
+  display: flex;
+  max-height: 70vh;
+  background: #0D1117;
+}
+
+/* Each panel takes exactly 50% */
+.diff-panel {
+  flex: 0 0 50%;
+  overflow-x: auto;
+  overflow-y: auto;
+}
+
+.diff-panel-left {
+  border-right: none;
+  /* 隐藏左侧滚动条，滚动由右侧同步控制 */
+  scrollbar-width: none;
+}
+
+.diff-panel-left::-webkit-scrollbar {
+  display: none;
+}
+
+.diff-panel-right {
+  border-left: none;
+}
+
+/* Inner content wrapper — sets min-width so panels can scroll */
+.diff-panel-content {
+  min-width: 100%;
+}
+
+/* Single diff line */
+.diff-line {
+  display: flex;
+  align-items: flex-start;
+  line-height: 18px;
+  font-family: 'SF Mono', 'Consolas', 'Monaco', 'Courier New', monospace;
+  font-size: 12px;
+  border-bottom: 1px solid #21262D;
+}
+
+.diff-line-num {
+  flex-shrink: 0;
+  width: 56px;
+  min-width: 56px;
+  text-align: right;
+  padding: 0 10px 0 16px;
+  color: rgba(110, 118, 129, 0.6);
+  user-select: none;
+  white-space: nowrap;
+}
+
+.diff-line-text {
+  flex: 1;
+  padding: 0 12px;
+  white-space: pre;
+  overflow: visible;
+}
+
+/* Line type colors */
+.diff-line.removed {
+  background: rgba(248, 81, 73, 0.1);
+}
+
+.diff-line.removed .diff-line-text {
+  color: #F85149;
+}
+
+.diff-line.removed .diff-line-num {
+  color: #F85149;
+}
+
+.diff-line.added {
+  background: rgba(63, 185, 80, 0.1);
+}
+
+.diff-line.added .diff-line-text {
+  color: #3FB950;
+}
+
+.diff-line.added .diff-line-num {
+  color: #3FB950;
+}
+
+.diff-line.empty {
+  background: rgba(0, 0, 0, 0.15);
+}
+
+.diff-line.empty .diff-line-text {
+  color: transparent;
+}
+
+.diff-line.empty .diff-line-num {
+  color: rgba(110, 118, 129, 0.2);
+}
+
+.diff-line-num.dim {
+  color: rgba(110, 118, 129, 0.2);
+}
+
+/* Hover */
+.diff-line:hover {
+  background-color: rgba(177, 186, 196, 0.04);
+}
+
+.diff-line.removed:hover {
+  background-color: rgba(248, 81, 73, 0.2);
+}
+
+.diff-line.added:hover {
+  background-color: rgba(63, 185, 80, 0.2);
+}
+
+/* ========== GitHub-style 1px gutter divider ========== */
+
+.diff-gutter {
+  flex-shrink: 0;
+  width: 0;
+  border-left: 1px solid #30363D;
+  border-right: 1px solid #30363D;
+  position: relative;
+  z-index: 1;
+}
+
+.diff-gutter::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: repeating-linear-gradient(
+    180deg,
+    transparent,
+    transparent 2px,
+    #21262D 2px,
+    #21262D 3px
+  );
+  pointer-events: none;
+}
+
+/* Header rows */
+.diff-header-line {
+  background: #0D1117;
+  border-bottom: 1px solid #30363D;
+  padding: 6px 16px;
+}
+
+.diff-header-line pre {
+  margin: 0;
+  color: #58A6FF;
+  font-size: 12px;
+  line-height: 1.6;
+  font-family: 'SF Mono', 'Consolas', monospace;
+}
+
+.diff-empty {
+  color: #8B949E;
+  padding: 40px;
+  text-align: center;
+}
+
+/* Scrollbar — 仅右侧面板显示 */
+.diff-panel::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.diff-panel::-webkit-scrollbar-track {
+  background: #0D1117;
+}
+
+.diff-panel::-webkit-scrollbar-thumb {
+  background: #30363D;
+  border: 2px solid #0D1117;
+  border-radius: 5px;
+}
+
+.diff-panel::-webkit-scrollbar-thumb:hover {
+  background: #484F58;
+}
+
+/* ============ Git Actions Bar ============ */
+
+.git-actions-bar {
+  background: #161B22;
+}
+
+.git-actions-bar .ant-btn {
+  border-radius: 4px;
+}
+
+.git-commit-section {
+  background: #161B22;
+}
+
+.git-commit-section .ant-input-textarea {
+  background: #0D1117;
+  border-color: #30363D;
+  color: #C9D1D9;
+}
+
+.git-commit-section .ant-input-textarea:focus {
+  border-color: #58A6FF;
+}
+
+.git-commit-section .ant-input-textarea::placeholder {
+  color: #484F58;
+}

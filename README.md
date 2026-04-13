@@ -31,6 +31,7 @@
 - **Git Diff & Status**: Integrated Git drawer for visualizing live repository changes and file differences.
 - **Deep Multi-Modal Support**: Enhanced images.
 - **History Playback**: Full session persistence with logging and historical replay capabilities.
+- **Session Kanban**: A visual Kanban board for managing all active sessions across agents at a glance—monitor statuses, view task queues, and jump to any session instantly.
 
 ---
 
