@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { 
-    Card, Form, Input, Button, Table, Space, 
-    Typography, Modal, Select, Switch, message, 
-    Tag, Divider, Tooltip, Popconfirm 
+import {
+    Card, Form, Input, Button, Table, Space,
+    Typography, Modal, Select, Switch, message,
+    Tag, Divider, Tooltip, Popconfirm, Collapse
 } from 'antd';
 import { 
     KeyOutlined, 
@@ -19,6 +19,7 @@ import {
     getModelConfigs, updateModelConfig, deleteModelConfig,
 } from '../../api/configApi';
 import type { CredentialTemplate, ModelConfig } from '../../api/configApi';
+import './ConfigManager.css';
 
 const { Title, Paragraph, Text } = Typography;
 
@@ -106,7 +107,7 @@ const ConfigManager: React.FC = () => {
             key: 'name',
             render: (text: string, record: CredentialTemplate) => (
                 <Space>
-                    <Text strong>{text}</Text>
+                    <Text strong style={{ color: '#E6EDF3' }}>{text}</Text>
                     {record.isDefault && <Tag color="gold">默认</Tag>}
                 </Space>
             )
@@ -115,26 +116,27 @@ const ConfigManager: React.FC = () => {
             title: 'API Key',
             dataIndex: 'apiKey',
             key: 'apiKey',
-            render: (text: string) => <Text type="secondary">••••••••{text.slice(-4)}</Text>
+            render: (text: string) => <code style={{ color: '#8B949E', fontSize: 13, fontFamily: 'JetBrains Mono, monospace' }}>••••••••{text.slice(-4)}</code>
         },
         {
             title: 'Base URL',
             dataIndex: 'baseUrl',
             key: 'baseUrl',
-            render: (text: string) => text || <Text type="secondary">官方接口</Text>
+            render: (text: string) => <span style={{ color: '#8B949E' }}>{text || '官方接口'}</span>
         },
         {
             title: '操作',
             key: 'action',
+            width: 150,
             render: (_: any, record: CredentialTemplate) => (
                 <Space>
-                    <Button type="link" icon={<EditOutlined />} onClick={() => {
+                    <Button type="text" icon={<EditOutlined />} onClick={() => {
                         setEditingTemplate(record);
                         templateForm.setFieldsValue(record);
                         setIsTemplateModalOpen(true);
-                    }}>编辑</Button>
+                    }} style={{ color: '#58A6FF' }}>编辑</Button>
                     <Popconfirm title="确定删除此模板吗？" onConfirm={() => handleDeleteTemplate(record.id)}>
-                        <Button type="link" danger icon={<DeleteOutlined />}>删除</Button>
+                        <Button type="text" danger icon={<DeleteOutlined />}>删除</Button>
                     </Popconfirm>
                 </Space>
             )
@@ -146,7 +148,7 @@ const ConfigManager: React.FC = () => {
             title: '模型标识 (Model ID)',
             dataIndex: 'modelId',
             key: 'modelId',
-            render: (text: string) => <Tag icon={<RocketOutlined />} color="blue">{text}</Tag>
+            render: (text: string) => <Tag icon={<RocketOutlined />} color="blue" style={{ borderRadius: 6, fontWeight: 600 }}>{text}</Tag>
         },
         {
             title: '关联凭据模板',
@@ -154,37 +156,38 @@ const ConfigManager: React.FC = () => {
             key: 'template',
             render: (template: CredentialTemplate) => (
                 <Space>
-                    <SafetyCertificateOutlined style={{ color: '#52c41a' }} />
-                    <Text>{template?.name || '未知模板'}</Text>
+                    <SafetyCertificateOutlined style={{ color: '#3FB950' }} />
+                    <Text style={{ color: '#E6EDF3' }}>{template?.name || '未知模板'}</Text>
                 </Space>
             )
         },
         {
             title: '操作',
             key: 'action',
+            width: 150,
             render: (_: any, record: ModelConfig) => (
                 <Popconfirm title="确定解除此映射吗？" onConfirm={() => record.id && handleDeleteMapping(record.id)}>
-                    <Button type="link" danger icon={<DeleteOutlined />}>解除映射</Button>
+                    <Button type="text" danger icon={<DeleteOutlined />}>解除映射</Button>
                 </Popconfirm>
             )
         }
     ];
 
     return (
-        <div style={{ padding: '24px' }}>
-            <Title level={3}><KeyOutlined /> API 凭据与模型管理</Title>
-            <Paragraph type="secondary">
+        <div className="config-page">
+            <Title level={3} style={{ color: '#E6EDF3', fontWeight: 800, marginBottom: 8 }}><KeyOutlined /> API 凭据与模型管理</Title>
+            <Paragraph style={{ color: '#8B949E', marginBottom: 32 }}>
                 通过“模板+映射”机制，为不同的模型配置独立的 API Key 和中转地址。
             </Paragraph>
 
-            <Divider />
-
             <Space direction="vertical" size="large" style={{ width: '100%' }}>
                 <Card 
-                  title={<span><SafetyCertificateOutlined style={{ marginRight: 8 }} />凭据模板 (Templates)</span>}
-                  extra={<Button type="primary" icon={<PlusOutlined />} onClick={() => setIsTemplateModalOpen(true)}>新增模板</Button>}
+                  className="config-card"
+                  title={<span><SafetyCertificateOutlined style={{ marginRight: 8, color: '#58A6FF' }} />凭据模板</span>}
+                  extra={<Button type="primary" icon={<PlusOutlined />} onClick={() => setIsTemplateModalOpen(true)} style={{ borderRadius: 8 }}>新增模板</Button>}
                 >
                     <Table 
+                        className="config-table"
                         dataSource={templates} 
                         columns={templateColumns} 
                         rowKey="id" 
@@ -194,10 +197,12 @@ const ConfigManager: React.FC = () => {
                 </Card>
 
                 <Card 
-                  title={<span><PartitionOutlined style={{ marginRight: 8 }} />模型映射 (Model Mappings)</span>}
-                  extra={<Button type="primary" icon={<PlusOutlined />} onClick={() => setIsMappingModalOpen(true)}>添加映射</Button>}
+                  className="config-card"
+                  title={<span><PartitionOutlined style={{ marginRight: 8, color: '#A371F7' }} />模型映射</span>}
+                  extra={<Button type="primary" icon={<PlusOutlined />} onClick={() => setIsMappingModalOpen(true)} style={{ borderRadius: 8 }}>添加映射</Button>}
                 >
                     <Table 
+                        className="config-table"
                         dataSource={modelConfigs} 
                         columns={mappingColumns} 
                         rowKey="id" 
@@ -211,21 +216,22 @@ const ConfigManager: React.FC = () => {
             <Modal
                 title={editingTemplate ? "编辑凭据模板" : "新增凭据模板"}
                 open={isTemplateModalOpen}
+                className="glass-modal"
                 onCancel={() => { setIsTemplateModalOpen(false); setEditingTemplate(null); templateForm.resetFields(); }}
                 onOk={() => templateForm.submit()}
                 destroyOnClose
             >
                 <Form form={templateForm} layout="vertical" onFinish={handleSaveTemplate}>
-                    <Form.Item name="name" label="模板名称" rules={[{ required: true }]}>
-                        <Input placeholder="例如：我的主账户、OpenRouter、测试用" />
+                    <Form.Item name="name" label={<span style={{color: '#8B949E'}}>模板名称</span>} rules={[{ required: true }]}>
+                        <Input placeholder="例如：我的主账户" className="glass-input" style={{background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.1)', color: '#E6EDF3'}} />
                     </Form.Item>
-                    <Form.Item name="apiKey" label="API Key" rules={[{ required: true }]}>
-                        <Input.Password placeholder="sk-ant-..." />
+                    <Form.Item name="apiKey" label={<span style={{color: '#8B949E'}}>API Key</span>} rules={[{ required: true }]}>
+                        <Input.Password placeholder="sk-ant-..." className="glass-input" style={{background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.1)', color: '#E6EDF3'}} />
                     </Form.Item>
-                    <Form.Item name="baseUrl" label="API Base URL (可选)">
-                        <Input prefix={<GlobalOutlined />} placeholder="https://api.anthropic.com" />
+                    <Form.Item name="baseUrl" label={<span style={{color: '#8B949E'}}>API Base URL (可选)</span>}>
+                        <Input prefix={<GlobalOutlined />} placeholder="https://api.anthropic.com" className="glass-input" style={{background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.1)', color: '#E6EDF3'}} />
                     </Form.Item>
-                    <Form.Item name="isDefault" label="设为默认模板" valuePropName="checked">
+                    <Form.Item name="isDefault" label={<span style={{color: '#8B949E'}}>设为默认模板</span>} valuePropName="checked">
                         <Switch />
                     </Form.Item>
                 </Form>
@@ -235,16 +241,17 @@ const ConfigManager: React.FC = () => {
             <Modal
                 title="添加模型映射"
                 open={isMappingModalOpen}
+                className="glass-modal"
                 onCancel={() => { setIsMappingModalOpen(false); mappingForm.resetFields(); }}
                 onOk={() => mappingForm.submit()}
                 destroyOnClose
             >
                 <Form form={mappingForm} layout="vertical" onFinish={handleSaveMapping}>
-                    <Form.Item name="modelId" label="模型 ID (Model ID)" rules={[{ required: true }]}>
-                        <Input placeholder="例如：claude-3-5-sonnet-latest" />
+                    <Form.Item name="modelId" label={<span style={{color: '#8B949E'}}>模型 ID (Model ID)</span>} rules={[{ required: true }]}>
+                        <Input placeholder="例如：claude-3-5-sonnet-latest" style={{background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.1)', color: '#E6EDF3'}} />
                     </Form.Item>
-                    <Form.Item name="templateId" label="关联凭据模板" rules={[{ required: true }]}>
-                        <Select placeholder="选择一个凭据模板">
+                    <Form.Item name="templateId" label={<span style={{color: '#8B949E'}}>关联凭据模板</span>} rules={[{ required: true }]}>
+                        <Select placeholder="选择一个凭据模板" dropdownStyle={{background: '#161B22', border: '1px solid #30363D'}}>
                             {templates.map(t => (
                                 <Select.Option key={t.id} value={t.id}>{t.name}</Select.Option>
                             ))}

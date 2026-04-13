@@ -1,0 +1,83 @@
+.config-page {
+  padding: 32px;
+  min-height: 100vh;
+  background: radial-gradient(circle at 10% 10%, #1a2736 0%, #0d1117 80%);
+  position: relative;
+  overflow: hidden;
+}
+
+.config-page::before {
+  content: "";
+  position: absolute;
+  top: 10%;
+  left: -100px;
+  width: 400px;
+  height: 400px;
+  background: rgba(163, 113, 247, 0.05); /* Purple light for config */
+  filter: blur(100px);
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.config-card {
+  background: rgba(22, 27, 34, 0.4) !important;
+  backdrop-filter: blur(15px);
+  -webkit-backdrop-filter: blur(15px);
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: 20px !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  margin-bottom: 24px;
+}
+
+.config-card .ant-card-head {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05) !important;
+  color: #E6EDF3 !important;
+  background: transparent !important;
+}
+
+.config-card .ant-card-head-title {
+  font-weight: 700 !important;
+  font-size: 16px;
+}
+
+.config-table .ant-table {
+  background: transparent !important;
+}
+
+.config-table .ant-table-thead > tr > th {
+  background: transparent !important;
+  color: #8B949E !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  font-size: 11px;
+  text-transform: uppercase;
+  font-weight: 700;
+}
+
+.config-table .ant-table-tbody > tr > td {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+  padding: 16px !important;
+}
+
+.config-table .ant-table-tbody > tr:hover > td {
+  background: rgba(255, 255, 255, 0.04) !important;
+}
+
+.glass-modal .ant-modal-content {
+  background: rgba(22, 27, 34, 0.8) !important;
+  backdrop-filter: blur(25px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: 20px !important;
+}
+
+.glass-modal .ant-modal-header {
+  background: transparent !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05) !important;
+}
+
+.glass-modal .ant-modal-title {
+  color: #E6EDF3 !important;
+}
+
+.glass-modal .ant-modal-close {
+  color: #8B949E;
+}

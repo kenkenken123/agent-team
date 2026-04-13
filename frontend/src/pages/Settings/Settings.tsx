@@ -48,7 +48,7 @@ const SettingsPage: React.FC = () => {
 
     return (
         <div className="settings-page">
-            <Title level={3}><SettingOutlined /> 系统设置</Title>
+            <Title level={3} style={{ color: '#E6EDF3', fontWeight: 800, marginBottom: 24 }}><SettingOutlined /> 系统设置</Title>
             <Paragraph style={{ color: '#8B949E' }}>
                 配置外部信息获取能力与智能路由分发引擎的基础参数。
             </Paragraph>

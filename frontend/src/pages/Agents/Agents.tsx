@@ -273,46 +273,72 @@ const AgentsPage: React.FC = () => {
   return (
     <div className="agents-page">
       <div className="agents-header">
-        <Title level={3} style={{ margin: 0, color: '#F0F6FC' }}>Agent 管理</Title>
+        <Typography.Title level={3} style={{ margin: 0, color: '#E6EDF3', fontWeight: 800 }}>Agent 管理</Typography.Title>
       </div>
 
       <Tabs 
         activeKey={activeTab} 
         onChange={setActiveTab} 
+        className="glass-tabs"
         tabBarExtraContent={
           activeTab === 'agents' 
-            ? <Button type="primary" icon={<PlusOutlined />} onClick={openCreateAgent}>新建 Agent 实例</Button>
+            ? <Button type="primary" icon={<PlusOutlined />} onClick={openCreateAgent} style={{ borderRadius: 8 }}>新建 Agent 实例</Button>
             : activeTab === 'templates'
-              ? <Button type="primary" icon={<PlusOutlined />} onClick={openCreateTemplate}>新建 模板</Button>
-              : <Button type="primary" icon={<PlusOutlined />} onClick={openCreateCommonPath}>添加常用目录</Button>
+              ? <Button type="primary" icon={<PlusOutlined />} onClick={openCreateTemplate} style={{ borderRadius: 8 }}>新建 模板</Button>
+              : <Button type="primary" icon={<PlusOutlined />} onClick={openCreateCommonPath} style={{ borderRadius: 8 }}>添加常用目录</Button>
         }
       >
         <TabPane tab="Agent 实例" key="agents">
-          <Table className="agents-table" columns={agentColumns} dataSource={agents} rowKey="id" loading={loading} pagination={{ pageSize: 15 }} />
+          <div className="agents-table-container">
+            <Table className="agents-table" columns={agentColumns} dataSource={agents} rowKey="id" loading={loading} pagination={{ pageSize: 10 }} />
+          </div>
         </TabPane>
         <TabPane tab="Agent 模板" key="templates">
-          <Table className="agents-table" columns={templateColumns} dataSource={templates} rowKey="id" loading={loading} pagination={{ pageSize: 15 }} />
+          <div className="agents-table-container">
+            <Table className="agents-table" columns={templateColumns} dataSource={templates} rowKey="id" loading={loading} pagination={{ pageSize: 10 }} />
+          </div>
         </TabPane>
         <TabPane tab="常用目录" key="common-paths">
-          <Table 
-            className="agents-table" 
-            dataSource={commonPaths}
-            rowKey="id"
-            columns={[
-              { title: '目录全路径', dataIndex: 'path', key: 'path', render: p => <code>{p}</code> },
-              { title: '别名/说明', dataIndex: 'name', key: 'name' },
-              { title: '添加时间', dataIndex: 'createdAt', key: 'createdAt', render: d => new Date(d).toLocaleString() },
-              { 
-                title: '操作', 
-                key: 'actions', 
-                render: (_, r) => (
-                  <Popconfirm title="移除常用路径？" onConfirm={() => handleDeleteCommonPath(r.id)}>
-                    <Button type="text" icon={<DeleteOutlined />} danger size="small" />
-                  </Popconfirm>
-                ) 
-              }
-            ]}
-          />
+          <div className="agents-table-container">
+            <Table 
+              className="agents-table" 
+              dataSource={commonPaths}
+              rowKey="id"
+              columns={[
+                { 
+                  title: '目录全路径', 
+                  dataIndex: 'path', 
+                  key: 'path', 
+                  ellipsis: true,
+                  render: p => <code style={{ color: '#8B949E' }}>{p}</code> 
+                },
+                { 
+                  title: '别名/说明', 
+                  dataIndex: 'name', 
+                  key: 'name', 
+                  width: 250,
+                  render: n => <span style={{ color: '#E6EDF3', fontWeight: 600 }}>{n}</span> 
+                },
+                { 
+                  title: '添加时间', 
+                  dataIndex: 'createdAt', 
+                  key: 'createdAt', 
+                  width: 200,
+                  render: d => <span style={{ color: '#8B949E', fontSize: 13 }}>{new Date(d).toLocaleString()}</span> 
+                },
+                { 
+                  title: '操作', 
+                  key: 'actions', 
+                  width: 100,
+                  render: (_, r) => (
+                    <Popconfirm title="移除常用路径？" onConfirm={() => handleDeleteCommonPath(r.id)}>
+                      <Button type="text" icon={<DeleteOutlined />} danger size="small" />
+                    </Popconfirm>
+                  ) 
+                }
+              ]}
+            />
+          </div>
         </TabPane>
       </Tabs>
 

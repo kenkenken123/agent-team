@@ -1,45 +1,93 @@
 .agents-page {
-  padding: 24px;
-  max-width: 1400px;
-  margin: 0 auto;
+  padding: 32px;
+  min-height: 100vh;
+  background: radial-gradient(circle at 10% 10%, #1a2736 0%, #0d1117 80%);
+  position: relative;
+  overflow: hidden;
+}
+
+.agents-page::before {
+  content: "";
+  position: absolute;
+  top: 40%;
+  right: -50px;
+  width: 400px;
+  height: 400px;
+  background: rgba(88, 166, 255, 0.05);
+  filter: blur(100px);
+  border-radius: 50%;
+  pointer-events: none;
 }
 
 .agents-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 20px;
+  margin-bottom: 32px;
+}
+
+/* Table Glassmorphism */
+.agents-table-container {
+  background: rgba(22, 27, 34, 0.4);
+  backdrop-filter: blur(15px);
+  -webkit-backdrop-filter: blur(15px);
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 16px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
 }
 
 .agents-table .ant-table {
-  background: #161B22;
-  border-radius: 10px;
-  overflow: hidden;
-  border: 1px solid #21262D;
+  background: transparent !important;
 }
 
 .agents-table .ant-table-thead > tr > th {
-  background: #21262D !important;
-  color: #8B949E;
-  border-bottom: 1px solid #30363D;
+  background: transparent !important;
+  color: #8B949E !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: 11px;
 }
 
 .agents-table .ant-table-tbody > tr > td {
-  border-bottom: 1px solid #21262D;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+  padding: 16px 8px !important;
+  color: #E6EDF3 !important;
 }
 
 .agents-table .ant-table-tbody > tr:hover > td {
-  background: #21262D !important;
+  background: rgba(255, 255, 255, 0.04) !important;
 }
 
+/* Form Styles */
 .agent-form .ant-form-item-label > label {
-  color: #C9D1D9;
+  color: #8B949E;
 }
 
-.agent-form .ant-input,
-.agent-form .ant-input-number,
-.agent-form .ant-select-selector {
-  background: #0D1117 !important;
-  border-color: #30363D !important;
-  color: #C9D1D9 !important;
+.agent-form-card {
+  background: rgba(22, 27, 34, 0.6) !important;
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: 16px !important;
+}
+
+.glass-tabs .ant-tabs-tab {
+  color: #8B949E !important;
+  font-weight: 500;
+  transition: all 0.3s ease;
+}
+
+.glass-tabs .ant-tabs-tab-active .ant-tabs-tab-btn {
+  color: #58A6FF !important;
+  font-weight: 700;
+}
+
+.glass-tabs .ant-tabs-ink-bar {
+  background: #58A6FF !important;
+  height: 2px !important;
+}
+
+.glass-tabs .ant-tabs-nav::before {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05) !important;
 }

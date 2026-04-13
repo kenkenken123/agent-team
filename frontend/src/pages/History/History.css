@@ -1,6 +1,5 @@
 .history-page {
   padding: 32px;
-  margin: 0 auto;
   min-height: 100vh;
   background: radial-gradient(circle at 10% 10%, #1a2736 0%, #0d1117 80%);
   position: relative;

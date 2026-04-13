@@ -1,29 +1,52 @@
 .settings-page {
-    padding: 24px;
-    max-width: 900px;
-    margin: 0 auto;
+  padding: 32px;
+  min-height: 100vh;
+  background: radial-gradient(circle at 10% 10%, #1a2736 0%, #0d1117 80%);
+  position: relative;
+  overflow: hidden;
+}
+
+.settings-page::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  right: -100px;
+  width: 400px;
+  height: 400px;
+  background: rgba(59, 130, 246, 0.05); /* Blue light for settings */
+  filter: blur(100px);
+  border-radius: 50%;
+  pointer-events: none;
 }
 
 .settings-page .ant-card {
-    background-color: #161B22;
-    border: 1px solid #30363D;
-    color: #C9D1D9;
+  background: rgba(22, 27, 34, 0.4) !important;
+  backdrop-filter: blur(15px);
+  -webkit-backdrop-filter: blur(15px);
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: 20px !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
 }
 
 .settings-page .ant-card-head {
-    border-bottom: 1px solid #30363D;
-    color: #F0F6FC;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05) !important;
+  color: #E6EDF3 !important;
+  background: transparent !important;
+  font-weight: 700;
 }
 
 .settings-page .ant-form-item-label > label {
-    color: #8B949E;
+  color: #8B949E;
+}
+
+.glass-input, .ant-input, .ant-input-number {
+  background: rgba(13, 17, 23, 0.6) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  color: #E6EDF3 !important;
+  border-radius: 8px !important;
 }
 
 .msg-history-list .ant-list-item {
-    border-bottom: 1px solid #30363D;
-    padding: 12px 0;
-}
-
-.msg-history-list .ant-list-item:last-child {
-    border-bottom: none;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  padding: 16px 0;
 }
