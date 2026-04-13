@@ -364,66 +364,63 @@ export const GitDrawer: React.FC<GitDrawerProps> = ({ visible, onClose, workingD
       <Drawer
         title={
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span>Source Control</span>
-            <Button type="text" icon={<ReloadOutlined />} onClick={fetchStatus} loading={loading} />
+            <span style={{ fontWeight: 800, color: '#E6EDF3' }}>Source Control</span>
+            <Button type="text" icon={<ReloadOutlined style={{ color: '#58A6FF' }} />} onClick={fetchStatus} loading={loading} />
           </div>
         }
         placement="right"
         onClose={onClose}
         open={visible}
-        width={360}
-        styles={{ body: { padding: 0 } }}
+        width={380}
+        styles={{ body: { padding: 0, background: 'transparent' } }}
         className="git-drawer"
       >
         {!workingDirectory ? (
-          <div style={{ padding: 20, textAlign: 'center', color: '#8B949E' }}>
+          <div style={{ padding: 40, textAlign: 'center', color: '#8B949E' }}>
             未选择工作目录
           </div>
         ) : (
-          <div className="git-content">
+          <div className="git-content" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
             {/* Branch header */}
-            <div className="git-header" style={{ padding: '12px 16px', borderBottom: '1px solid #30363D' }}>
+            <div className="git-header" style={{ padding: '16px 20px' }}>
               <Space>
-                <BranchesOutlined style={{ color: '#8B949E' }} />
-                <Text strong style={{ color: '#C9D1D9' }}>{statusInfo?.branch || 'Unknown Branch'}</Text>
+                <BranchesOutlined style={{ color: '#A371F7' }} />
+                <Text strong style={{ color: '#E6EDF3', fontSize: 14 }}>{statusInfo?.branch || 'Unknown'}</Text>
                 {changeCount > 0 && (
-                  <Tag color="processing" style={{ fontSize: 11 }}>{changeCount} changes</Tag>
+                  <Tag bordered={false} style={{ background: 'rgba(88, 166, 255, 0.1)', color: '#58A6FF', borderRadius: 4, fontSize: 11 }}>{changeCount} changes</Tag>
                 )}
               </Space>
             </div>
 
             {/* Action buttons bar */}
-            <div className="git-actions-bar" style={{ padding: '10px 16px', borderBottom: '1px solid #30363D', display: 'flex', gap: 8 }}>
+            <div className="git-actions-bar" style={{ padding: '12px 20px', display: 'flex', gap: 10 }}>
               <Button
                 type="primary"
                 icon={<ScanOutlined />}
                 onClick={handleCodeReview}
                 loading={reviewing}
                 disabled={!statusInfo?.files || statusInfo.files.length === 0}
-                style={{ flex: 1, fontSize: 12 }}
-                size="small"
-                title="一键代码审查"
+                style={{ flex: 1, borderRadius: 8 }}
+                size="middle"
               >
                 代码审查
               </Button>
               <Button
-                type="default"
                 icon={<CloudUploadOutlined />}
                 onClick={handleCommitPush}
                 loading={committing}
                 disabled={!commitMessage.trim() || !statusInfo?.files || statusInfo.files.length === 0}
-                style={{ flex: 1, fontSize: 12 }}
-                size="small"
-                title="提交并推送"
+                style={{ flex: 1, borderRadius: 8, background: 'rgba(255,255,255,0.05)', color: '#E6EDF3', border: '1px solid rgba(255,255,255,0.1)' }}
+                size="middle"
               >
                 提交推送
               </Button>
             </div>
 
             {/* Commit message input */}
-            <div className="git-commit-section" style={{ padding: '10px 16px', borderBottom: '1px solid #30363D' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                <Text style={{ fontSize: 12, color: '#8B949E' }}>提交信息</Text>
+            <div className="git-commit-section" style={{ padding: '16px 20px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <Text style={{ fontSize: 12, color: '#8B949E', fontWeight: 600 }}>COMMIT MESSAGE</Text>
                 <Button
                   type="link"
                   size="small"
@@ -431,52 +428,52 @@ export const GitDrawer: React.FC<GitDrawerProps> = ({ visible, onClose, workingD
                   onClick={handleGenerateCommitMessage}
                   loading={generating}
                   disabled={!statusInfo?.files || statusInfo.files.length === 0}
-                  style={{ padding: 0, height: 'auto', fontSize: 12, color: '#f5a623' }}
-                  title="AI 生成提交信息"
+                  style={{ padding: 0, height: 'auto', fontSize: 12, color: '#f5a623', fontWeight: 600 }}
                 >
-                  AI 生成
+                   AI GENERATE
                 </Button>
               </div>
               <TextArea
-                placeholder="输入提交信息，或点击 AI 生成..."
+                placeholder="Message (Ctrl+Enter to commit)"
                 value={commitMessage}
                 onChange={(e) => setCommitMessage(e.target.value)}
-                rows={2}
+                rows={3}
                 maxLength={200}
-                showCount
-                style={{ fontSize: 12, resize: 'none' }}
+                className="glass-input"
+                style={{ fontSize: 13, resize: 'none' }}
                 onPressEnter={(e) => {
                   if (e.ctrlKey) {
                     handleCommitPush();
                   }
                 }}
               />
-              <div style={{ marginTop: 4, fontSize: 11, color: '#8B949E' }}>
-                Ctrl+Enter 快速提交
-              </div>
             </div>
 
             {/* File list */}
-            <Spin spinning={loading}>
-              <List
-                size="small"
-                dataSource={statusInfo?.files || []}
-                renderItem={(item) => (
-                  <List.Item
-                    className="git-list-item"
-                    onClick={() => handleViewDiff(item)}
-                    style={{ cursor: 'pointer', padding: '8px 16px', borderBottom: '1px solid #30363D' }}
-                  >
-                    <Space style={{ width: '100%' }}>
-                      {renderStatusTag(item.status)}
-                      <FileTextOutlined style={{ color: '#8B949E' }} />
-                      <Text style={{ color: '#C9D1D9', wordBreak: 'break-all', fontSize: 13 }}>{item.path}</Text>
-                    </Space>
-                  </List.Item>
-                )}
-                locale={{ emptyText: 'No changes' }}
-              />
-            </Spin>
+            <div style={{ flex: 1, overflowY: 'auto' }}>
+              <Spin spinning={loading}>
+                <List
+                  size="small"
+                  dataSource={statusInfo?.files || []}
+                  renderItem={(item) => (
+                    <List.Item
+                      className="git-list-item"
+                      onClick={() => handleViewDiff(item)}
+                      style={{ cursor: 'pointer', padding: '12px 20px' }}
+                    >
+                      <Space style={{ width: '100%', justifyContent: 'space-between' }}>
+                        <Space>
+                          {renderStatusTag(item.status)}
+                          <FileTextOutlined style={{ color: '#8B949E' }} />
+                          <Text style={{ color: '#C9D1D9', fontSize: 13, fontFamily: 'JetBrains Mono, monospace' }}>{item.path}</Text>
+                        </Space>
+                      </Space>
+                    </List.Item>
+                  )}
+                  locale={{ emptyText: <div style={{ padding: 40, color: '#484F58' }}>No local changes</div> }}
+                />
+              </Spin>
+            </div>
 
             {/* Review task info */}
             {reviewTaskId && (
