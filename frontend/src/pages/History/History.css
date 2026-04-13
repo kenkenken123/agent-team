@@ -1,33 +1,123 @@
 .history-page {
-  padding: 24px;
-  max-width: 1400px;
+  padding: 32px;
   margin: 0 auto;
+  min-height: 100vh;
+  background: radial-gradient(circle at 10% 10%, #1a2736 0%, #0d1117 80%);
+  position: relative;
+  overflow: hidden;
+}
+
+.history-page::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  right: -50px;
+  width: 300px;
+  height: 300px;
+  background: rgba(88, 166, 255, 0.05);
+  filter: blur(80px);
+  border-radius: 50%;
+  pointer-events: none;
 }
 
 .history-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 20px;
+  margin-bottom: 32px;
+}
+
+/* Glassy Filter Styles */
+.history-header .ant-input-search,
+.history-header .ant-select {
+  border-radius: 10px;
+}
+
+.glass-search .ant-input {
+  background: rgba(22, 27, 34, 0.5) !important;
+  backdrop-filter: blur(10px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  color: #E6EDF3 !important;
+}
+
+.glass-select .ant-select-selector {
+  background: rgba(22, 27, 34, 0.5) !important;
+  backdrop-filter: blur(10px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  color: #E6EDF3 !important;
+  border-radius: 10px !important;
+}
+
+.glass-select .ant-select-arrow {
+  color: #8B949E;
+}
+
+/* Table Container Glassmorphism */
+.history-table-container {
+  background: rgba(22, 27, 34, 0.4);
+  backdrop-filter: blur(15px);
+  -webkit-backdrop-filter: blur(15px);
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 16px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
 }
 
 .history-table .ant-table {
-  background: #161B22;
-  border-radius: 10px;
-  overflow: hidden;
-  border: 1px solid #21262D;
+  background: transparent !important;
 }
 
-.history-table .ant-table-thead > tr > th {
-  background: #21262D !important;
-  color: #8B949E;
-  border-bottom: 1px solid #30363D;
+.history-table .ant-table-thead>tr>th {
+  background: transparent !important;
+  color: #8B949E !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: 11px;
+  letter-spacing: 0.5px;
 }
 
-.history-table .ant-table-tbody > tr > td {
-  border-bottom: 1px solid #21262D;
+.history-table .ant-table-tbody>tr>td {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+  padding: 16px 8px !important;
+  transition: all 0.2s ease;
 }
 
-.history-table .ant-table-tbody > tr:hover > td {
-  background: #21262D !important;
+.history-table .ant-table-tbody>tr:hover>td {
+  background: rgba(255, 255, 255, 0.04) !important;
+}
+
+.history-table .ant-table-tbody>tr:hover {
+  box-shadow: 0 0 15px rgba(88, 166, 255, 0.05);
+}
+
+/* Pagination Glassmorphism */
+.history-table .ant-pagination {
+  margin-top: 24px !important;
+  justify-content: center !important;
+}
+
+.history-table .ant-pagination-item {
+  background: rgba(255, 255, 255, 0.03) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+.history-table .ant-pagination-item-active {
+  border-color: #58A6FF !important;
+  background: rgba(88, 166, 255, 0.1) !important;
+}
+
+.history-table .ant-pagination-item a {
+  color: #8B949E !important;
+}
+
+.history-table .ant-pagination-item-active a {
+  color: #58A6FF !important;
+}
+
+.history-table .ant-pagination-prev .ant-pagination-item-link,
+.history-table .ant-pagination-next .ant-pagination-item-link {
+  background: rgba(255, 255, 255, 0.03) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  color: #8B949E !important;
 }

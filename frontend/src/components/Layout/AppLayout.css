@@ -1,18 +1,22 @@
 .app-layout {
   height: 100vh;
   overflow: hidden;
+  display: flex;
 }
 
-.app-sider {
-  background: #0D1117 !important;
-  border-right: 1px solid #21262D;
+/* Glassy Sider */
+.app-sider-glass {
+  background: rgba(255, 255, 255, 0.02) !important;
+  backdrop-filter: blur(25px);
+  -webkit-backdrop-filter: blur(25px);
+  border-right: 1px solid rgba(255, 255, 255, 0.08) !important;
   display: flex;
   flex-direction: column;
 }
 
-.app-sider .ant-layout-sider-trigger {
-  background: #161B22 !important;
-  border-top: 1px solid #21262D;
+.app-sider-glass .ant-layout-sider-trigger {
+  background: rgba(22, 27, 34, 0.5) !important;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
   color: #8B949E;
 }
 
@@ -20,51 +24,52 @@
   padding: 16px 12px;
   display: flex;
   align-items: center;
-  gap: 10px;
-  border-bottom: 1px solid #21262D;
+  gap: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
   min-height: 64px;
 }
 
 .logo-icon {
-  font-size: 22px;
-  width: 36px;
-  height: 36px;
-  background: linear-gradient(135deg, #58A6FF, #BC8CFF);
+  font-size: 20px;
+  width: 32px;
+  height: 32px;
+  background: linear-gradient(135deg, #3B82F6, #8B5CF6);
   border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  box-shadow: 0 0 15px rgba(59, 130, 246, 0.3);
 }
 
 .logo-text {
   display: flex;
   flex-direction: column;
-  overflow: hidden;
 }
 
 .app-menu {
   background: transparent !important;
   border-right: none !important;
   flex: 1;
-  padding: 8px 0;
+  padding: 16px 0;
 }
 
 .app-menu .ant-menu-item {
   color: #8B949E !important;
-  margin: 2px 8px !important;
-  border-radius: 8px !important;
-  transition: background 0.15s, color 0.15s;
+  margin: 4px 12px !important;
+  border-radius: 10px !important;
+  transition: all 0.2s !important;
 }
 
 .app-menu .ant-menu-item:hover {
-  background: #21262D !important;
-  color: #C9D1D9 !important;
+  background: rgba(255, 255, 255, 0.04) !important;
+  color: #E6EDF3 !important;
 }
 
 .app-menu .ant-menu-item-selected {
-  background: #1C2128 !important;
+  background: rgba(88, 166, 255, 0.1) !important;
   color: #58A6FF !important;
+  font-weight: 600;
 }
 
 .app-menu .ant-menu-item-selected::after {
@@ -72,7 +77,8 @@
 }
 
 .app-content {
-  background: #0D1117;
+  flex: 1;
+  background: #0D1117; 
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -85,7 +91,7 @@
 }
 
 .app-version {
-  padding: 12px;
-  border-top: 1px solid #21262D;
+  padding: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
   text-align: center;
 }

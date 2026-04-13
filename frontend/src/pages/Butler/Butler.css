@@ -1,14 +1,34 @@
 .butler-page {
-  max-width: 800px;
+  max-width: 900px;
   margin: 0 auto;
-  padding: 24px;
+  padding: 48px 32px;
+  min-height: 100vh;
+  background: radial-gradient(circle at 100% 0%, #1a2736 0%, #0d1117 70%);
+  position: relative;
+}
+
+.butler-page::before {
+  content: "";
+  position: absolute;
+  top: 20%;
+  left: -100px;
+  width: 400px;
+  height: 400px;
+  background: rgba(139, 92, 246, 0.03);
+  filter: blur(100px);
+  border-radius: 50%;
+  pointer-events: none;
 }
 
 .butler-input-card {
-  background: #161b22 !important;
-  border: 1px solid #30363d !important;
-  border-radius: 12px !important;
-  padding: 16px 12px !important; /* Increased padding */
+  background: rgba(22, 27, 34, 0.4) !important;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: 20px !important;
+  padding: 24px !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  margin-bottom: 32px;
 }
 
 /* 状态切换与发送过渡 */
@@ -54,23 +74,25 @@
 
 /* 覆盖 textarea */
 .butler-textarea {
-  background-color: #0d1117 !important;
-  border-color: #30363d !important;
-  color: #c9d1d9 !important;
-  border-radius: 8px !important;
+  background-color: rgba(13, 17, 23, 0.6) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  color: #e6edf3 !important;
+  border-radius: 12px !important;
   font-size: 15px !important;
-  padding: 12px !important;
-  min-height: 140px !important; /* Increased height Slightly */
-  margin-bottom: 24px !important; /* More space below textarea */
+  padding: 16px !important;
+  min-height: 160px !important;
+  margin-bottom: 24px !important;
+  transition: all 0.3s;
 }
 
 .butler-textarea:focus {
-  border-color: #58a6ff !important;
-  box-shadow: 0 0 0 2px rgba(88, 166, 255, 0.2) !important;
+  background-color: rgba(13, 17, 23, 0.8) !important;
+  border-color: rgba(88, 166, 255, 0.4) !important;
+  box-shadow: 0 0 15px rgba(88, 166, 255, 0.1) !important;
 }
 
 .butler-textarea::placeholder {
-  color: #484f58 !important;
+  color: #5b646e !important;
 }
 
 /* 附件上传组件 */
@@ -126,16 +148,19 @@
 
 /* 历史记录流水区域 */
 .history-stream-card {
-  background: #161b22 !important;
-  border: 1px solid #30363d !important;
-  border-radius: 12px !important;
+  background: rgba(22, 27, 34, 0.4) !important;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  border-radius: 20px !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
 }
 
 .history-stream-card .ant-card-head {
-  border-bottom: 1px solid #30363d;
-  background: rgba(22, 27, 34, 0.8);
-  border-radius: 12px 12px 0 0;
-  min-height: 48px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  background: rgba(22, 27, 34, 0.2);
+  border-radius: 20px 20px 0 0;
+  min-height: 56px;
   padding: 0 24px;
 }
 
@@ -144,9 +169,14 @@
 }
 
 .history-stream-item {
-  border-bottom: 1px solid #30363d !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03) !important;
   padding: 24px !important;
-  display: block !important; /* Override Ant Design List.Item flex property for custom layout */
+  display: block !important;
+  transition: background 0.2s;
+}
+
+.history-stream-item:hover {
+  background: rgba(255, 255, 255, 0.02);
 }
 
 .history-stream-item:last-child {

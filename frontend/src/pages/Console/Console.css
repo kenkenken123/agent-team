@@ -2,7 +2,19 @@
   height: 100%;
   display: flex;
   flex-direction: column;
-  background-color: #0D1117;
+  background: radial-gradient(circle at 50% 50%, #1a2736 0%, #0d1117 100%);
+  position: relative;
+}
+
+.console-page::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: radial-gradient(circle at 10% 10%, rgba(88, 166, 255, 0.05), transparent 40%);
+  pointer-events: none;
 }
 
 .console-main-layout {
@@ -13,8 +25,10 @@
 
 /* Sider Styles */
 .task-sider {
-  background: #161B22 !important;
-  border-right: 1px solid #30363D;
+  background: rgba(22, 27, 34, 0.4) !important;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-right: 1px solid rgba(255, 255, 255, 0.05) !important;
   display: flex;
   flex-direction: column;
 }
@@ -29,7 +43,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: #0D1117;
+  background: rgba(13, 17, 23, 0.3);
 }
 
 .task-list {
@@ -61,6 +75,7 @@
   transition: all 0.2s;
   color: #C9D1D9;
   font-size: 13px;
+  border-left: 3px solid transparent;
 }
 
 .agent-quick-item:hover {
@@ -70,6 +85,7 @@
 .agent-quick-item.active {
   background: #262C36;
   color: #58A6FF;
+  border-left: 3px solid #58A6FF;
 }
 
 .agent-name-text {
@@ -92,7 +108,7 @@
 }
 
 .agent-pin-icon.pinned {
-  color: #D29922;
+  color: #e3b341;
 }
 
 .agent-pin-icon:hover {
@@ -114,18 +130,23 @@
 
 .task-list-item {
   padding: 12px !important;
-  border-bottom: 1px solid #21262D !important;
+  margin: 6px 12px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.05) !important;
+  border-radius: 10px;
   cursor: pointer;
-  transition: background 0.2s;
+  transition: all 0.2s;
 }
 
 .task-list-item:hover {
   background: #21262D;
+  border-color: #58a6ff !important;
 }
 
 .task-list-item.active {
-  background: #262C36;
-  border-left: 3px solid #58A6FF;
+  background: #21262D;
+  border-color: #58A6FF !important;
+  box-shadow: 0 0 0 1px #58A6FF inset;
 }
 
 .task-item-content {
@@ -224,19 +245,22 @@
 
 .user-bubble {
   align-self: flex-end;
-  background-color: #238636; /* GitHub style Green */
+  background-color: #1f6feb;
   color: #ffffff;
   border-bottom-right-radius: 2px;
 }
 
 .assistant-bubble {
   align-self: flex-start;
-  background-color: #161B22;
-  border: 1px solid #30363D;
+  background: rgba(22, 27, 34, 0.6);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   width: 100%;
   max-width: 100%;
   padding: 0;
   overflow: hidden;
+  border-radius: 12px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
 }
 
 /* Input Bar */
@@ -316,16 +340,20 @@
   white-space: nowrap;
 }
 
+.premium-switch {
+  border-radius: 20px;
+}
+
 .premium-switch.ant-switch-checked {
-  background-color: #238636;
+  background: linear-gradient(90deg, #3b82f6, #8b5cf6) !important;
 }
 
 .optimize-switch.ant-switch-checked {
-  background-color: #8957e5; /* Purple for optimization */
+  background: linear-gradient(90deg, #3b82f6, #8b5cf6) !important;
 }
 
 .plan-switch.ant-switch-checked {
-  background-color: #D29922; /* Amber/Gold for plan mode */
+  background-color: #D29922 !important; /* Amber/Gold for plan mode */
 }
 
 /* Plan Mode Badge in Chat */
@@ -352,15 +380,17 @@
 }
 
 .chat-input-bar {
-  max-width: 800px;
+  max-width: 900px;
   margin: 0 auto;
-  background: #161B22;
-  border: 1px solid #30363D;
-  border-radius: 12px;
-  padding: 8px;
+  background: rgba(22, 27, 34, 0.5);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  padding: 12px;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
 }
 
 .continue-hint-badge {
@@ -394,6 +424,34 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  background: linear-gradient(90deg, #3b82f6 0%, #8b5cf6 100%) !important;
+  border: none !important;
+  color: white !important;
+  font-weight: 500;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.send-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.4);
+}
+
+.send-button:disabled {
+  background: #21262d !important;
+  color: #8b949e !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+.send-button.ant-btn-dangerous {
+  background: transparent !important;
+  border: 1px solid #f85149 !important;
+  color: #f85149 !important;
+}
+
+.send-button.ant-btn-dangerous:hover {
+  background: rgba(248, 81, 73, 0.1) !important;
+  box-shadow: none;
 }
 
 .input-footer-text {
@@ -405,12 +463,16 @@
 
 /* Scrollbar styling */
 .chat-flow::-webkit-scrollbar {
-  width: 8px;
+  width: 4px;
 }
 .chat-flow::-webkit-scrollbar-track {
   background: transparent;
 }
 .chat-flow::-webkit-scrollbar-thumb {
-  background: #30363D;
+  background: transparent;
   border-radius: 4px;
+  transition: background 0.3s;
+}
+.chat-flow:hover::-webkit-scrollbar-thumb {
+  background: #30363d;
 }

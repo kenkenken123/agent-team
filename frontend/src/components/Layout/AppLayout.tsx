@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Layout, Menu, Typography } from 'antd';
+const { Sider, Content } = Layout;
 import {
   DashboardOutlined,
   RobotOutlined,
@@ -26,7 +27,6 @@ import { useAppStore } from '../../stores/appStore';
 import type { PageKey } from '../../stores/appStore';
 import './AppLayout.css';
 
-const { Sider, Content } = Layout;
 const { Text } = Typography;
 
 const PAGE_MAP: Record<PageKey, React.ReactNode> = {
@@ -54,20 +54,19 @@ const AppLayout: React.FC = () => {
   return (
     <Layout className="app-layout">
       <Sider
-        className="app-sider"
+        className="app-sider-glass"
         collapsible
         collapsed={collapsed}
         onCollapse={setCollapsed}
         width={220}
         collapsedWidth={64}
       >
-        {/* Logo */}
         <div className="app-logo">
           <div className="logo-icon">⚡</div>
           {!collapsed && (
             <div className="logo-text">
-              <Text strong style={{ color: '#F0F6FC', fontSize: 15 }}>Agent Team</Text>
-              <Text style={{ color: '#8B949E', fontSize: 11 }}>Claude Code 控制台</Text>
+              <Text strong style={{ color: '#F0F6FC', fontSize: 16 }}>Agent Team</Text>
+              <Text style={{ color: '#8B949E', fontSize: 10 }}>Claude Code 控制台</Text>
             </div>
           )}
         </div>
@@ -131,17 +130,16 @@ const AppLayout: React.FC = () => {
                 {
                   key: 'config',
                   icon: <KeyOutlined />,
-                  label: 'API 凭据管理',
+                  label: 'API 凭证',
                 },
               ],
             },
           ]}
         />
 
-        {/* 底部版本信息 */}
         {!collapsed && (
           <div className="app-version">
-            <Text style={{ color: '#484F58', fontSize: 11 }}>v1.0.0 · 一期</Text>
+            <Text style={{ color: '#484F58', fontSize: 11 }}>v1.0.0 · Premium</Text>
           </div>
         )}
       </Sider>

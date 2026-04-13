@@ -75,8 +75,8 @@ const Dashboard: React.FC = () => {
                     <div className="stats-grid">
                         <div className="stat-card">
                             <div className="stat-header">
-                                <span className="stat-label">活跃 Agent 总数</span>
-                                <RobotOutlined className="stat-icon" />
+                                <span className="stat-label">活跃 AGENT 总数</span>
+                                <RobotOutlined className="stat-icon" style={{ color: '#58A6FF' }} />
                             </div>
                             <div className="stat-value">{stats?.totalAgents ?? 0}</div>
                         </div>
@@ -84,7 +84,7 @@ const Dashboard: React.FC = () => {
                         <div className="stat-card">
                             <div className="stat-header">
                                 <span className="stat-label">当前运行中任务</span>
-                                <ThunderboltOutlined className="stat-icon" style={{color: '#bc8cff'}} />
+                                <ThunderboltOutlined className="stat-icon" style={{ color: '#58A6FF' }} />
                             </div>
                             <div className="stat-value">{stats?.runningTasks ?? 0}</div>
                         </div>
@@ -92,15 +92,15 @@ const Dashboard: React.FC = () => {
                         <div className="stat-card">
                             <div className="stat-header">
                                 <span className="stat-label">选定期间任务数</span>
-                                <CalendarOutlined className="stat-icon" style={{color: '#ffd33d'}} />
+                                <CalendarOutlined className="stat-icon" style={{ color: '#D29922' }} />
                             </div>
                             <div className="stat-value">{stats?.periodTasks ?? 0}</div>
                         </div>
 
                         <div className="stat-card">
                             <div className="stat-header">
-                                <span className="stat-label">选定期间 Token 消耗</span>
-                                <DeploymentUnitOutlined className="stat-icon" style={{color: '#bc8ff2'}} />
+                                <span className="stat-label">选定期间 TOKEN 消耗</span>
+                                <DeploymentUnitOutlined className="stat-icon" style={{ color: '#A371F7' }} />
                             </div>
                             <div className="stat-value">
                                 {formatNum((stats?.periodInputTokens ?? 0) + (stats?.periodOutputTokens ?? 0))}
@@ -154,7 +154,7 @@ const Dashboard: React.FC = () => {
                                             </div>
                                         </div>
                                     ))
-                                )}
+                                ) || <div className="empty-list">暂无任务数据</div>}
                             </div>
                         </div>
                     </div>

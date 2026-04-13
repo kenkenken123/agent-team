@@ -43,10 +43,11 @@ const HistoryPage: React.FC = () => {
       title: 'Agent',
       dataIndex: 'agentName',
       key: 'agentName',
+      width: 180,
       render: (name) => (
         <Space>
-          <RobotOutlined style={{ color: '#58A6FF' }} />
-          <span style={{ color: '#C9D1D9' }}>{name}</span>
+          <RobotOutlined style={{ color: '#58A6FF', fontSize: 16 }} />
+          <span style={{ color: '#E6EDF3', fontWeight: 700 }}>{name}</span>
         </Space>
       ),
     },
@@ -61,41 +62,59 @@ const HistoryPage: React.FC = () => {
       title: '状态',
       dataIndex: 'status',
       key: 'status',
-      render: (s) => <TaskStatusTag status={s} />,
+      width: 100,
+      render: (s) => (
+        <span style={{ 
+          color: '#3FB950', 
+          background: 'rgba(63, 185, 80, 0.1)', 
+          padding: '2px 8px', 
+          borderRadius: '4px',
+          fontSize: '12px',
+          fontWeight: 'bold',
+          border: '1px solid rgba(63, 185, 80, 0.2)'
+        }}>
+          {s === 'Completed' ? '已完成' : s === 'Running' ? '正在执行' : s === 'Failed' ? '执行失败' : '已取消'}
+        </span>
+      ),
     },
     {
       title: '会话 ID',
       dataIndex: 'claudeSessionId',
       key: 'claudeSessionId',
+      width: 200,
       render: (id) => id
-        ? <code style={{ color: '#8B949E', fontSize: 11 }}>{id.substring(0, 16)}...</code>
+        ? <code style={{ color: '#8B949E', fontSize: 12, fontFamily: 'JetBrains Mono, monospace' }}>{id.substring(0, 18)}...</code>
         : <span style={{ color: '#484F58' }}>—</span>,
     },
     {
       title: 'Input Tokens',
       dataIndex: 'inputTokens',
       key: 'inputTokens',
-      render: (v) => <span style={{ color: '#79C0FF' }}>{v?.toLocaleString() ?? '—'}</span>,
+      width: 120,
+      render: (v) => <span style={{ color: '#58A6FF', fontFamily: 'JetBrains Mono, monospace', fontWeight: 500 }}>{v?.toLocaleString() ?? '0'}</span>,
     },
     {
       title: 'Output Tokens',
       dataIndex: 'outputTokens',
       key: 'outputTokens',
-      render: (v) => <span style={{ color: '#56D364' }}>{v?.toLocaleString() ?? '—'}</span>,
+      width: 120,
+      render: (v) => <span style={{ color: '#3FB950', fontFamily: 'JetBrains Mono, monospace', fontWeight: 500 }}>{v?.toLocaleString() ?? '0'}</span>,
     },
     {
       title: '创建时间',
       dataIndex: 'createdAt',
       key: 'createdAt',
-      render: (t) => <span style={{ color: '#6E7681', fontSize: 12 }}>{new Date(t).toLocaleString('zh-CN')}</span>,
+      width: 180,
+      render: (t) => <span style={{ color: '#8B949E', fontSize: 13 }}>{new Date(t).toLocaleString('zh-CN')}</span>,
     },
     {
       title: '耗时',
       key: 'duration',
+      width: 100,
       render: (_, r) => {
         if (!r.startedAt || !r.completedAt) return <span style={{ color: '#484F58' }}>—</span>;
         const sec = Math.round((new Date(r.completedAt).getTime() - new Date(r.startedAt).getTime()) / 1000);
-        return <span style={{ color: '#8B949E' }}>{sec}s</span>;
+        return <span style={{ color: '#D29922', fontFamily: 'JetBrains Mono, monospace', fontWeight: 600 }}>{sec}s</span>;
       },
     },
   ];
@@ -103,15 +122,17 @@ const HistoryPage: React.FC = () => {
   return (
     <div className="history-page">
       <div className="history-header">
-        <Title level={3} style={{ margin: 0, color: '#F0F6FC' }}>任务历史</Title>
-        <Space>
+        <Title level={3} style={{ margin: 0, color: '#E6EDF3', fontWeight: 800 }}>任务历史</Title>
+        <Space size={16}>
           <Input.Search
-            style={{ width: 220 }}
+            className="glass-search"
+            style={{ width: 240 }}
             placeholder="搜索会话 ID"
             allowClear
             onSearch={val => setFilterSessionId(val || undefined)}
           />
           <Select
+            className="glass-select"
             style={{ width: 180 }}
             placeholder="筛选 Agent"
             allowClear
@@ -120,7 +141,8 @@ const HistoryPage: React.FC = () => {
             options={agents.map(a => ({ label: a.name, value: a.id }))}
           />
           <Select
-            style={{ width: 130 }}
+            className="glass-select"
+            style={{ width: 140 }}
             placeholder="筛选状态"
             allowClear
             value={filterStatus}
@@ -135,14 +157,20 @@ const HistoryPage: React.FC = () => {
         </Space>
       </div>
 
-      <Table
-        className="history-table"
-        columns={columns}
-        dataSource={tasks}
-        rowKey="id"
-        loading={loading}
-        pagination={{ pageSize: 20 }}
-      />
+      <div className="history-table-container">
+        <Table
+          className="history-table"
+          columns={columns}
+          dataSource={tasks}
+          rowKey="id"
+          loading={loading}
+          pagination={{ 
+            pageSize: 10,
+            showSizeChanger: false,
+            className: "glass-pagination"
+          }}
+        />
+      </div>
     </div>
   );
 };

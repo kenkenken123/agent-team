@@ -160,13 +160,15 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ task, onStatusChange }) =
     clean = clean.replace(/^[┌│└]─ Prompt:.*?\r?\n?/gm, '');
     clean = clean.replace(/^[┌│└]─ Status:.*?\r?\n?/gm, '');
 
-    // 4. 截断极长的工具调用描述 (防止 Bash 脚本等撑屏)
+    // 4. 截断极长的工具调用描述并转化为便于展示的格式
     clean = clean.replace(/\[Claude (正在调用工具|is using tool): ([\s\S]*?)\]/g, (match, p1, p2) => {
-      const content = p2.trim().replace(/\r?\n/g, ' ');
+      let content = p2.trim().replace(/\r?\n/g, ' ');
       if (content.length > 80) {
-        return `[Claude ${p1}: ${content.substring(0, 80)}...]`;
+        content = content.substring(0, 80) + '...';
       }
-      return `[Claude ${p1}: ${content}]`;
+      const parsedToolName = content.match(/^([a-zA-Z0-9_-]+)/)?.[1] || 'Tool';
+      const restContent = content.substring(parsedToolName.length).trim();
+      return `\`TOOL:${parsedToolName}|${restContent}\``;
     });
 
     const lines = clean.trim().split(/\r?\n/);
@@ -347,8 +349,36 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ task, onStatusChange }) =
   const MarkdownComponents = useMemo(() => ({
     code({ node, inline, className, children, ...props }: any) {
       const match = /language-(\w+)/.exec(className || '');
+      const text = String(children);
+      
+      if (inline && text.startsWith('TOOL:')) {
+        const parts = text.replace('TOOL:', '').split('|');
+        const toolName = parts[0];
+        const content = parts[1];
+        let bgColor = '#58a6ff'; // Default blue
+        if (toolName.toLowerCase().includes('read') || toolName.toLowerCase().includes('file')) bgColor = '#1f6feb';
+        else if (toolName.toLowerCase().includes('edit') || toolName.toLowerCase().includes('replace')) bgColor = '#8957e5';
+        else if (toolName.toLowerCase().includes('bash') || toolName.toLowerCase().includes('command')) bgColor = '#d29922';
+        
+        return (
+          <span style={{ 
+            display: 'inline-flex', alignItems: 'center', gap: '4px',
+            background: 'transparent', margin: '4px 0', verticalAlign: 'middle'
+          }}>
+             <span style={{ background: bgColor, color: 'white', padding: '2px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 'bold' }}>
+               {toolName}
+             </span>
+             {content && content !== '()' && (
+                 <span style={{ color: '#8b949e', fontSize: '11px', background: '#1c2128', padding: '2px 6px', borderRadius: '4px', border: '1px solid #30363d' }}>
+                   {content}
+                 </span>
+             )}
+          </span>
+        );
+      }
+
       return !inline && match ? (
-        <CollapsibleCodeBlock language={match[1]} code={String(children).replace(/\n$/, '')} />
+        <CollapsibleCodeBlock language={match[1]} code={text.replace(/\n$/, '')} />
       ) : (
         <code className={className} {...props}>
           {children}
