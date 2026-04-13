@@ -152,6 +152,38 @@ public class GitController : ControllerBase
     }
 
     /// <summary>
+    /// 根据 Git 变更生成 AI 提交信息
+    /// </summary>
+    [HttpPost("generate-commit-message")]
+    public async Task<IActionResult> GenerateCommitMessage([FromBody] GenerateCommitMessageRequest req)
+    {
+        if (string.IsNullOrWhiteSpace(req.Path))
+        {
+            return BadRequest("Path is required");
+        }
+
+        try
+        {
+            var status = await _gitService.GetStatusAsync(req.Path);
+            var statusSummary = $"Branch: {status.Branch}\nChanges:\n{string.Join("\n", status.Files.Select(f => $"  [{f.Status}] {f.Path}"))}";
+
+            var message = await _router.GenerateCommitMessageAsync(statusSummary);
+
+            if (string.IsNullOrEmpty(message))
+            {
+                return BadRequest(new { error = "生成失败，请检查 LLM 配置" });
+            }
+
+            return Ok(new { message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "生成提交信息失败");
+            return StatusCode(500, new { error = ex.Message });
+        }
+    }
+
+    /// <summary>
     /// Git 提交并推送
     /// </summary>
     [HttpPost("commit-push")]
@@ -189,3 +221,4 @@ public class GitController : ControllerBase
 // Request DTOs
 public record CodeReviewRequest(string Path);
 public record CommitPushRequest(string Path, string Message);
+public record GenerateCommitMessageRequest(string Path);

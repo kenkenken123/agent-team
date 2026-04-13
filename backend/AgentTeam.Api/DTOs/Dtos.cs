@@ -94,6 +94,7 @@ public record TaskDto(
     int? InputTokens,
     int? OutputTokens,
     string? Model,
+    bool IsPlanMode,
     DateTime? StartedAt,
     DateTime? CompletedAt,
     int? ExitCode,
@@ -111,7 +112,9 @@ public record CreateTaskRequest(
     string TerminalType = "powershell",
     string? WorkingDirectory = null,
     bool AutoIdentifyAgent = false,
-    bool OptimizePrompt = false
+    bool OptimizePrompt = false,
+    /// <summary>是否为 Plan 模式（仅分析规划，不执行代码修改）</summary>
+    bool PlanMode = false
 );
 
 // ───── Stats DTOs ─────

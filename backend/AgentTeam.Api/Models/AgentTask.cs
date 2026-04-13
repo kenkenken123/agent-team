@@ -32,6 +32,9 @@ public class AgentTask
     /// <summary>任务执行时所在的工作目录</summary>
     public string? WorkingDirectory { get; set; }
 
+    /// <summary>是否为 Plan 模式（仅分析规划，不执行代码修改）</summary>
+    public bool IsPlanMode { get; set; }
+
     /// <summary>终端类型：cmd / powershell / bash</summary>
     public string TerminalType { get; set; } = "powershell";
 

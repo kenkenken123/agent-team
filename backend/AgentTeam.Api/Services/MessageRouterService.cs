@@ -111,6 +111,75 @@ public class MessageRouterService(
             return (null, $"内部错误: {ex.Message}", null);
         }
     }
+    public async Task<string> GenerateCommitMessageAsync(string gitStatus)
+    {
+        var baseUrlSetting = await db.SystemSettings.FirstOrDefaultAsync(s => s.Key == "router.llm.baseUrl");
+        var apiKeySetting = await db.SystemSettings.FirstOrDefaultAsync(s => s.Key == "router.llm.apiKey");
+        var modelIdSetting = await db.SystemSettings.FirstOrDefaultAsync(s => s.Key == "router.llm.modelId");
+
+        var baseUrl = baseUrlSetting?.Value ?? "https://api.openai.com/v1";
+        var apiKey = apiKeySetting?.Value;
+        var modelId = modelIdSetting?.Value ?? "gpt-4o-mini";
+
+        if (string.IsNullOrEmpty(apiKey))
+        {
+            return string.Empty;
+        }
+
+        var systemPrompt = @"你是一个 Git 提交信息生成助手。根据用户提供的 Git 变更摘要，生成一条符合 Conventional Commits 规范的中文提交信息。
+
+规范要求：
+1. 格式：`type: 描述内容`
+2. 常用 type：feat（新功能）、fix（修复）、docs（文档）、style（格式）、refactor（重构）、perf（性能）、test（测试）、chore（构建/工具）、ci（CI 配置）
+3. 描述使用中文，简洁明了，不超过 50 个字符
+4. 只返回提交信息本身，不要有任何前言或 Markdown 标记
+
+示例：
+- feat: 新增用户登录页面的表单验证
+- fix: 修复任务列表滚动时的重复渲染问题
+- refactor: 提取公共状态管理逻辑到独立 Hook";
+
+        var userPrompt = $"以下是 Git 变更状态：\n{gitStatus}\n\n请根据以上变更生成一条合适的提交信息。";
+
+        try
+        {
+            var client = httpClientFactory.CreateClient();
+            client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", apiKey);
+
+            var requestBody = new
+            {
+                model = modelId,
+                messages = new[]
+                {
+                    new { role = "system", content = systemPrompt },
+                    new { role = "user", content = userPrompt }
+                }
+            };
+
+            var response = await client.PostAsJsonAsync($"{baseUrl.TrimEnd('/')}/chat/completions", requestBody);
+            if (!response.IsSuccessStatusCode)
+            {
+                return string.Empty;
+            }
+
+            var result = await response.Content.ReadFromJsonAsync<JsonElement>();
+            var content = result.GetProperty("choices")[0].GetProperty("message").GetProperty("content").GetString() ?? "";
+
+            // 清理可能的 Markdown 格式标记
+            if (content.Contains("```"))
+            {
+                content = content.Replace("```", "").Trim();
+            }
+
+            return content.Trim();
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error generating commit message with LLM");
+            return string.Empty;
+        }
+    }
+
     public async Task<string> OptimizePromptAsync(string originalPrompt)
     {
         var baseUrlSetting = await db.SystemSettings.FirstOrDefaultAsync(s => s.Key == "router.llm.baseUrl");

@@ -110,7 +110,8 @@ public class TasksController(
             TerminalType = req.TerminalType,
             WorkingDirectory = workingDirectory,
             Model = req.Model, // 仅当请求显式指定时才设置
-            UsePlatformConfig = !string.IsNullOrEmpty(req.Model) // 显式指定 model 时才使用平台配置
+            UsePlatformConfig = !string.IsNullOrEmpty(req.Model), // 显式指定 model 时才使用平台配置
+            IsPlanMode = req.PlanMode
         };
 
         agent.LastUsedAt = DateTime.UtcNow;
@@ -212,6 +213,7 @@ public class TasksController(
         t.InputTokens,
         t.OutputTokens,
         t.Model,
+        t.IsPlanMode,
         t.StartedAt,
         t.CompletedAt,
         t.ExitCode,

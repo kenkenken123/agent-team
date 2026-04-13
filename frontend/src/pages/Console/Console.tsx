@@ -28,7 +28,7 @@ const { Text } = Typography;
 
 
 const ConsolePage: React.FC = () => {
-  const { selectedAgentId, setSelectedAgentId, selectedSessionId, setSelectedSessionId, dataSyncVersion, bumpDataSync } = useAppStore();
+  const { selectedAgentId, setSelectedAgentId, selectedSessionId, setSelectedSessionId, dataSyncVersion, bumpDataSync, queuedMessage, setQueuedMessage, optimizePrompt, setOptimizePrompt } = useAppStore();
   const [agents, setAgents] = useState<Agent[]>([]);
   const [tasks, setTasks] = useState<AgentTask[]>([]);
   const [selectedTask, setSelectedTask] = useState<AgentTask | null>(null);
@@ -46,8 +46,6 @@ const ConsolePage: React.FC = () => {
   const prevSessionIdRef = useRef<string | null>(null);
   const isInitialLoadRef = useRef(true);
 
-  // Bug3: 任务运行中支持输入排队
-  const [pendingPrompt, setPendingPrompt] = useState<string | null>(null);
   const autoLaunchTaskIdRef = useRef<string | null>(null);
 
   const [currentTake, setCurrentTake] = useState(5);
@@ -56,7 +54,7 @@ const ConsolePage: React.FC = () => {
   const [agentSearch, setAgentSearch] = useState('');
 
   const [autoIdentifyAgent] = useState(false); // 固定为 false，UI 已移除
-  const [optimizePrompt, setOptimizePrompt] = useState(false);
+  const [planMode, setPlanMode] = useState(false);
 
   // 添加命令状态
   const [availableCommands, setAvailableCommands] = useState<string[]>([]);
@@ -273,7 +271,8 @@ const ConsolePage: React.FC = () => {
         model: selectedModel,
         workingDirectory: selectedWorkingDirectory || undefined,
         autoIdentifyAgent,
-        optimizePrompt
+        optimizePrompt,
+        planMode
       });
 
 
@@ -312,8 +311,8 @@ const ConsolePage: React.FC = () => {
 
   const handleCancel = async (taskId: string) => {
     await taskApi.cancel(taskId);
-    if (pendingPrompt) {
-      setPendingPrompt(null);
+    if (queuedMessage) {
+      setQueuedMessage(null);
       message.info('排队消息已取消');
     } else {
       message.success('已发送取消指令');
@@ -348,24 +347,24 @@ const ConsolePage: React.FC = () => {
     );
   }, []);
 
-  // Bug3: 当当前任务完成/失败时，自动发送排队的输入
+  // Bug3 + Bug4: 当当前任务完成/失败时，自动发送排队的输入（使用全局 queuedMessage，跨页面持久）
   const prevAutoTaskId = useRef<string | null>(null);
   useEffect(() => {
-    if (!pendingPrompt) return;
+    if (!queuedMessage) return;
     const st = selectedTask?.status;
     if (st !== 'Completed' && st !== 'Failed') return;
     // 防止重复触发
     if (selectedTask?.id === prevAutoTaskId.current) return;
     prevAutoTaskId.current = selectedTask?.id || null;
 
-    const queued = pendingPrompt;
-    setPendingPrompt(null);
+    const msg = queuedMessage;
+    setQueuedMessage(null);
 
     // 确保当前会话有 sessionId 可以续写
     const sessionId = selectedTask?.claudeSessionId;
     if (!sessionId) {
       message.warning('排队消息已发送，但无法续写（无有效 SessionId）');
-      setPrompt(queued);
+      setPrompt(msg.prompt);
       return;
     }
 
@@ -373,26 +372,41 @@ const ConsolePage: React.FC = () => {
     setLaunching(true);
 
     taskApi.create({
-      agentId: selectedTask.agentId,
-      prompt: queued.trim(),
+      agentId: msg.agentId || selectedTask.agentId,
+      prompt: msg.prompt.trim(),
       resumeSessionId: sessionId,
       forceNewSession: false,
-      model: selectedModel,
-      workingDirectory: selectedWorkingDirectory,
+      model: msg.model || selectedModel,
+      workingDirectory: msg.workingDirectory || selectedWorkingDirectory,
       autoIdentifyAgent,
-      optimizePrompt
+      optimizePrompt,
+      planMode
     }).then(task => {
       setPrompt('');
       setSelectedTask(task);
-      setAgents(pa => pa.map(a => a.id === selectedTask.agentId ? { ...a, lastUsedAt: new Date().toISOString() } : a));
+      setAgents(pa => pa.map(a => a.id === (msg.agentId || selectedTask.agentId) ? { ...a, lastUsedAt: new Date().toISOString() } : a));
       loadTasks();
     }).catch((e: any) => {
       message.error(e?.response?.data?.error ?? '排队任务启动失败');
-      setPrompt(queued);
+      setPrompt(msg.prompt);
     }).finally(() => {
       setLaunching(false);
     });
-  }, [selectedTask, selectedTask?.status, pendingPrompt]);
+  }, [selectedTask, selectedTask?.status, queuedMessage]);
+
+  // Bug4: 组件挂载时检查全局排队消息，如果匹配当前任务，恢复排队状态监听
+  useEffect(() => {
+    if (!queuedMessage) return;
+    // 排队消息的 sessionId 与当前选中任务的 sessionId 匹配时，说明这是当前会话的排队消息
+    if (selectedTask?.claudeSessionId && queuedMessage.sessionId === selectedTask.claudeSessionId) {
+      // 如果当前任务已完成/失败，立即触发自动发送
+      const st = selectedTask.status;
+      if (st === 'Completed' || st === 'Failed') {
+        // 什么都不做，上面的 useEffect 会自动触发
+      }
+      // 否则（Running），用户回到页面时能看到排队状态，等待任务完成自动发送
+    }
+  }, [queuedMessage, selectedTask]);
 
   const taskStatusIcon = (status: AgentTask['status']) => {
     switch (status) {
@@ -542,6 +556,11 @@ const ConsolePage: React.FC = () => {
                     <div className="bubble-content">{task.prompt}</div>
                   </div>
                   <div className="message-bubble assistant-bubble">
+                    {task.isPlanMode && (
+                      <div className="plan-mode-badge">
+                        📋 Plan 模式 — 仅分析规划，不执行修改
+                      </div>
+                    )}
                     <TerminalPanel task={task} onStatusChange={handleStatusChange} />
                   </div>
                 </div>
@@ -634,6 +653,19 @@ const ConsolePage: React.FC = () => {
                       unCheckedChildren="关"
                     />
                   </div>
+                  <div className="toggle-item">
+                    <Tooltip title="仅进行分析与规划，不执行代码修改操作">
+                      <span className="toggle-label">Plan 模式</span>
+                    </Tooltip>
+                    <Switch
+                      size="small"
+                      checked={planMode}
+                      onChange={setPlanMode}
+                      className="premium-switch plan-switch"
+                      checkedChildren="开"
+                      unCheckedChildren="关"
+                    />
+                  </div>
                 </Space>
               </div>
 
@@ -648,10 +680,10 @@ const ConsolePage: React.FC = () => {
                   <Button type="link" size="small" onClick={() => setContinueSession(null)}>取消</Button>
                 </div>
               )}
-              {pendingPrompt && (
+              {queuedMessage && (
                 <div className="continue-hint-badge" style={{ background: '#1a2733', borderColor: '#58A6FF' }}>
-                  <span style={{ color: '#58A6FF' }}>排队中: {pendingPrompt.substring(0, 30)}{pendingPrompt.length > 30 ? '...' : ''}</span>
-                  <Button type="link" size="small" onClick={() => setPendingPrompt(null)}>取消</Button>
+                  <span style={{ color: '#58A6FF' }}>排队中: {queuedMessage.prompt.substring(0, 30)}{queuedMessage.prompt.length > 30 ? '...' : ''}</span>
+                  <Button type="link" size="small" onClick={() => setQueuedMessage(null)}>取消</Button>
                 </div>
               )}
               <Mentions
@@ -668,10 +700,17 @@ const ConsolePage: React.FC = () => {
                 onKeyDown={e => {
                   if (e.key === 'Enter' && e.ctrlKey) {
                     e.preventDefault();
-                    // Bug3: 任务运行中，Ctrl+Enter 进入排队
+                    // Bug3+Bug4: 任务运行中，Ctrl+Enter 进入排队（全局持久）
                     if (selectedTask?.status === 'Running') {
                       if (!prompt.trim()) return;
-                      setPendingPrompt(prompt.trim());
+                      setQueuedMessage({
+                        prompt: prompt.trim(),
+                        agentId: selectedAgentId || '',
+                        sessionId: selectedTask.claudeSessionId || '',
+                        model: selectedModel,
+                        workingDirectory: selectedWorkingDirectory,
+                        planMode: optimizePrompt
+                      });
                       message.success('消息已加入排队，将在当前任务完成后自动发送');
                       setPrompt('');
                       return;
@@ -737,7 +776,7 @@ const ConsolePage: React.FC = () => {
 
                 {launching || selectedTask?.status === 'Running' ? (
                   <>
-                    {pendingPrompt ? (
+                    {queuedMessage ? (
                       <Button
                         className="send-button"
                         type="primary"
@@ -745,11 +784,11 @@ const ConsolePage: React.FC = () => {
                         icon={<SendOutlined />}
                         onClick={() => {
                           // 用户主动点击，立即取消排队
-                          setPendingPrompt(null);
+                          setQueuedMessage(null);
                           message.info('排队已取消');
                         }}
                       >
-                        排队中 ({pendingPrompt.length}字) · 点击取消
+                        排队中 ({queuedMessage.prompt.length}字) · 点击取消
                       </Button>
                     ) : (
                       <Button

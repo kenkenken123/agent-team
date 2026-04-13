@@ -200,6 +200,8 @@ const KanbanPage: React.FC = () => {
         setPlaceholders(prev => prev.filter(p => p.agentId !== selectedSession.agentId));
       }
       loadData(true);
+      // 通知控制台等其他页面刷新
+      bumpDataSync();
     } catch (e: any) {
       message.error(e?.response?.data?.error || '启动失败');
     } finally {
@@ -226,6 +228,7 @@ const KanbanPage: React.FC = () => {
         setIsAddModalOpen(false);
         setNewPrompt('');
         loadData(true);
+        bumpDataSync();
       } catch (e: any) {
         message.error(e?.response?.data?.error || '启动失败');
       } finally {
@@ -314,11 +317,23 @@ const KanbanPage: React.FC = () => {
           </div>
 
           <div className="card-content">
-            <div className="latest-output">
-              {session.latestTask
-                ? (outputCache[session.latestTask.id] || session.latestTask.prompt)
-                : '等待发起指令...'}
-            </div>
+            {session.latestTask ? (
+              <>
+                <div className="user-prompt">
+                  <span className="prompt-label">用户输入</span>
+                  <Tooltip title={session.latestTask.prompt}>
+                    <span className="prompt-text">{session.latestTask.prompt}</span>
+                  </Tooltip>
+                </div>
+                {outputCache[session.latestTask.id] && (
+                  <div className="latest-output">
+                    {outputCache[session.latestTask.id]}
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="latest-output">等待发起指令...</div>
+            )}
           </div>
 
           <div className="card-footer">

@@ -19,6 +19,10 @@ export interface CommitPushResponse {
     message: string;
 }
 
+export interface GenerateCommitMessageResponse {
+    message: string;
+}
+
 export const gitApi = {
     async getStatus(path: string): Promise<GitStatusInfo> {
         const url = `http://localhost:5501/api/git/status?path=${encodeURIComponent(path)}`;
@@ -64,6 +68,20 @@ export const gitApi = {
         if (!res.ok) {
             const err = await res.json().catch(() => ({}));
             throw new Error(err.error || '提交推送失败');
+        }
+        return res.json();
+    },
+
+    async generateCommitMessage(path: string): Promise<GenerateCommitMessageResponse> {
+        const url = 'http://localhost:5501/api/git/generate-commit-message';
+        const res = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ path })
+        });
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            throw new Error(err.error || '生成提交信息失败');
         }
         return res.json();
     }

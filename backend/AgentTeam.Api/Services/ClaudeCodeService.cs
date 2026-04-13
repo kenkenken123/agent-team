@@ -286,6 +286,10 @@ public class ClaudeCodeService(
         if (agent.MaxTurns.HasValue)
             args.Append($"--max-turns {agent.MaxTurns} ");
 
+        // Plan 模式：只分析规划，不执行代码修改
+        if (task.IsPlanMode)
+            args.Append("--plan ");
+
         // 追加 --output-format stream-json --verbose 以便解析流式的事件与 session_id
         args.Append("--output-format stream-json --verbose ");
 

@@ -78,6 +78,7 @@ export interface AgentTask {
   inputTokens?: number;
   outputTokens?: number;
   model?: string;
+  isPlanMode?: boolean;
   startedAt?: string;
   completedAt?: string;
   exitCode?: number;
@@ -95,6 +96,7 @@ export interface CreateTaskRequest {
   terminalType?: string;
   autoIdentifyAgent?: boolean;
   optimizePrompt?: boolean;
+  planMode?: boolean;
 }
 
 // Stats 类型

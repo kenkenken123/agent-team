@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Drawer, List, Typography, Space, Button, Modal, Spin, Tag, Input, message, Alert } from 'antd';
-import { ReloadOutlined, FileTextOutlined, BranchesOutlined, ScanOutlined, CloudUploadOutlined } from '@ant-design/icons';
+import { ReloadOutlined, FileTextOutlined, BranchesOutlined, ScanOutlined, CloudUploadOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import { gitApi } from '../../api/gitApi';
 import type { GitStatusInfo, GitFileStatus } from '../../api/gitApi';
 import './index.css';
@@ -246,6 +246,7 @@ export const GitDrawer: React.FC<GitDrawerProps> = ({ visible, onClose, workingD
   // Commit state
   const [commitMessage, setCommitMessage] = useState('');
   const [committing, setCommitting] = useState(false);
+  const [generating, setGenerating] = useState(false);
 
   const fetchStatus = async () => {
     if (!workingDirectory) return;
@@ -299,6 +300,29 @@ export const GitDrawer: React.FC<GitDrawerProps> = ({ visible, onClose, workingD
       message.error(error.message || '代码审查启动失败');
     } finally {
       setReviewing(false);
+    }
+  };
+
+  const handleGenerateCommitMessage = async () => {
+    if (!workingDirectory) return;
+    if (!statusInfo?.files || statusInfo.files.length === 0) {
+      message.warning('没有可生成的提交信息');
+      return;
+    }
+
+    setGenerating(true);
+    try {
+      const result = await gitApi.generateCommitMessage(workingDirectory);
+      if (result.message) {
+        setCommitMessage(result.message);
+        message.success('AI 提交信息已生成');
+      } else {
+        message.warning('未生成有效的提交信息');
+      }
+    } catch (error: any) {
+      message.error(error.message || '生成提交信息失败');
+    } finally {
+      setGenerating(false);
     }
   };
 
@@ -398,8 +422,23 @@ export const GitDrawer: React.FC<GitDrawerProps> = ({ visible, onClose, workingD
 
             {/* Commit message input */}
             <div className="git-commit-section" style={{ padding: '10px 16px', borderBottom: '1px solid #30363D' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                <Text style={{ fontSize: 12, color: '#8B949E' }}>提交信息</Text>
+                <Button
+                  type="link"
+                  size="small"
+                  icon={<ThunderboltOutlined />}
+                  onClick={handleGenerateCommitMessage}
+                  loading={generating}
+                  disabled={!statusInfo?.files || statusInfo.files.length === 0}
+                  style={{ padding: 0, height: 'auto', fontSize: 12, color: '#f5a623' }}
+                  title="AI 生成提交信息"
+                >
+                  AI 生成
+                </Button>
+              </div>
               <TextArea
-                placeholder="输入提交信息..."
+                placeholder="输入提交信息，或点击 AI 生成..."
                 value={commitMessage}
                 onChange={(e) => setCommitMessage(e.target.value)}
                 rows={2}
