@@ -1,15 +1,23 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import {
-  Typography, Space, Select, Button, Modal, Input,
-  message, Popover, Badge, Empty, Spin, Tag, Tooltip
+  Space, Select, Button, Modal, Input,
+  message, Popover, Spin, Tooltip
 } from 'antd';
 import {
-  AppstoreOutlined, PlusOutlined, RobotOutlined,
-  ReloadOutlined, SearchOutlined, MessageOutlined,
-  EyeOutlined, UserAddOutlined, ClockCircleOutlined,
-  PlayCircleOutlined, CheckCircleOutlined, CloseCircleOutlined,
-  ExclamationCircleOutlined
-} from '@ant-design/icons';
+  LayoutDashboard,
+  Plus,
+  RefreshCw,
+  Bot,
+  Clock,
+  MessageSquare,
+  Eye,
+  UserPlus,
+  CheckCircle2,
+  AlertCircle,
+  XCircle,
+  PlayCircle,
+  MoreHorizontal
+} from 'lucide-react';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 
@@ -20,8 +28,6 @@ import type { Agent, AgentTask, TaskStatus } from '../../types';
 import './Kanban.css';
 
 dayjs.extend(relativeTime);
-
-const { Text, Title } = Typography;
 
 // 模拟“占位会话”类型
 interface KanbanSession {
@@ -64,7 +70,7 @@ const KanbanPage: React.FC = () => {
     try {
       const [agentsData, tasksData] = await Promise.all([
         agentApi.getAll(),
-        taskApi.getAll({ take: 100 }) // 看板需要较多样数据来展示
+        taskApi.getAll({ take: 100 })
       ]);
       setAgents(agentsData.filter(a => a.isEnabled));
       setTasks(tasksData.items);
@@ -82,7 +88,6 @@ const KanbanPage: React.FC = () => {
     return () => clearInterval(timer);
   }, [loadData]);
 
-  // Bug1: 监听其他页面的数据变更通知，即时刷新
   useEffect(() => {
     if (dataSyncVersion > 0) {
       loadData(true);
@@ -93,7 +98,6 @@ const KanbanPage: React.FC = () => {
   const sessions = useMemo(() => {
     const sessionMap = new Map<string, KanbanSession>();
 
-    // 处理真实任务数据
     tasks.forEach(task => {
       const sid = task.claudeSessionId || `single-${task.id}`;
       const existing = sessionMap.get(sid);
@@ -106,25 +110,20 @@ const KanbanPage: React.FC = () => {
           latestTask: task,
           status: task.status,
           updatedAt: task.createdAt,
-          lastOutput: '', // 这里后端目前没返回最后一行内容，前端可能需要截断 Prompt 或等待扩展
+          lastOutput: '',
           isPlaceholder: false
         });
       }
     });
 
     const allSessions = Array.from(sessionMap.values());
-
-    // 合并占位会话 (如果没有真实任务覆盖它)
     const filteredPlaceholders = placeholders.filter(p => {
-      // 如果这个 agent 有了真实会话（通常是刚启动后），我们就移除占位
-      // 这里的逻辑比较简单：同一个 agent 的占位如果已有真实会话产生则移除
       return !allSessions.some(s => s.agentId === p.agentId && !s.isPlaceholder);
     });
 
     return [...allSessions, ...filteredPlaceholders];
   }, [tasks, placeholders]);
 
-  // 筛选后的会话
   const filteredSessions = useMemo(() => {
     let list = sessions;
     if (filterAgentIds.length > 0) {
@@ -133,13 +132,12 @@ const KanbanPage: React.FC = () => {
     return list.sort((a, b) => dayjs(b.updatedAt).unix() - dayjs(a.updatedAt).unix());
   }, [sessions, filterAgentIds]);
 
-  // 加载可见会话的最新输出（Running 每次刷新；已完成命中缓存则跳过）
   useEffect(() => {
     const sessionsToLoad = filteredSessions.filter(s => {
       if (!s.latestTask?.id || s.isPlaceholder) return false;
-      if (s.status === 'Running') return true;          // 运行中每次更新
-      return !outputCache[s.latestTask.id];             // 其他状态只拉一次
-    }).slice(0, 30); // 最多并发 30 个
+      if (s.status === 'Running') return true;
+      return !outputCache[s.latestTask.id];
+    }).slice(0, 30);
 
     if (sessionsToLoad.length === 0) return;
 
@@ -149,13 +147,9 @@ const KanbanPage: React.FC = () => {
       try {
         const raw = await taskApi.getOutput(taskId);
         if (cancelled) return;
-        // 去除 ANSI 转义码 & 控制字符
         const rawContent = raw ?? '';
-        // 1. 去除 ANSI 转义码
         const noAnsi = rawContent.replace(/\x1B\[[0-9;]*[a-zA-Z]/g, '');
-        // 2. 按行分割
         const allLines = noAnsi.split(/\r?\n/);
-        // 3. 取最后几行中非空且有意义的一行进行清洗显示
         const processedLines = allLines
           .map(line => line.replace(/[\u0000-\u001F\u007F-\u009F]/g, ' ').trim())
           .filter(line => line.length >= 2);
@@ -163,25 +157,19 @@ const KanbanPage: React.FC = () => {
         const lastLine = processedLines[processedLines.length - 1] ?? '';
         setOutputCache(prev => ({ ...prev, [taskId]: lastLine }));
       } catch {
-        // 忽略错误，保留旧缓存
+        // 忽略错误
       }
     });
 
     return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filteredSessions]);
 
-  // 分类到三列
   const columns = {
-    // 空闲等待：等待发起任务的会话（Pending）或纯占位符（Idle）
     idle: filteredSessions.filter(s => s.status === 'Pending' || s.status === 'Idle'),
-    // 正在执行：有任务正在运行
     running: filteredSessions.filter(s => s.status === 'Running'),
-    // 已完成：包含成功、失败、取消
     completed: filteredSessions.filter(s => s.status === 'Completed' || s.status === 'Failed' || s.status === 'Cancelled')
   };
 
-  // 操作函数
   const handleLaunch = async () => {
     if (!selectedSession || !launchPrompt.trim()) return;
     setProcessing(true);
@@ -195,12 +183,10 @@ const KanbanPage: React.FC = () => {
       message.success('任务已启动');
       setIsLaunchModalOpen(false);
       setLaunchPrompt('');
-      // 如果启动的是占位，移除它
       if (selectedSession.isPlaceholder) {
         setPlaceholders(prev => prev.filter(p => p.agentId !== selectedSession.agentId));
       }
       loadData(true);
-      // 通知控制台等其他页面刷新
       bumpDataSync();
     } catch (e: any) {
       message.error(e?.response?.data?.error || '启动失败');
@@ -216,7 +202,6 @@ const KanbanPage: React.FC = () => {
     }
 
     if (newPrompt.trim()) {
-      // 如果填了任务，直接启动
       setProcessing(true);
       try {
         await taskApi.create({
@@ -235,7 +220,6 @@ const KanbanPage: React.FC = () => {
         setProcessing(false);
       }
     } else {
-      // 如果没填任务，创建占位
       const agent = agents.find(a => a.id === newAgentId);
       const newPlaceholder: KanbanSession = {
         sessionId: '',
@@ -255,47 +239,74 @@ const KanbanPage: React.FC = () => {
     setSelectedAgentId(session.agentId);
     setSelectedSessionId(session.sessionId || null);
     setPage('console');
-    // 注意：这里跳转到 console 还需要某种机制让它选中特定的 sessionId
-    // 目前 console 加载逻辑是基于选中的 agentId 加载最新任务
   };
 
-  const statusIcon = (status: string) => {
+  const renderStatusInfo = (status: string) => {
     switch (status) {
-      case 'Running': return <SyncOutlined spin style={{ color: '#58a6ff' }} />;
-      case 'Completed': return <CheckCircleOutlined style={{ color: '#3fb950' }} />;
-      case 'Failed': return <ExclamationCircleOutlined style={{ color: '#f85149' }} />;
-      case 'Cancelled': return <CloseCircleOutlined style={{ color: '#8b949e' }} />;
-      default: return <ClockCircleOutlined style={{ color: '#8b949e' }} />;
+      case 'Running':
+        return {
+          icon: <RefreshCw size={14} className="animate-spin" />,
+          label: 'Running',
+          dotClass: 'status-dot-running',
+          labelClass: 'status-label-running'
+        };
+      case 'Completed':
+        return {
+          icon: <CheckCircle2 size={14} />,
+          label: 'Completed',
+          dotClass: 'status-dot-completed',
+          labelClass: 'status-label-completed'
+        };
+      case 'Failed':
+        return {
+          icon: <AlertCircle size={14} />,
+          label: 'Failed',
+          dotClass: 'status-dot-failed',
+          labelClass: 'status-label-failed'
+        };
+      case 'Cancelled':
+        return {
+          icon: <XCircle size={14} />,
+          label: 'Cancelled',
+          dotClass: 'status-dot-idle',
+          labelClass: 'status-label-idle'
+        };
+      default:
+        return {
+          icon: <PlayCircle size={14} />,
+          label: 'Idle',
+          dotClass: 'status-dot-idle',
+          labelClass: 'status-label-idle'
+        };
     }
   };
 
   const renderCard = (session: KanbanSession) => {
+    const statusInfo = renderStatusInfo(session.status);
+    
     const popoverContent = (
       <div className="card-hover-actions">
-        <Button
-          type="text"
-          icon={<MessageOutlined />}
+        <button
+          className="action-btn"
           onClick={() => { setSelectedSession(session); setIsLaunchModalOpen(true); }}
         >
-          继续聊天
-        </Button>
-        <Button
-          type="text"
-          icon={<EyeOutlined />}
+          <MessageSquare size={16} /> 继续聊天
+        </button>
+        <button
+          className="action-btn"
           onClick={() => goToDetail(session)}
         >
-          查看详情
-        </Button>
-        <Button
-          type="text"
-          icon={<UserAddOutlined />}
+          <Eye size={16} /> 查看详情
+        </button>
+        <button
+          className="action-btn"
           onClick={() => {
             setNewAgentId(session.agentId);
             setIsAddModalOpen(true);
           }}
         >
-          在此 Agent 新增会话
-        </Button>
+          <UserPlus size={16} /> 在此 Agent 新增会话
+        </button>
       </div>
     );
 
@@ -307,42 +318,44 @@ const KanbanPage: React.FC = () => {
         placement="rightTop"
         overlayClassName="canvas-popover"
       >
-        <div className={`kanban-card status-${session.status.toLowerCase()}`}>
+        <div className={`kanban-card group`}>
           <div className="card-header">
-            <div className="agent-info">
-              <RobotOutlined style={{ color: '#8b949e' }} />
+            <div className="agent-meta">
+              <div className={`status-dot ${statusInfo.dotClass}`} />
               <span className="agent-name">{session.agentName}</span>
             </div>
-            {session.sessionId && <span className="session-id">#{session.sessionId.substring(0, 8)}</span>}
+            {session.sessionId && (
+              <span className="session-id">#{session.sessionId.substring(0, 8)}</span>
+            )}
           </div>
 
-          <div className="card-content">
+          <div className="card-body">
             {session.latestTask ? (
               <>
-                <div className="user-prompt">
-                  <span className="prompt-label">用户输入</span>
+                <div className="user-input-section">
+                  <span className="input-prefix">用户输入</span>
                   <Tooltip title={session.latestTask.prompt}>
-                    <span className="prompt-text">{session.latestTask.prompt}</span>
+                    <span className="input-text">{session.latestTask.prompt}</span>
                   </Tooltip>
                 </div>
                 {outputCache[session.latestTask.id] && (
-                  <div className="latest-output">
+                  <div className="output-preview">
                     {outputCache[session.latestTask.id]}
                   </div>
                 )}
               </>
             ) : (
-              <div className="latest-output">等待发起指令...</div>
+              <div className="output-preview">等待发起指令...</div>
             )}
           </div>
 
           <div className="card-footer">
-            <Space size={4}>
-              {statusIcon(session.status)}
-              <span>{session.status}</span>
-            </Space>
-            <div className="time-stamp">
-              <ClockCircleOutlined />
+            <div className={`status-label ${statusInfo.labelClass}`}>
+              {statusInfo.icon}
+              <span>{statusInfo.label}</span>
+            </div>
+            <div className="time-ago">
+              <Clock size={12} />
               <span>{dayjs(session.updatedAt).fromNow()}</span>
             </div>
           </div>
@@ -354,18 +367,20 @@ const KanbanPage: React.FC = () => {
   return (
     <div className="kanban-page">
       <div className="kanban-header">
-        <Title level={4} style={{ margin: 0, color: '#f0f6fc' }}>
-          <AppstoreOutlined /> 会话看板
-        </Title>
-        <Space>
+        <div className="header-group">
+          <LayoutDashboard className="header-icon" size={24} />
+          <h1>会话看板</h1>
+        </div>
+        <div className="header-actions">
           <Select
             mode="multiple"
             placeholder="筛选 Agent"
-            style={{ width: 300 }}
+            className="header-select"
             value={filterAgentIds}
             onChange={setFilterAgentIds}
             maxTagCount="responsive"
             allowClear
+            dropdownStyle={{ backgroundColor: '#161b22', border: '1px solid #30363d' }}
           >
             {agents.map(a => (
               <Select.Option key={a.id} value={a.id}>{a.name}</Select.Option>
@@ -373,48 +388,87 @@ const KanbanPage: React.FC = () => {
           </Select>
           <Button
             type="primary"
-            icon={<PlusOutlined />}
+            className="header-btn-new"
             onClick={() => { setNewAgentId(undefined); setIsAddModalOpen(true); }}
           >
-            新增会话
+            <Plus size={18} /> 新增会话
           </Button>
-          <Button icon={<ReloadOutlined />} onClick={() => loadData()}>刷新</Button>
-        </Space>
+          <button 
+            className="header-btn-refresh"
+            onClick={() => loadData()}
+          >
+            <RefreshCw size={18} />
+          </button>
+        </div>
       </div>
 
       {loading && tasks.length === 0 ? (
-        <div style={{ height: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+        <div className="loading-wrapper">
           <Spin size="large" />
         </div>
       ) : (
         <div className="kanban-board">
+          {/* 空闲等待 */}
           <div className="kanban-column">
             <div className="column-header">
-              <h3>空闲等待 <Badge count={columns.idle.length} offset={[10, -5]} style={{ transform: 'scale(0.8)' }} /></h3>
+              <div className="column-title">
+                <PlayCircle size={16} />
+                <span>空闲等待</span>
+              </div>
+              <span className="column-count">{columns.idle.length}</span>
             </div>
             <div className="card-list">
               {columns.idle.map(renderCard)}
-              {columns.idle.length === 0 && <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无空闲会话" className="empty-placeholder" />}
+              {columns.idle.length === 0 && (
+                <div className="empty-placeholder">
+                  <MessageSquare />
+                  <span>暂无任务</span>
+                </div>
+              )}
             </div>
           </div>
 
-          <div className="kanban-column">
+          {/* 正在执行 */}
+          <div className="kanban-column column-running">
             <div className="column-header">
-              <h3>正在执行 <Badge status="processing" count={columns.running.length} offset={[10, -5]} /></h3>
+              <div className="column-title title-running">
+                <RefreshCw size={16} className="animate-spin" />
+                <span>正在执行</span>
+              </div>
+              <span className="column-count count-running">
+                {columns.running.length}
+              </span>
             </div>
             <div className="card-list">
               {columns.running.map(renderCard)}
-              {columns.running.length === 0 && <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无执行中任务" className="empty-placeholder" />}
+              {columns.running.length === 0 && (
+                <div className="empty-placeholder">
+                  <Bot />
+                  <span>暂无任务</span>
+                </div>
+              )}
             </div>
           </div>
 
+          {/* 已完成 */}
           <div className="kanban-column">
             <div className="column-header">
-              <h3>已完成 <Badge count={columns.completed.length} offset={[10, -5]} color="#3fb950" /></h3>
+              <div className="column-title title-completed">
+                <CheckCircle2 size={16} />
+                <span>已完成</span>
+              </div>
+              <span className="column-count count-completed">
+                {columns.completed.length}
+              </span>
             </div>
             <div className="card-list">
               {columns.completed.map(renderCard)}
-              {columns.completed.length === 0 && <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无历史纪录" className="empty-placeholder" />}
+              {columns.completed.length === 0 && (
+                <div className="empty-placeholder">
+                  <Clock />
+                  <span>暂无任务</span>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -422,55 +476,71 @@ const KanbanPage: React.FC = () => {
 
       {/* 继续聊天弹框 */}
       <Modal
-        title={`继续会话 - ${selectedSession?.agentName}`}
+        title={
+          <div className="modal-title-wrapper">
+            <MessageSquare size={18} className="modal-title-icon" />
+            <span>继续会话 - {selectedSession?.agentName}</span>
+          </div>
+        }
         open={isLaunchModalOpen}
         onOk={handleLaunch}
         onCancel={() => setIsLaunchModalOpen(false)}
         confirmLoading={processing}
         okText="直接启动"
+        className="dark-modal"
       >
-        <div style={{ marginBottom: 12 }}>
-          <Text type="secondary">正在向会话 {selectedSession?.sessionId?.substring(0, 8) || '新起点'} 发送新指令</Text>
+        <div className="modal-desc">
+          <p className="modal-desc-text">
+            正在向会话 <span className="modal-desc-id">{selectedSession?.sessionId?.substring(0, 8) || '新起点'}</span> 发送新指令
+          </p>
         </div>
         <Input.TextArea
           placeholder="请输入任务内容..."
-          autoSize={{ minRows: 3, maxRows: 6 }}
+          autoSize={{ minRows: 4, maxRows: 8 }}
           value={launchPrompt}
           onChange={e => setLaunchPrompt(e.target.value)}
+          className="modal-textarea"
         />
       </Modal>
 
       {/* 新增会话弹框 */}
       <Modal
-        title="创建新会话"
+        title={
+          <div className="modal-title-wrapper">
+            <Plus size={18} className="modal-title-icon" />
+            <span>创建新会话</span>
+          </div>
+        }
         open={isAddModalOpen}
         onOk={handleAddNewSession}
         onCancel={() => setIsAddModalOpen(false)}
         confirmLoading={processing}
         okText="确定"
+        className="dark-modal"
       >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <div>
-            <Text strong>选择 Agent *</Text>
+        <div className="modal-form">
+          <div className="modal-form-item">
+            <label>选择 Agent *</label>
             <Select
-              style={{ width: '100%', marginTop: 8 }}
+              style={{ width: '100%' }}
               placeholder="请选择"
               value={newAgentId}
               onChange={setNewAgentId}
+              dropdownStyle={{ backgroundColor: '#161b22', border: '1px solid #30363d' }}
             >
               {agents.map(a => (
                 <Select.Option key={a.id} value={a.id}>{a.name}</Select.Option>
               ))}
             </Select>
           </div>
-          <div>
-            <Text strong>初始任务 (可选)</Text>
+          <div className="modal-form-item">
+            <label>初始任务 (可选)</label>
             <Input.TextArea
-              style={{ marginTop: 8 }}
               placeholder="输入任务则立即启动，不输入则仅创建占位符"
-              autoSize={{ minRows: 3, maxRows: 6 }}
+              autoSize={{ minRows: 4, maxRows: 8 }}
               value={newPrompt}
               onChange={e => setNewPrompt(e.target.value)}
+              className="modal-textarea"
             />
           </div>
         </div>
@@ -479,7 +549,5 @@ const KanbanPage: React.FC = () => {
   );
 };
 
-// 补齐缺少的图标
-const SyncOutlined = (props: any) => <ReloadOutlined {...props} />;
-
 export default KanbanPage;
+

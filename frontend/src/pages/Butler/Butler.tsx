@@ -28,6 +28,9 @@ const ButlerPage: React.FC = () => {
     const [agents, setAgents] = useState<Agent[]>([]);
     const [fileList, setFileList] = useState<any[]>([]);
     
+    // Add state to track selected agent for purple placeholder text
+    const [selectedAgentId, setLocalSelectedAgentId] = useState<string | undefined>(undefined);
+    
     const { setPage, setSelectedAgentId } = useAppStore();
 
     const loadMessages = async () => {
@@ -92,58 +95,70 @@ const ButlerPage: React.FC = () => {
 
     return (
         <div className="butler-page">
-            <Title level={3}><CustomerServiceOutlined /> Agent 管家</Title>
-            <Paragraph style={{ color: '#8B949E' }}>
-                我是您的智能管家。您可以直接下达任务，我会自动识别并分发给最合适的 Agent 去执行。也可以直接指派指定 Agent 处理。
-            </Paragraph>
+            <Typography style={{ textAlign: 'center', marginBottom: 32 }}>
+                <Title level={3} style={{ color: '#f0f6fc', margin: 0 }}>
+                    <CustomerServiceOutlined style={{ marginRight: 8, color: '#8b5cf6' }} /> 
+                    Agent 管家
+                </Title>
+                <div style={{ color: '#8b949e', marginTop: 8, fontSize: 13 }}>
+                    我是您的智能管家。您可以直接下达任务，我会自动识别分发，或由您指定专属 Agent 处理。
+                </div>
+            </Typography>
 
-            <Space direction="vertical" size="large" style={{ width: '100%' }}>
-                {/* 指令发送区 */}
+            <Space direction="vertical" size={24} style={{ width: '100%' }}>
+                {/* 第一层：操作区 */}
                 <Card bordered={false} className="butler-input-card">
-                    <Form 
-                        form={msgForm} 
-                        layout="vertical" 
-                        onFinish={onSendToButler}
-                        initialValues={{ agentId: undefined, optimizePrompt: false }}
-                    >
-                        <Space style={{ width: '100%', marginBottom: 16, justifyContent: 'space-between' }} align="center">
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 16, flex: 1 }}>
-                                <Text strong style={{ color: '#F0F6FC', whiteSpace: 'nowrap' }}>处理者 (Agent):</Text>
-                                <Form.Item name="agentId" style={{ marginBottom: 0, flex: 1 }}>
-                                    <Select 
-                                        placeholder="自动识别 (智能路由)" 
-                                        allowClear 
-                                        style={{ width: '100%' }}
-                                        size="large"
-                                    >
-                                        {agents.map(agent => (
-                                            <Option key={agent.id} value={agent.id}>
-                                                <RobotOutlined style={{ marginRight: 8 }} />
-                                                {agent.name}
-                                            </Option>
-                                        ))}
-                                    </Select>
-                                </Form.Item>
+                    <div className={`input-section-transition ${loading ? 'input-faded' : ''}`}>
+                        <Form 
+                            form={msgForm} 
+                            layout="vertical" 
+                            onFinish={onSendToButler}
+                            initialValues={{ agentId: undefined, optimizePrompt: false }}
+                            onValuesChange={(changedValues) => {
+                                if ('agentId' in changedValues) {
+                                    setLocalSelectedAgentId(changedValues.agentId);
+                                }
+                            }}
+                        >
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 28, gap: 20 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 16, flex: 1 }}>
+                                    <Form.Item name="agentId" style={{ marginBottom: 0, flex: 1 }}>
+                                        <Select 
+                                            placeholder="✨ 自动识别 (智能路由)" 
+                                            allowClear 
+                                            className={!selectedAgentId ? 'select-auto-identify' : ''}
+                                            style={{ width: '100%' }}
+                                            size="large"
+                                            dropdownStyle={{ background: '#161b22', border: '1px solid #30363d' }}
+                                        >
+                                            {agents.map(agent => (
+                                                <Option key={agent.id} value={agent.id}>
+                                                    <RobotOutlined style={{ marginRight: 8, color: '#58a6ff' }} />
+                                                    {agent.name}
+                                                </Option>
+                                            ))}
+                                        </Select>
+                                    </Form.Item>
+                                </div>
+                                
+                                <div className="optimize-toggle-wrapper">
+                                    <Tooltip title="启用后，管家会使用高级 AI 对您的指令进行优化和补全">
+                                        <Text className="optimize-text">✨ 优化指令</Text>
+                                    </Tooltip>
+                                    <Form.Item name="optimizePrompt" valuePropName="checked" style={{ marginBottom: 0 }}>
+                                        <Switch size="small" className="optimize-switch" />
+                                    </Form.Item>
+                                </div>
                             </div>
-                            
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(137, 87, 229, 0.1)', padding: '4px 12px', borderRadius: 20, border: '1px solid rgba(137, 87, 229, 0.2)' }}>
-                                <Tooltip title="启用后，管家会使用高级 AI 对您的指令进行优化和补全，以获得更精准的执行效果">
-                                    <Text style={{ color: '#bc8cff', fontSize: 13, fontWeight: 500, cursor: 'help' }}>✨ 优化指令</Text>
-                                </Tooltip>
-                                <Form.Item name="optimizePrompt" valuePropName="checked" style={{ marginBottom: 0 }}>
-                                    <Switch size="small" />
-                                </Form.Item>
-                            </div>
-                        </Space>
 
                         <Form.Item
                             name="text"
                             rules={[{ required: true, message: '请输入您的指令' }]}
+                            style={{ marginBottom: 32 }}
                         >
                             <Input.TextArea 
-                                rows={4} 
-                                placeholder="请输入您的指令。例如：'帮我分析一下 backend 目录下的代码结构' 或 '帮我写一个 React 登录页面'"
-                                style={{ borderRadius: 8, fontSize: '16px', padding: '12px' }}
+                                className="butler-textarea"
+                                placeholder="指派说明或任何需求，例如：'帮我分析一下 backend 目录下的代码结构' 或 '帮我写一个 React 登录页面'"
                                 onPaste={async (e) => {
                                     const items = e.clipboardData.items;
                                     for (let i = 0; i < items.length; i++) {
@@ -154,7 +169,7 @@ const ButlerPage: React.FC = () => {
                                                     message.warning('最多只能上传 3 张图片');
                                                     return;
                                                 }
-                                                message.loading({ content: '正在上传粘贴的图片...', key: 'paste-upload' });
+                                                message.loading({ content: '正在上传...', key: 'paste-upload' });
                                                 const formData = new FormData();
                                                 formData.append('file', file);
                                                 try {
@@ -163,7 +178,7 @@ const ButlerPage: React.FC = () => {
                                                     });
                                                     const data = await response.json();
                                                     if (data && data.url) {
-                                                        message.success({ content: '图片已成功添加至附件', key: 'paste-upload' });
+                                                        message.success({ content: '已添加附件', key: 'paste-upload' });
                                                         const newFile: any = {
                                                             uid: `paste-${Date.now()}`,
                                                             name: 'pasted-' + (file.name || 'image.png'),
@@ -187,38 +202,39 @@ const ButlerPage: React.FC = () => {
                             />
                         </Form.Item>
 
-                        <Form.Item label="附件图片" style={{ marginBottom: 24 }}>
-                            <Upload
-                                action="http://localhost:5501/api/Upload"
-                                listType="picture-card"
-                                fileList={fileList}
-                                onChange={({ fileList: fl }) => setFileList(fl)}
-                                className="butler-uploader"
-                                name="file" // 与后端接收名一致
-                            >
-                                {fileList.length < 3 && (
-                                    <div>
-                                        <UploadOutlined />
-                                        <div style={{ marginTop: 8 }}>上传</div>
-                                    </div>
-                                )}
-                            </Upload>
-                            <Text type="secondary" style={{ fontSize: 12 }}>提示：上传的图片将作为指令上下文供 Agent 参考（支持截图分析）</Text>
-                        </Form.Item>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                            <Form.Item style={{ marginBottom: 0 }}>
+                                <Upload
+                                    action="http://localhost:5501/api/Upload"
+                                    listType="picture-card"
+                                    fileList={fileList}
+                                    onChange={({ fileList: fl }) => setFileList(fl)}
+                                    className="butler-uploader"
+                                    name="file"
+                                >
+                                    {fileList.length < 3 && (
+                                        <div className="upload-btn-content">
+                                            <UploadOutlined style={{ fontSize: 20, color: '#8b949e' }} />
+                                            <div style={{ marginTop: 8, color: '#8b949e', fontSize: 12 }}>附图</div>
+                                        </div>
+                                    )}
+                                </Upload>
+                            </Form.Item>
 
-                        <Form.Item style={{ marginBottom: 0 }}>
-                            <Button 
-                                type="primary" 
-                                htmlType="submit" 
-                                icon={<SendOutlined />} 
-                                loading={loading}
-                                size="large"
-                                style={{ height: '48px', padding: '0 32px', borderRadius: '24px' }}
-                            >
-                                发送指令
-                            </Button>
-                        </Form.Item>
+                            <Form.Item style={{ marginBottom: 0 }}>
+                                <Button 
+                                    type="primary" 
+                                    htmlType="submit" 
+                                    className="butler-send-btn"
+                                    icon={<SendOutlined />} 
+                                    loading={loading}
+                                >
+                                    发送指令
+                                </Button>
+                            </Form.Item>
+                        </div>
                     </Form>
+                    </div>
 
                     {routingResult && (
                         <div className="routing-result-box" style={{ marginTop: 24 }}>
@@ -259,55 +275,73 @@ const ButlerPage: React.FC = () => {
                     )}
                 </Card>
 
-                {/* 历史记录区 */}
+                {/* 第二层：历史记录流水区 */}
                 <Card 
-                  title={<span><HistoryOutlined style={{ marginRight: 8 }} />指令记录流水</span>} 
+                  title={
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#c9d1d9' }}>
+                        <HistoryOutlined style={{ color: '#8b949e' }} />
+                        <span>历史流水</span>
+                    </div>
+                  } 
                   bordered={false}
+                  className="history-stream-card"
                 >
                     <List
                         className="msg-history-list"
-                        itemLayout="vertical"
                         dataSource={messages}
-                        locale={{ emptyText: <Empty description="暂无指令记录" /> }}
+                        locale={{ 
+                            emptyText: (
+                                <Empty 
+                                    image={<HistoryOutlined style={{ fontSize: 48, color: '#30363d' }} />}
+                                    description={<span style={{ color: '#8b949e' }}>时光静好，暂无历史</span>}
+                                />
+                            ) 
+                        }}
                         renderItem={(item: IncomingMessage) => (
                             <List.Item
                                 key={item.id}
-                                extra={
-                                    <Space direction="vertical" align="end">
-                                        {getStatusTag(item.status)}
-                                        {item.triggeredTaskId && (
-                                            <Button 
-                                                type="link" 
-                                                size="small" 
-                                                onClick={() => goToConsole(item.triggeredAgentId, item.triggeredTaskId)}
-                                                icon={<ArrowRightOutlined />}
-                                            >
-                                                查看任务
-                                            </Button>
-                                        )}
-                                    </Space>
-                                }
-                                style={{ borderBottom: '1px solid #30363D', padding: '20px 0' }}
+                                className="history-stream-item"
                             >
-                                <List.Item.Meta
-                                    title={
-                                        <Text style={{ color: '#8B949E', fontSize: 12 }}>
-                                            {new Date(item.createdAt).toLocaleString()} 来自 {item.source}
-                                        </Text>
-                                    }
-                                    description={
-                                        <div style={{ marginTop: 8 }}>
-                                            <Paragraph style={{ color: '#C9D1D9', fontSize: 15, marginBottom: 8 }}>
-                                                {item.parsedText}
-                                            </Paragraph>
-                                            {item.routerReason && (
-                                                <div style={{ color: '#8B949E', fontSize: 13, background: '#161B22', padding: '8px 12px', borderRadius: 6 }}>
-                                                    反馈：{item.routerReason}
-                                                </div>
-                                            )}
+                                <div className="stream-item-content">
+                                    <div className="stream-header">
+                                        <div className="stream-time">
+                                            {new Date(item.createdAt).toLocaleString()}
                                         </div>
-                                    }
-                                />
+                                        <div className="stream-right-meta">
+                                            <Tag color="#21262d" style={{ color: '#8b949e', border: '1px solid #30363d' }}>
+                                                {item.source || 'Web'}
+                                            </Tag>
+                                            <span style={{ fontSize: 12, color: '#6e7681' }}>#{item.id.substring(0,6)}</span>
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="stream-body">
+                                        <div className="stream-text">
+                                            {item.parsedText}
+                                        </div>
+                                        {item.routerReason && (
+                                            <div className="stream-feedback">
+                                                {item.routerReason}
+                                            </div>
+                                        )}
+                                    </div>
+                                    
+                                    <div className="stream-footer">
+                                        <div className="stream-status">
+                                            {getStatusTag(item.status)}
+                                        </div>
+                                        {item.triggeredTaskId && (
+                                            <div className="stream-action">
+                                                <Button 
+                                                    className="ghost-action-btn"
+                                                    onClick={() => goToConsole(item.triggeredAgentId, item.triggeredTaskId)}
+                                                >
+                                                    查看任务 <ArrowRightOutlined />
+                                                </Button>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
                             </List.Item>
                         )}
                     />
