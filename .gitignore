@@ -24,4 +24,6 @@ data/
 
 # 日志文件
 *.log
-temp/*
+# WeChat Data
+.wechatbot-data/
+wechat-service/.wechatbot-data/

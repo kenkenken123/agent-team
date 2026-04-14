@@ -1,0 +1,100 @@
+.wechat-page {
+  padding: 24px;
+  min-height: 100%;
+  background: radial-gradient(circle at top right, rgba(88, 166, 255, 0.05), transparent),
+              radial-gradient(circle at bottom left, rgba(139, 148, 158, 0.05), transparent);
+}
+
+.wechat-header {
+  margin-bottom: 24px;
+}
+
+.wechat-grid {
+  display: grid;
+  grid-template-columns: 350px 1fr;
+  gap: 24px;
+}
+
+.status-card {
+  background: rgba(22, 27, 34, 0.6);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(48, 54, 61, 0.8);
+  border-radius: 12px;
+  padding: 24px;
+  height: fit-content;
+}
+
+.qr-container {
+  margin: 20px 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 250px;
+  background: rgba(13, 17, 23, 0.4);
+  border-radius: 8px;
+  border: 1px dashed rgba(48, 54, 61, 1);
+}
+
+.qr-image {
+  width: 200px;
+  height: 200px;
+  border-radius: 8px;
+  padding: 8px;
+  background: #fff;
+}
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 500;
+  margin-bottom: 16px;
+}
+
+.status-connected {
+  background: rgba(46, 160, 67, 0.15);
+  color: #3fb950;
+}
+
+.status-waiting {
+  background: rgba(187, 128, 9, 0.15);
+  color: #d29922;
+}
+
+.status-disconnected {
+  background: rgba(248, 81, 73, 0.15);
+  color: #f85149;
+}
+
+.session-card {
+  background: rgba(22, 27, 34, 0.6);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(48, 54, 61, 0.8);
+  border-radius: 12px;
+  padding: 24px;
+  overflow: hidden;
+}
+
+.session-table .ant-table {
+  background: transparent !important;
+}
+
+.session-table .ant-table-thead > tr > th {
+  background: rgba(48, 54, 61, 0.2) !important;
+  color: #8B949E !important;
+  border-bottom: 1px solid rgba(48, 54, 61, 0.5) !important;
+}
+
+.session-table .ant-table-cell {
+  border-bottom: 1px solid rgba(48, 54, 61, 0.3) !important;
+}
+
+.user-id {
+  font-family: 'Cascadia Code', 'Consolas', monospace;
+  font-size: 12px;
+  color: #58A6FF;
+}

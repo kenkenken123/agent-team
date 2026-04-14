@@ -18,6 +18,7 @@ public class MessageIngestionService(
         var incoming = new IncomingMessage
         {
             Source = message.SourceName,
+            SourceMessageId = message.SenderId, // 新增：保存微信 UserId 或其他平台的发送者 ID
             ParsedText = message.Text,
             RawContent = System.Text.Json.JsonSerializer.Serialize(message),
             Status = MessageStatus.Pending,

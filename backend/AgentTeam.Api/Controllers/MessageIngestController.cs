@@ -13,7 +13,14 @@ public class MessageIngestController(
     AppDbContext db,
     MessageIngestionService ingestionService) : ControllerBase
 {
-    public record IngestRequest(string Text, Guid? AgentId = null, string[]? ImageUrls = null, bool OptimizePrompt = false);
+    public record IngestRequest(
+        string Text,
+        Guid? AgentId = null,
+        string[]? ImageUrls = null,
+        bool OptimizePrompt = false,
+        string? SourceName = null,   // 消息来源：WeChat / WebPage 等
+        string? SenderId = null      // 发送者 ID（微信的 userId）
+    );
 
     [HttpPost("ingest")]
     public async Task<IActionResult> Ingest([FromBody] IngestRequest req)
@@ -23,7 +30,8 @@ public class MessageIngestController(
 
         var parsed = new ParsedMessage
         {
-            SourceName = "WebPage",
+            SourceName = req.SourceName ?? "WebPage",
+            SenderId   = req.SenderId,
             Text = req.Text,
             AgentId = req.AgentId,
             ImageUrls = req.ImageUrls != null ? string.Join(";", req.ImageUrls) : null,

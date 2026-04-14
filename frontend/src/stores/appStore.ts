@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-export type PageKey = 'dashboard' | 'agents' | 'console' | 'history' | 'simulation' | 'settings' | 'butler' | 'config' | 'kanban' | 'system' | 'initialSetup';
+export type PageKey = 'dashboard' | 'agents' | 'console' | 'history' | 'simulation' | 'settings' | 'butler' | 'config' | 'kanban' | 'system' | 'initialSetup' | 'wechat';
 
 export interface QueuedMessage {
   prompt: string;

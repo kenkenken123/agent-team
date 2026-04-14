@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { Layout, Menu, Typography } from 'antd';
-const { Sider, Content } = Layout;
 import {
   DashboardOutlined,
   RobotOutlined,
@@ -11,6 +10,7 @@ import {
   KeyOutlined,
   AppstoreOutlined,
   ThunderboltOutlined,
+  WechatOutlined,
 } from '@ant-design/icons';
 import Dashboard from '../../pages/Dashboard/Dashboard';
 import AgentsPage from '../../pages/Agents/Agents';
@@ -23,10 +23,12 @@ import ConfigManager from '../../pages/Config/ConfigManager';
 import KanbanPage from '../../pages/Kanban/Kanban';
 import SystemManagementPage from '../../pages/SystemManagement/SystemManagement';
 import InitialSetupPage from '../../pages/InitialSetup/InitialSetup';
+import WeChatPage from '../../pages/WeChat/WeChat';
 import { useAppStore } from '../../stores/appStore';
 import type { PageKey } from '../../stores/appStore';
 import './AppLayout.css';
 
+const { Sider, Content } = Layout;
 const { Text } = Typography;
 
 const PAGE_MAP: Record<PageKey, React.ReactNode> = {
@@ -41,6 +43,7 @@ const PAGE_MAP: Record<PageKey, React.ReactNode> = {
   kanban: <KanbanPage />,
   system: <SystemManagementPage />,
   initialSetup: <InitialSetupPage />,
+  wechat: <WeChatPage />,
 };
 
 const AppLayout: React.FC = () => {
@@ -48,7 +51,7 @@ const AppLayout: React.FC = () => {
   const [collapsed, setCollapsed] = useState(false);
 
   // 判断当前页面是否在系统管理子菜单下
-  const isSystemChild = currentPage === 'settings' || currentPage === 'agents' || currentPage === 'config' || currentPage === 'initialSetup';
+  const isSystemChild = currentPage === 'settings' || currentPage === 'agents' || currentPage === 'config' || currentPage === 'initialSetup' || currentPage === 'wechat';
   const selectedMainKey = isSystemChild ? 'system' : currentPage;
 
   return (
@@ -131,6 +134,11 @@ const AppLayout: React.FC = () => {
                   key: 'config',
                   icon: <KeyOutlined />,
                   label: 'API 凭证',
+                },
+                {
+                  key: 'wechat',
+                  icon: <WechatOutlined />,
+                  label: '微信接入',
                 },
               ],
             },
