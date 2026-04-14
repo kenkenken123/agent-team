@@ -1,13 +1,16 @@
 import React, { useEffect, useState } from 'react';
 import { Typography, Button, Space, Table, Spin, Empty, Tag, Divider, message, QRCode } from 'antd';
-import {
-  CheckCircleOutlined,
-  SyncOutlined,
-  CloseCircleOutlined,
-  MessageOutlined,
-  ClockCircleOutlined,
-  ReloadOutlined
-} from '@ant-design/icons';
+import { 
+  CheckCircle2, 
+  RotateCw, 
+  XCircle, 
+  MessageSquare, 
+  Clock, 
+  RefreshCw,
+  LogOut,
+  ShieldCheck,
+  ShieldAlert
+} from 'lucide-react';
 import { wechatApi, type WeChatStatus, type WeChatSession } from '../../api/wechat';
 import './WeChat.css';
 
@@ -54,25 +57,25 @@ const WeChatPage: React.FC = () => {
   const statusMap = {
     disconnected: {
       text: '未连接',
-      icon: <CloseCircleOutlined />,
+      icon: <XCircle size={16} />,
       className: 'status-disconnected',
       desc: '微信服务已断开，请请求二维码重新登录。'
     },
     waiting_qr: {
       text: '等待扫码',
-      icon: <SyncOutlined spin />,
+      icon: <RotateCw size={16} className="animate-spin" />,
       className: 'status-waiting',
       desc: '二维码已生成，请使用微信 App 扫描。'
     },
     scanned: {
       text: '已扫码',
-      icon: <SyncOutlined spin />,
+      icon: <RotateCw size={16} className="animate-spin" />,
       className: 'status-waiting',
       desc: '请在手机微信上点击“确认登录”。'
     },
     connected: {
       text: '已连接',
-      icon: <CheckCircleOutlined />,
+      icon: <CheckCircle2 size={16} />,
       className: 'status-connected',
       desc: '机器人已在线，正在监听微信消息。'
     }
@@ -97,7 +100,9 @@ const WeChatPage: React.FC = () => {
       key: 'messageCount',
       sorter: (a: any, b: any) => a.messageCount - b.messageCount,
       render: (count: number) => (
-        <Tag color="blue" icon={<MessageOutlined />}>{count}</Tag>
+        <Tag color="processing" icon={<MessageSquare size={12} style={{ marginRight: 4 }} />} className="token-tag">
+          {count}
+        </Tag>
       )
     },
     {
@@ -106,8 +111,8 @@ const WeChatPage: React.FC = () => {
       key: 'lastMessageAt',
       render: (time: string) => (
         <Space>
-          <ClockCircleOutlined style={{ color: '#8B949E' }} />
-          <Text style={{ color: '#8B949E', fontSize: 13 }}>
+          <Clock size={14} style={{ color: '#8B949E' }} />
+          <Text className="memory-time">
             {new Date(time).toLocaleString()}
           </Text>
         </Space>
@@ -138,29 +143,29 @@ const WeChatPage: React.FC = () => {
 
           <div className="qr-container">
             {loading ? (
-              <Spin tip="载入中..." />
+              <Spin tip="载入中..." indicator={<RotateCw className="animate-spin" />} />
             ) : data?.qrUrl ? (
               <>
                 <div style={{ background: '#fff', padding: 12, borderRadius: 8 }}>
                   <QRCode value={data.qrUrl} size={200} bordered={false} color="#000" bgColor="#fff" />
                 </div>
                 <Text
-                  style={{ marginTop: 16, color: '#58A6FF', cursor: 'pointer' }}
+                  style={{ marginTop: 16, color: '#58A6FF', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
                   onClick={() => data.qrUrl && window.open(data.qrUrl)}
                 >
-                  在浏览器中打开二维码
+                  <RefreshCw size={14} /> 在浏览器中打开二维码
                 </Text>
               </>
             ) : data?.loginStatus === 'connected' ? (
               <div style={{ textAlign: 'center' }}>
-                <CheckCircleOutlined style={{ fontSize: 64, color: '#3fb950', marginBottom: 16 }} />
+                <ShieldCheck size={64} color="#3fb950" style={{ marginBottom: 16, opacity: 0.8 }} />
                 <br />
-                <Text style={{ color: '#3fb950' }}>服务正常运行中</Text>
+                <Text style={{ color: '#3fb950', fontWeight: 600 }}>服务正常运行中</Text>
               </div>
             ) : (
-              <div style={{ marginTop: 24 }}>
-                <Button onClick={handleReconnect} loading={reconnecting} icon={<ReloadOutlined />}>
-                  重新连接 / 切换账号
+              <div style={{ marginTop: 24, padding: '0 24px' }}>
+                <Button block type="primary" onClick={handleReconnect} loading={reconnecting} icon={<LogOut size={16} />}>
+                  启动连接 / 切换账号
                 </Button>
               </div>
             )}
@@ -171,16 +176,19 @@ const WeChatPage: React.FC = () => {
           <Space direction="vertical" style={{ width: '100%' }}>
             <Button 
               block 
+              ghost
               onClick={handleReconnect} 
               loading={reconnecting}
-              icon={<ReloadOutlined />}
+              icon={<RotateCw size={16} className={reconnecting ? 'animate-spin' : ''} />}
             >
-              重新连接 / 切换账号
+              强制重试
             </Button>
             {data?.connectedAt && (
-              <Text type="secondary" style={{ fontSize: 12 }}>
-                上线时间: {new Date(data.connectedAt).toLocaleString()}
-              </Text>
+              <div style={{ textAlign: 'center', marginTop: 8 }}>
+                <Text className="memory-time">
+                  上线时间: {new Date(data.connectedAt).toLocaleString()}
+                </Text>
+              </div>
             )}
           </Space>
         </div>

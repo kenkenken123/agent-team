@@ -11,6 +11,7 @@ public class MessageIngestionService(
     AppDbContext db,
     MessageRouterService router,
     ClaudeCodeService claudeService,
+    ButlerMemoryService memoryService,
     ILogger<MessageIngestionService> logger)
 {
     public async Task<IncomingMessage> IngestAsync(ParsedMessage message)
@@ -45,6 +46,9 @@ public class MessageIngestionService(
 
         db.IncomingMessages.Add(incoming);
         await db.SaveChangesAsync();
+
+        // 记录用户消息到管家的短期记忆队列
+        await memoryService.AddShortTermMemoryAsync("user", incoming.ParsedText);
 
         try
         {

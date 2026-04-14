@@ -1,0 +1,142 @@
+.butler-memory-page {
+  padding: 32px;
+  max-width: 1300px;
+  margin: 0 auto;
+}
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  margin-bottom: 24px;
+  width: 100%;
+}
+
+.page-header h2 {
+  margin: 0;
+  color: #F0F6FC;
+}
+
+.glass-card {
+  background: rgba(22, 27, 34, 0.6);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(48, 54, 61, 0.5);
+  border-radius: 12px;
+  min-height: 600px;
+  min-width: 800px;
+}
+
+/* Tabs Styling */
+.glass-card .ant-tabs-nav::before {
+  border-bottom: 1px solid rgba(48, 54, 61, 0.5) !important;
+}
+
+.glass-card .ant-tabs-tab {
+  color: #8b949e !important;
+  font-weight: 500;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.glass-card .ant-tabs-tab-active .ant-tabs-tab-btn {
+  color: #e6edf3 !important;
+}
+
+.glass-card .ant-tabs-ink-bar {
+  background: #58a6ff !important;
+  height: 2px !important;
+}
+
+.memory-list .memory-item {
+  padding: 20px 0;
+  border-bottom: 1px solid rgba(48, 54, 61, 0.5) !important;
+  transition: background 0.2s;
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Ant Design Table Overrides for Glassmorphism */
+.ant-table {
+  background: transparent !important;
+  color: #e6edf3 !important;
+}
+
+.ant-table-thead>tr>th {
+  background: rgba(48, 54, 61, 0.2) !important;
+  color: #8b949e !important;
+  border-bottom: 1px solid rgba(48, 54, 61, 0.5) !important;
+  font-weight: 600 !important;
+}
+
+.ant-table-tbody>tr>td {
+  border-bottom: 1px solid rgba(48, 54, 61, 0.3) !important;
+  transition: all 0.2s;
+}
+
+.ant-table-tbody>tr:hover>td {
+  background: rgba(48, 54, 61, 0.2) !important;
+}
+
+/* Empty State */
+.ant-empty-description {
+  color: #8b949e !important;
+  font-style: italic;
+}
+
+.memory-list .memory-item:hover {
+  background: rgba(48, 54, 61, 0.2);
+}
+
+.memory-id {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 13px;
+  color: #e6edf3;
+  letter-spacing: -0.2px;
+}
+
+.memory-time {
+  color: #8b949e;
+  font-size: 12px;
+}
+
+.btn-edit-memory {
+  color: #d29922 !important;
+}
+
+.btn-edit-memory:hover {
+  background: rgba(210, 153, 34, 0.1) !important;
+}
+
+.btn-delete-memory {
+  color: #f85149 !important;
+}
+
+.btn-delete-memory:hover {
+  background: rgba(248, 81, 73, 0.1) !important;
+}
+
+.profile-container {
+  padding: 16px 0;
+}
+
+.profile-pre {
+  background: rgba(13, 17, 23, 0.6);
+  padding: 16px;
+  border-radius: 8px;
+  border: 1px solid #30363D;
+  color: #8B949E;
+  font-family: 'Inter', monospace;
+  overflow-x: auto;
+  margin-bottom: 16px;
+}

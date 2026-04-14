@@ -11,6 +11,7 @@ namespace AgentTeam.Api.Services;
 public class MessageRouterService(
     AppDbContext db,
     IHttpClientFactory httpClientFactory,
+    ButlerMemoryService butlerMemoryService,
     ILogger<MessageRouterService> logger)
 {
     private class RouterResponse
@@ -53,9 +54,15 @@ public class MessageRouterService(
                 : a.Template.SystemPrompt
         });
 
-        var prompt = $@"你是一个智能分发器。根据以下消息内容，判断是否有合适的 Agent 处理，并尝试提取其中包含的本地文件路径（工作目录）。
+        var memoryContext = await butlerMemoryService.GetMemoryContextAsync(excludeLastUserMessage: true);
+
+        var prompt = $@"你是一个智能分发器。根据以下消息内容以及管家记忆（包含此前的聊天上下文和长期规则），判断是否有合适的 Agent 处理，并尝试提取其中包含的本地文件路径（工作目录）。
+
+【管家记忆上下文】
+{memoryContext}
+
 如果有合适的 Agent，返回 JSON 格式: {{""agentId"": ""..."", ""reason"": ""..."", ""workingDirectory"": ""提取到的路径或 null""}}
-如果没有合适的 Agent，返回 JSON 格式: {{""agentId"": null, ""reason"": ""没找到合适的 Agent"", ""workingDirectory"": null}}
+如果没有任何合适的 Agent 能够解决甚至相关，才可以返回: {{""agentId"": null, ""reason"": ""没找到合适的 Agent"", ""workingDirectory"": null}}
 
 注意：
 1. 路径提取应包含盘符和文件夹（如 D:\project\foo）。
@@ -67,6 +74,8 @@ public class MessageRouterService(
 
 消息内容：
 {messageText}";
+
+        logger.LogInformation("[LLM Router] Request Prompt: {Prompt}", prompt);
 
         try
         {
@@ -89,6 +98,8 @@ public class MessageRouterService(
 
             var result = await response.Content.ReadFromJsonAsync<JsonElement>();
             var content = result.GetProperty("choices")[0].GetProperty("message").GetProperty("content").GetString() ?? "";
+            
+            logger.LogInformation("[LLM Router] Raw Response: {Response}", content);
 
             // 清理可能的 Markdown 格式标记
             if (content.Contains("```"))
@@ -195,13 +206,22 @@ public class MessageRouterService(
             return originalPrompt; // 无法优化，返回原值
         }
 
-        var systemPrompt = @"你是一个 Prompt 优化专家。你的任务是优化用户的指令，使其更清晰、更具体、更容易被 AI Agent 理解。
-保持原始含义的基础上：
-1. 明确任务目标。
-2. 纠正可能的拼写或逻辑模糊。
-3. 如果指令过短或不完整，尝试在合理范围内补全语义。
-4. 始终使用中文返回优化后的内容。
-5. 只返回优化后的字符串，不要有其他前言或 Markdown 标签。";
+        var memoryContext = await butlerMemoryService.GetMemoryContextAsync(excludeLastUserMessage: true);
+
+        var systemPrompt = $@"你是一个 Prompt 优化专家（管家）。你的任务是结合当前的系统记忆上下文，优化用户的原始指令，使其更清晰、更具体、更容易被后端的执行 Agent 理解。
+保持原始核心意图的基础上：
+1. 结合【管家记忆上下文】，如果用户提到“那个文件”、“刚才的方法”或缺失了明确的工作目录、文件名，请帮助他直接在 Prompt 中补全这些信息。
+2. 明确任务目标。
+3. 纠正可能的拼写或逻辑模糊。
+4. 如果指令过短或不完整，在明确的记忆参考下补全它。
+5. 始终使用中文返回优化后的内容。
+6. **只返回优化后的最终指令字符串，不要有其他解释、前言或 Markdown 标签。不要自问自答。**
+
+【管家记忆上下文】
+{memoryContext}";
+
+        logger.LogInformation("[LLM Optimizer] Request SystemPrompt: {SystemPrompt}", systemPrompt);
+        logger.LogInformation("[LLM Optimizer] Request UserPrompt: {UserPrompt}", originalPrompt);
 
         try
         {
@@ -226,6 +246,8 @@ public class MessageRouterService(
 
             var result = await response.Content.ReadFromJsonAsync<JsonElement>();
             var content = result.GetProperty("choices")[0].GetProperty("message").GetProperty("content").GetString() ?? originalPrompt;
+
+            logger.LogInformation("[LLM Optimizer] Optimized Result: {Result}", content);
 
             return content.Trim();
         }

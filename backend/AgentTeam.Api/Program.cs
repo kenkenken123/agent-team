@@ -38,6 +38,7 @@ builder.Services.AddSingleton<GitService>();
 builder.Services.AddSingleton<WeChatBridgeService>(); // 新增
 builder.Services.AddScoped<MessageRouterService>();
 builder.Services.AddScoped<MessageIngestionService>();
+builder.Services.AddSingleton<ButlerMemoryService>();
 
 // CORS
 builder.Services.AddCors(opts =>

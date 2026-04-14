@@ -13,10 +13,11 @@ namespace AgentTeam.Api.Services;
 public class ClaudeCodeService(
     IServiceScopeFactory scopeFactory,
     OutputFileService outputFileService,
+    ButlerMemoryService butlerMemoryService,
     ILogger<ClaudeCodeService> logger)
 {
-    // 保存运行中的进程 taskId -> Process
     private readonly Dictionary<Guid, System.Diagnostics.Process> _runningProcesses = [];
+    private readonly Dictionary<Guid, System.Text.StringBuilder> _lastAssistantMessages = [];
     private readonly Lock _lock = new();
 
     // WebSocket 推送委托：外部订阅后可实时接收输出
@@ -192,6 +193,33 @@ public class ClaudeCodeService(
 
             lock (_lock) { _runningProcesses.Remove(task.Id); }
 
+            // 触发即时记忆评估
+            string? finalMessage = null;
+            lock (_lock)
+            {
+                // 此时进程已经结束，无论成功失败都必须清理助手消息缓存
+                if (_lastAssistantMessages.TryGetValue(task.Id, out var sb))
+                {
+                    finalMessage = sb.ToString();
+                    _lastAssistantMessages.Remove(task.Id);
+                }
+            }
+
+            if (exitCode == 0 && !string.IsNullOrWhiteSpace(finalMessage))
+            {
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        await butlerMemoryService.ImmediateEvaluationAsync(task.Prompt, finalMessage);
+                    }
+                    catch (Exception ex)
+                    {
+                        logger.LogError(ex, "[Task {TaskId}] 触发自动即时记忆评估失败", task.Id);
+                    }
+                });
+            }
+
             var statusStr = exitCode == 0 ? "Completed" : "Failed";
             await NotifyStatusAsync(task.Id, statusStr);
             logger.LogInformation("任务 {TaskId} 结束，退出码: {ExitCode}", task.Id, exitCode);
@@ -223,6 +251,13 @@ public class ClaudeCodeService(
                 await db.SaveChangesAsync();
             }
             await NotifyStatusAsync(taskId, "Cancelled");
+
+            // 主动进行内存清理，防止 _lastAssistantMessages 堆积
+            lock (_lock)
+            {
+                _lastAssistantMessages.Remove(taskId);
+            }
+
             return true;
         }
         catch (Exception ex)
@@ -279,7 +314,9 @@ public class ClaudeCodeService(
 
         if (agent.Template != null && !string.IsNullOrWhiteSpace(agent.Template.SystemPrompt))
         {
-            var escapedPrompt = agent.Template.SystemPrompt.Replace("\"", "\\\"");
+            // 重要：必须替换换行符为空格，并转义双引号。
+            // 换行符（\n 或 \r）在 Windows CMD 下会导致命令输入流被提前截断，从而引发命令解析错误或丢失。
+            var escapedPrompt = agent.Template.SystemPrompt.Replace("\r", " ").Replace("\n", " ").Replace("\"", "\\\"");
             args.Append($"--system-prompt \"{escapedPrompt}\" ");
         }
 
@@ -299,7 +336,8 @@ public class ClaudeCodeService(
             var images = task.ImageUrls.Split(';');
             finalPrompt += "\n[附图: " + string.Join(", ", images) + "]";
         }
-        var escapedUserPrompt = finalPrompt.Replace("\"", "\\\"");
+        // 对用户 Prompt 同样进行清理，原因同上：防止换行符破坏 CMD 命令行结构。
+        var escapedUserPrompt = finalPrompt.Replace("\r", " ").Replace("\n", " ").Replace("\"", "\\\"");
         args.Append($"\"{escapedUserPrompt}\"");
 
         var executable = System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Windows)
@@ -380,14 +418,30 @@ public class ClaudeCodeService(
                 var type = typeEl.GetString();
 
                 // 1. 助手消息或其 Delta
-                if (type == "assistant" || type == "message" || type == "content_block_delta")
+                if (type == "assistant" || type == "message" || type == "content_block_delta" || type == "message_start")
                 {
+                    if (type == "message_start" || type == "message")
+                    {
+                        lock (_lock)
+                        {
+                            _lastAssistantMessages[taskId] = new System.Text.StringBuilder();
+                        }
+                    }
+
                     // 处理 content_block_delta (流式常用)
                     if (root.TryGetProperty("delta", out var deltaEl))
                     {
                         if (deltaEl.TryGetProperty("type", out var det) && det.GetString() == "text_delta")
                         {
                             extractedText = deltaEl.TryGetProperty("text", out var t) ? t.GetString() : null;
+                            if (extractedText != null)
+                            {
+                                lock (_lock)
+                                {
+                                    if (!_lastAssistantMessages.ContainsKey(taskId)) _lastAssistantMessages[taskId] = new System.Text.StringBuilder();
+                                    _lastAssistantMessages[taskId].Append(extractedText);
+                                }
+                            }
                         }
                         else if (deltaEl.TryGetProperty("type", out var det2) && det2.GetString() == "thought_delta")
                         {
@@ -405,7 +459,15 @@ public class ClaudeCodeService(
                             {
                                 var itemType = itemTypeEl.GetString();
                                 if (itemType == "text" && item.TryGetProperty("text", out var textEl))
-                                    sb.Append(textEl.GetString());
+                                {
+                                    var text = textEl.GetString();
+                                    sb.Append(text);
+                                    lock (_lock)
+                                    {
+                                        if (!_lastAssistantMessages.ContainsKey(taskId)) _lastAssistantMessages[taskId] = new System.Text.StringBuilder();
+                                        _lastAssistantMessages[taskId].Append(text);
+                                    }
+                                }
                                 else if (itemType == "tool_use")
                                 {
                                     sb.Append(ParseToolUse(item));

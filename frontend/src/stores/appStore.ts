@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-export type PageKey = 'dashboard' | 'agents' | 'console' | 'history' | 'simulation' | 'settings' | 'butler' | 'config' | 'kanban' | 'system' | 'initialSetup' | 'wechat';
+export type PageKey = 'dashboard' | 'agents' | 'console' | 'history' | 'simulation' | 'settings' | 'butler' | 'butlerMemory' | 'config' | 'kanban' | 'system' | 'initialSetup' | 'wechat';
 
 export interface QueuedMessage {
   prompt: string;
@@ -32,8 +32,15 @@ interface AppState {
   setQueuedMessage: (msg: QueuedMessage | null) => void;
 }
 
+// 获取初始 Hash 对应的页面，如果无效则默认 'butler'
+const getInitialPage = (): PageKey => {
+  const hash = typeof window !== 'undefined' ? window.location.hash.replace('#', '') : '';
+  const validPages: PageKey[] = ['dashboard', 'agents', 'console', 'history', 'simulation', 'settings', 'butler', 'butlerMemory', 'config', 'kanban', 'system', 'initialSetup', 'wechat'];
+  return (hash && validPages.includes(hash as PageKey)) ? (hash as PageKey) : 'butler';
+};
+
 export const useAppStore = create<AppState>((set) => ({
-  currentPage: 'butler',
+  currentPage: getInitialPage(),
   selectedAgentId: null,
   selectedSessionId: null,
   initialConsoleTab: null,

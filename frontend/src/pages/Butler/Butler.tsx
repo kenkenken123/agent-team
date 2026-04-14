@@ -105,9 +105,9 @@ const ButlerPage: React.FC = () => {
                 </div>
             </Typography>
 
-            <Space direction="vertical" size={24} style={{ width: '100%' }}>
+            <Space orientation="vertical" size={24} style={{ width: '100%' }}>
                 {/* 第一层：操作区 */}
-                <Card bordered={false} className="butler-input-card">
+                <Card variant="borderless" className="butler-input-card">
                     <div className={`input-section-transition ${loading ? 'input-faded' : ''}`}>
                         <Form 
                             form={msgForm} 
@@ -129,7 +129,7 @@ const ButlerPage: React.FC = () => {
                                             className={!selectedAgentId ? 'select-auto-identify' : ''}
                                             style={{ width: '100%' }}
                                             size="large"
-                                            dropdownStyle={{ background: '#161b22', border: '1px solid #30363d' }}
+                                            styles={{ popup: { root: { background: '#161b22', border: '1px solid #30363d' } } }}
                                         >
                                             {agents.map(agent => (
                                                 <Option key={agent.id} value={agent.id}>
@@ -240,7 +240,7 @@ const ButlerPage: React.FC = () => {
                         <div className="routing-result-box" style={{ marginTop: 24 }}>
                             <Badge.Ribbon text="分析结果" color={routingResult.status === 'Routed' ? '#238636' : '#d29922'}>
                                 <div style={{ padding: '20px', background: '#1C2128', borderRadius: 12, border: '1px solid #30363D' }}>
-                                    <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+                                    <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
                                         <div>
                                             <Text strong style={{ fontSize: 16 }}>处理状态：</Text> {getStatusTag(routingResult.status)}
                                         </div>
@@ -283,68 +283,62 @@ const ButlerPage: React.FC = () => {
                         <span>历史流水</span>
                     </div>
                   } 
-                  bordered={false}
+                  variant="borderless"
                   className="history-stream-card"
                 >
-                    <List
-                        className="msg-history-list"
-                        dataSource={messages}
-                        locale={{ 
-                            emptyText: (
-                                <Empty 
-                                    image={<HistoryOutlined style={{ fontSize: 48, color: '#30363d' }} />}
-                                    description={<span style={{ color: '#8b949e' }}>时光静好，暂无历史</span>}
-                                />
-                            ) 
-                        }}
-                        renderItem={(item: IncomingMessage) => (
-                            <List.Item
-                                key={item.id}
-                                className="history-stream-item"
-                            >
-                                <div className="stream-item-content">
-                                    <div className="stream-header">
-                                        <div className="stream-time">
-                                            {new Date(item.createdAt).toLocaleString()}
-                                        </div>
-                                        <div className="stream-right-meta">
-                                            <Tag color="#21262d" style={{ color: '#8b949e', border: '1px solid #30363d' }}>
-                                                {item.source || 'Web'}
-                                            </Tag>
-                                            <span style={{ fontSize: 12, color: '#6e7681' }}>#{item.id.substring(0,6)}</span>
-                                        </div>
-                                    </div>
-                                    
-                                    <div className="stream-body">
-                                        <div className="stream-text">
-                                            {item.parsedText}
-                                        </div>
-                                        {item.routerReason && (
-                                            <div className="stream-feedback">
-                                                {item.routerReason}
+                    <div className="msg-history-list">
+                        {messages.length === 0 ? (
+                            <Empty 
+                                image={<HistoryOutlined style={{ fontSize: 48, color: '#30363d' }} />}
+                                description={<span style={{ color: '#8b949e' }}>时光静好，暂无历史</span>}
+                            />
+                        ) : (
+                            messages.map((item: IncomingMessage) => (
+                                <div key={item.id} className="history-stream-item">
+                                    <div className="stream-item-content">
+                                        <div className="stream-header">
+                                            <div className="stream-time">
+                                                {new Date(item.createdAt).toLocaleString()}
                                             </div>
-                                        )}
-                                    </div>
-                                    
-                                    <div className="stream-footer">
-                                        <div className="stream-status">
-                                            {getStatusTag(item.status)}
-                                        </div>
-                                        {item.triggeredTaskId && (
-                                            <div className="stream-action">
-                                                <Button 
-                                                    className="ghost-action-btn"
-                                                    onClick={() => goToConsole(item.triggeredAgentId, item.triggeredTaskId)}
-                                                >
-                                                    查看任务 <ArrowRightOutlined />
-                                                </Button>
+                                            <div className="stream-right-meta">
+                                                <Tag color="#21262d" style={{ color: '#8b949e', border: '1px solid #30363d' }}>
+                                                    {item.source || 'Web'}
+                                                </Tag>
+                                                <span style={{ fontSize: 12, color: '#6e7681' }}>#{item.id.substring(0,6)}</span>
                                             </div>
-                                        )}
+                                        </div>
+                                        
+                                        <div className="stream-body">
+                                            <div className="stream-text">
+                                                {item.parsedText}
+                                            </div>
+                                            {item.routerReason && (
+                                                <div className="stream-feedback">
+                                                    {item.routerReason}
+                                                </div>
+                                            )}
+                                        </div>
+                                        
+                                        <div className="stream-footer">
+                                            <div className="stream-status">
+                                                {getStatusTag(item.status)}
+                                            </div>
+                                            {item.triggeredTaskId && (
+                                                <div className="stream-action">
+                                                    <Button 
+                                                        className="ghost-action-btn"
+                                                        onClick={() => goToConsole(item.triggeredAgentId, item.triggeredTaskId)}
+                                                    >
+                                                        查看任务 <ArrowRightOutlined />
+                                                    </Button>
+                                                </div>
+                                            )}
+                                        </div>
                                     </div>
                                 </div>
-                            </List.Item>
+                            ))
                         )}
-                    />
+                    </div>
                 </Card>
             </Space>
         </div>

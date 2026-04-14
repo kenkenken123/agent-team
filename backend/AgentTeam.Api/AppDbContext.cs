@@ -17,6 +17,7 @@ public class AppDbContext : DbContext
     public DbSet<IncomingMessage> IncomingMessages { get; set; } = null!;
     public DbSet<CredentialTemplate> CredentialTemplates { get; set; } = null!;
     public DbSet<ModelConfig> ModelConfigs { get; set; } = null!;
+    public DbSet<LongTermMemory> Memories { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

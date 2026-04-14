@@ -27,3 +27,4 @@ data/
 # WeChat Data
 .wechatbot-data/
 wechat-service/.wechatbot-data/
+backend/AgentTeam.Api/.memories/*
