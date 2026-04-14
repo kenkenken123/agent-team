@@ -1,9 +1,43 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using AgentTeam.Api.Data;
 using AgentTeam.Api.Services;
 using AgentTeam.Api.WebSockets;
 using Microsoft.EntityFrameworkCore;
+
+// 自定义 DateTime 序列化器：确保 UTC 时间带上 Z 标记
+public class UtcDateTimeConverter : JsonConverter<DateTime>
+{
+    public override DateTime Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        return DateTime.Parse(reader.GetString()!, null, System.Globalization.DateTimeStyles.RoundtripKind);
+    }
+
+    public override void Write(Utf8JsonWriter writer, DateTime value, JsonSerializerOptions options)
+    {
+        var utcValue = value.Kind == DateTimeKind.Utc ? value : DateTime.SpecifyKind(value, DateTimeKind.Utc);
+        writer.WriteStringValue(utcValue);
+    }
+}
+
+// 自定义 DateTime? 序列化器
+public class UtcDateTimeNullableConverter : JsonConverter<DateTime?>
+{
+    public override DateTime? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        var s = reader.GetString();
+        if (string.IsNullOrEmpty(s)) return null;
+        return DateTime.Parse(s, null, System.Globalization.DateTimeStyles.RoundtripKind);
+    }
+
+    public override void Write(Utf8JsonWriter writer, DateTime? value, JsonSerializerOptions options)
+    {
+        if (!value.HasValue) { writer.WriteNullValue(); return; }
+        var utcValue = value.Value.Kind == DateTimeKind.Utc ? value.Value : DateTime.SpecifyKind(value.Value, DateTimeKind.Utc);
+        writer.WriteStringValue(utcValue);
+    }
+}
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -18,6 +52,8 @@ builder.Services.AddControllers()
     .AddJsonOptions(o =>
     {
         o.JsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
+        o.JsonSerializerOptions.Converters.Add(new UtcDateTimeConverter());
+        o.JsonSerializerOptions.Converters.Add(new UtcDateTimeNullableConverter());
     });
 
 builder.Services.AddOpenApi();

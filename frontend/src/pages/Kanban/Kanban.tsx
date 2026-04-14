@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
+import utc from 'dayjs/plugin/utc';
 
 import { agentApi } from '../../api/agentApi';
 import { taskApi } from '../../api/taskApi';
@@ -28,8 +29,19 @@ import type { Agent, AgentTask, TaskStatus } from '../../types';
 import './Kanban.css';
 
 dayjs.extend(relativeTime);
+dayjs.extend(utc);
 
-// 模拟“占位会话”类型
+/** 解析后端返回的时间字符串为本地时间（后端存的是 UTC，但不带 Z 标记） */
+const parseTime = (value: string): dayjs.Dayjs => {
+  // 如果已经有 Z 或其他时区标记，直接解析
+  if (value.endsWith('Z') || value.includes('+')) {
+    return dayjs(value);
+  }
+  // 否则当作 UTC 时间解析
+  return dayjs.utc(value).local();
+};
+
+// 模拟”占位会话”类型
 interface KanbanSession {
   sessionId: string;
   agentId: string;
@@ -94,6 +106,11 @@ const KanbanPage: React.FC = () => {
     }
   }, [dataSyncVersion, loadData]);
 
+  // 获取任务的最后触发时间：优先使用 startedAt，回退到 createdAt
+  const getTaskTriggerTime = (task: AgentTask): string => {
+    return task.startedAt || task.createdAt;
+  };
+
   // 将任务聚合为会话
   const sessions = useMemo(() => {
     const sessionMap = new Map<string, KanbanSession>();
@@ -101,15 +118,16 @@ const KanbanPage: React.FC = () => {
     tasks.forEach(task => {
       const sid = task.claudeSessionId || `single-${task.id}`;
       const existing = sessionMap.get(sid);
+      const triggerTime = getTaskTriggerTime(task);
 
-      if (!existing || dayjs(task.createdAt).isAfter(dayjs(existing.updatedAt))) {
+      if (!existing || parseTime(triggerTime).isAfter(parseTime(existing.updatedAt))) {
         sessionMap.set(sid, {
           sessionId: task.claudeSessionId || '',
           agentId: task.agentId,
           agentName: task.agentName || 'Unknown Agent',
           latestTask: task,
           status: task.status,
-          updatedAt: task.createdAt,
+          updatedAt: triggerTime,
           lastOutput: '',
           isPlaceholder: false
         });
@@ -129,7 +147,7 @@ const KanbanPage: React.FC = () => {
     if (filterAgentIds.length > 0) {
       list = list.filter(s => filterAgentIds.includes(s.agentId));
     }
-    return list.sort((a, b) => dayjs(b.updatedAt).unix() - dayjs(a.updatedAt).unix());
+    return list.sort((a, b) => parseTime(b.updatedAt).unix() - parseTime(a.updatedAt).unix());
   }, [sessions, filterAgentIds]);
 
   useEffect(() => {
@@ -356,7 +374,7 @@ const KanbanPage: React.FC = () => {
             </div>
             <div className="time-ago">
               <Clock size={12} />
-              <span>{dayjs(session.updatedAt).fromNow()}</span>
+              <span>{parseTime(session.updatedAt).fromNow()}</span>
             </div>
           </div>
         </div>
