@@ -39,8 +39,11 @@ const mediaHandler = new MediaHandler(bot);
 bot.onMessage(async (msg) => {
   const userId = msg.userId ?? 'unknown';
   const text   = msg.text ?? '';
+  const type   = msg.type ?? 'text'; // 假设 SDK 带有消息类型
 
-  console.log(`[WeChat] 收到消息 from=${userId}: ${text.slice(0, 80)}`);
+  console.log(`\n[MSG] >>> 收到微信消息 [${type}]`);
+  console.log(`[MSG] From: ${userId}`);
+  console.log(`[MSG] Content: ${text.slice(0, 200)}${text.length > 200 ? '...' : ''}`);
 
   // 更新用户会话记录
   const existingSession = userSessions.get(userId);
@@ -52,14 +55,19 @@ bot.onMessage(async (msg) => {
   });
   state.sessionCount = userSessions.size;
 
-  // 开始 Typing 心跳（在 Agent 处理期间持续显示"正在输入"）
+  // 开始 Typing 心跳
+  console.log(`[FLOW] 正在为用户 ${userId} 开启 "正在输入..." 状态`);
   typingManager.start(userId);
 
   try {
     // 处理媒体消息
     const media = await mediaHandler.handle(msg);
+    if (media) {
+      console.log(`[FLOW] 检测到附件内容: ${media.type}${media.fileName ? ' (' + media.fileName + ')' : ''}`);
+    }
 
-    // 路由给后端 agent-team 的 MessageIngestionService
+    // 路由给后端
+    console.log(`[FLOW] 正在将消息转发至后端 Agent 系统...`);
     const result = await routeToBackend({
       userId,
       text,
@@ -68,17 +76,18 @@ bot.onMessage(async (msg) => {
     });
 
     if (!result.success) {
-      console.error('[WeChat] 路由失败:', result.error);
-      await bot.reply(msg, '抱歉，消息处理失败，请稍后重试。');
+      console.error(`[FLOW] ❌ 转发失败: ${result.error}`);
+      await bot.reply(msg, '抱歉，系统处理失败，请稍后重试。');
     } else {
-      console.log(`[WeChat] 消息已提交给后端，任务 ID: ${result.messageId}`);
+      console.log(`[FLOW] ✅ 转发成功，任务 ID: ${result.messageId}`);
     }
   } catch (err) {
-    console.error('[WeChat] 消息处理异常:', err);
-    await bot.reply(msg, '系统内部错误，请稍后重试。');
+    console.error(`[FLOW] ❌ 消息流程异常:`, err);
+    await bot.reply(msg, '系统内部故障，请联系管理员。');
   } finally {
     // 停止 Typing 心跳
     typingManager.stop(userId);
+    console.log(`[FLOW] 流程结束，已关闭 "正在输入..." 状态\n`);
   }
 });
 
@@ -91,6 +100,14 @@ bot.on('login', (creds: { accountId?: string }) => {
   state.qrUrl = undefined;
   state.lastUpdate = new Date().toISOString();
   console.log(`[WeChat] ✅ 登录成功！账户: ${creds.accountId}`);
+
+  // 关键：确保消息监听循环正在运行
+  if (!bot.isRunning) {
+    console.log('[WeChat] 正在为新会话启动监听循环...');
+    bot.start().catch(err => {
+      console.error('[WeChat] 启动监听循环失败:', err);
+    });
+  }
 });
 
 bot.on('session:expired', () => {

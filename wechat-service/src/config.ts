@@ -3,7 +3,7 @@
 
 export const config = {
   /** agent-team 后端 API 地址 */
-  backendUrl: process.env.BACKEND_URL ?? 'http://localhost:5501',
+  backendUrl: process.env.BACKEND_URL ?? 'http://127.0.0.1:5501',
 
   /** 本服务监听端口（供后端管理 API 调用） */
   servicePort: parseInt(process.env.WECHAT_SERVICE_PORT ?? '5600'),

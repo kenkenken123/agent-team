@@ -28,9 +28,12 @@ public class MessageIngestController(
         if (string.IsNullOrWhiteSpace(req.Text))
             return BadRequest(new { error = "消息内容不能为空" });
 
+        var sourceName = req.SourceName ?? "WebPage";
+        if (sourceName.ToLower() == "wechat") sourceName = "WeChat";
+
         var parsed = new ParsedMessage
         {
-            SourceName = req.SourceName ?? "WebPage",
+            SourceName = sourceName,
             SenderId   = req.SenderId,
             Text = req.Text,
             AgentId = req.AgentId,

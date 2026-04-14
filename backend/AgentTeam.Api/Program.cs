@@ -89,39 +89,43 @@ claudeService.OnStatusChanged += async (taskId, status) =>
     var msg = JsonSerializer.Serialize(new { type = "status", taskId, status }, jsonOptions);
     await wsManager.BroadcastAsync(taskId, msg);
 
-    // 微信集成：当任务完成时，自动回复结果
-    if (status == "Completed")
+    // 微信集成：当任务状态变化时自动反馈
+    _ = Task.Run(async () =>
     {
-        _ = Task.Run(async () =>
+        try
         {
-            try
+            using var scope = app.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var incoming = await db.IncomingMessages.FirstOrDefaultAsync(m => m.TriggeredTaskId == taskId);
+
+            if (incoming == null || !string.Equals(incoming.Source, "WeChat", StringComparison.OrdinalIgnoreCase) || string.IsNullOrEmpty(incoming.SourceMessageId))
+                return;
+
+            if (status == "Running")
             {
-                using var scope = app.Services.CreateScope();
-                var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-                var incoming = await db.IncomingMessages.FirstOrDefaultAsync(m => m.TriggeredTaskId == taskId);
-                
-                if (incoming != null && incoming.Source == "WeChat" && !string.IsNullOrEmpty(incoming.SourceMessageId))
+                await wechatBridge.SendMessageAsync(incoming.SourceMessageId, "⏳ Agent 已接收任务，开始深度处理中...");
+            }
+            else if (status == "Completed")
+            {
+                var task = await db.Tasks.FindAsync(taskId);
+                if (task != null && !string.IsNullOrEmpty(task.OutputFilePath) && File.Exists(task.OutputFilePath))
                 {
-                    var task = await db.Tasks.FindAsync(taskId);
-                    if (task != null && !string.IsNullOrEmpty(task.OutputFilePath) && File.Exists(task.OutputFilePath))
-                    {
-                        var content = await File.ReadAllTextAsync(task.OutputFilePath);
-                        // 简单处理：提取最后 1000 个字符并移除 ANSI 代码
-                        var cleanText = Regex.Replace(content, @"\x1B\[[^@-~]*[@-~]", "");
-                        
-                        // 寻找最后一部分内容作为回复（简单截断）
-                        var replyText = cleanText.Length > 2000 ? "..." + cleanText.Substring(cleanText.Length - 1900) : cleanText;
-                        
-                        await wechatBridge.SendMessageAsync(incoming.SourceMessageId, $"✅ 任务已完成：\n\n{replyText}");
-                    }
+                    var content = await File.ReadAllTextAsync(task.OutputFilePath);
+                    var cleanText = Regex.Replace(content, @"\x1B\[[^@-~]*[@-~]", "");
+                    var replyText = cleanText.Length > 2000 ? "..." + cleanText.Substring(cleanText.Length - 1900) : cleanText;
+                    await wechatBridge.SendMessageAsync(incoming.SourceMessageId, $"✅ 任务处理完成：\n\n{replyText}");
                 }
             }
-            catch (Exception ex)
+            else if (status == "Failed")
             {
-                Console.WriteLine($"[WeChat Callback Error] {ex.Message}");
+                await wechatBridge.SendMessageAsync(incoming.SourceMessageId, "❌ 抱歉，Agent 在执行任务时遇到了错误，处理已终止。");
             }
-        });
-    }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[WeChat Callback Error] {ex.Message}");
+        }
+    });
 };
 
 claudeService.OnAskUserQuestion += async (taskId, question, requestId) =>

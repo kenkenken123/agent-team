@@ -10,7 +10,7 @@ if not exist node_modules (
 )
 
 :: Configuration
-set BACKEND_URL=http://localhost:5501
+set BACKEND_URL=http://127.0.0.1:5501
 set WECHAT_SERVICE_PORT=5504
 set WECHAT_STORAGE_DIR=./.wechatbot-data
 
