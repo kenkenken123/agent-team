@@ -45,6 +45,7 @@ const ConsolePage: React.FC = () => {
   const prevSessionTaskCountRef = useRef(0);
   const prevSessionIdRef = useRef<string | null>(null);
   const isInitialLoadRef = useRef(true);
+  const prevAgentIdRef = useRef<string | undefined>(undefined); // 用于追踪 Agent 切换，防止工作目录被意外重置
 
   const autoLaunchTaskIdRef = useRef<string | null>(null);
 
@@ -134,8 +135,9 @@ const ConsolePage: React.FC = () => {
       const activeAgents = agentsData.filter(a => a.isEnabled);
       setAgents(activeAgents);
       setCommonPaths(pathsData);
-      // 如果当前没选，且有可用的 Agent，自动选第一个
+      // 如果当前没选，且有可用的 Agent，自动选第一个并同步 ref
       if (!selectedAgentId && activeAgents.length > 0) {
+        prevAgentIdRef.current = activeAgents[0].id;
         setSelectedAgentId(activeAgents[0].id);
       }
     }).catch(err => {
@@ -244,13 +246,16 @@ const ConsolePage: React.FC = () => {
 
   const selectedAgent = agents.find(a => a.id === selectedAgentId);
 
+  // 仅当 Agent ID 真正切换时才重置模型和工作目录
+  // 防止 setAgents 更新 lastUsedAt 导致 selectedAgent 引用变化而意外重置
   useEffect(() => {
-    if (selectedAgent) {
+    if (selectedAgent && selectedAgentId !== prevAgentIdRef.current) {
+      prevAgentIdRef.current = selectedAgentId;
       const models = selectedAgent.allowedModels?.split(',').map(m => m.trim()).filter(m => m !== '') || [];
       setSelectedModel(models.length > 0 ? models[0] : '');
       setSelectedWorkingDirectory(selectedAgent.workingDirectory);
     }
-  }, [selectedAgentId, selectedAgent]); // 切换 Agent 时重置，agents 加载完成时也需重新赋值
+  }, [selectedAgentId, selectedAgent]);
 
   const handleLaunch = async () => {
     if (!selectedAgentId || !prompt.trim()) {

@@ -82,6 +82,12 @@ public class TasksController(
             prompt = await router.OptimizePromptAsync(prompt);
         }
 
+        // 3. Plan 模式下追加禁止执行提示
+        if (req.PlanMode)
+        {
+            prompt += "\n\n注意: 当前处于分析模式。请分析并给出执行步骤，禁止执行任何文件写入或系统修改操作。";
+        }
+
         // 获取要使用的 SessionId
         string? sessionId = null;
         if (!req.ForceNewSession)

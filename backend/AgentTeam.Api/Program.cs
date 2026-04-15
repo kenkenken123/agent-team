@@ -6,39 +6,6 @@ using AgentTeam.Api.Services;
 using AgentTeam.Api.WebSockets;
 using Microsoft.EntityFrameworkCore;
 
-// 自定义 DateTime 序列化器：确保 UTC 时间带上 Z 标记
-public class UtcDateTimeConverter : JsonConverter<DateTime>
-{
-    public override DateTime Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
-    {
-        return DateTime.Parse(reader.GetString()!, null, System.Globalization.DateTimeStyles.RoundtripKind);
-    }
-
-    public override void Write(Utf8JsonWriter writer, DateTime value, JsonSerializerOptions options)
-    {
-        var utcValue = value.Kind == DateTimeKind.Utc ? value : DateTime.SpecifyKind(value, DateTimeKind.Utc);
-        writer.WriteStringValue(utcValue);
-    }
-}
-
-// 自定义 DateTime? 序列化器
-public class UtcDateTimeNullableConverter : JsonConverter<DateTime?>
-{
-    public override DateTime? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
-    {
-        var s = reader.GetString();
-        if (string.IsNullOrEmpty(s)) return null;
-        return DateTime.Parse(s, null, System.Globalization.DateTimeStyles.RoundtripKind);
-    }
-
-    public override void Write(Utf8JsonWriter writer, DateTime? value, JsonSerializerOptions options)
-    {
-        if (!value.HasValue) { writer.WriteNullValue(); return; }
-        var utcValue = value.Value.Kind == DateTimeKind.Utc ? value.Value : DateTime.SpecifyKind(value.Value, DateTimeKind.Utc);
-        writer.WriteStringValue(utcValue);
-    }
-}
-
 var builder = WebApplication.CreateBuilder(args);
 
 // 配置控制台日志
@@ -185,3 +152,43 @@ app.Map("/ws/task/{taskId:guid}", async (HttpContext context, Guid taskId) =>
 app.MapControllers();
 Console.WriteLine("Backend is running on http://0.0.0.0:5501 ...");
 app.Run("http://0.0.0.0:5501");
+
+// ─── 自定义 DateTime 序列化器：确保 UTC 时间带上 Z 标记 ─────────
+
+/// <summary>
+/// 将 DateTime 序列化为 ISO 8601 格式，始终带 Z 标记（视为 UTC）。
+/// SQLite 读取的 DateTime.Kind 为 Unspecified，此转换器确保输出带时区标记。
+/// </summary>
+public class UtcDateTimeConverter : JsonConverter<DateTime>
+{
+    public override DateTime Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        return DateTime.Parse(reader.GetString()!, null, System.Globalization.DateTimeStyles.RoundtripKind);
+    }
+
+    public override void Write(Utf8JsonWriter writer, DateTime value, JsonSerializerOptions options)
+    {
+        var utcValue = value.Kind == DateTimeKind.Utc ? value : DateTime.SpecifyKind(value, DateTimeKind.Utc);
+        writer.WriteStringValue(utcValue);
+    }
+}
+
+/// <summary>
+/// 将 DateTime? 序列化为 ISO 8601 格式，始终带 Z 标记（视为 UTC）。
+/// </summary>
+public class UtcDateTimeNullableConverter : JsonConverter<DateTime?>
+{
+    public override DateTime? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        var s = reader.GetString();
+        if (string.IsNullOrEmpty(s)) return null;
+        return DateTime.Parse(s, null, System.Globalization.DateTimeStyles.RoundtripKind);
+    }
+
+    public override void Write(Utf8JsonWriter writer, DateTime? value, JsonSerializerOptions options)
+    {
+        if (!value.HasValue) { writer.WriteNullValue(); return; }
+        var utcValue = value.Value.Kind == DateTimeKind.Utc ? value.Value : DateTime.SpecifyKind(value.Value, DateTimeKind.Utc);
+        writer.WriteStringValue(utcValue);
+    }
+}

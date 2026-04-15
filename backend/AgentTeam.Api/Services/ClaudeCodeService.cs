@@ -305,9 +305,16 @@ public class ClaudeCodeService(
         // 注意：--print 必须加上以防陷入交互模式
         args.Append("--print ");
 
-        // 权限模式：使用 default（允许 Hook 拦截），而非 bypassPermissions
-        // Hook 配置已通过 ~/.claude/settings.json 的 hooks.permission_prompt 完成
-        args.Append("--dangerously-skip-permissions ");
+        // 权限模式：根据任务模式选择
+        if (task.IsPlanMode)
+        {
+            args.Append("--permission-mode plan ");
+        }
+        else
+        {
+            // 非 Plan 模式下，默认跳过权限确认以便自动化执行
+            args.Append("--dangerously-skip-permissions ");
+        }
 
         if (!string.IsNullOrEmpty(task.Model))
             args.Append($"--model {task.Model} ");
@@ -323,9 +330,7 @@ public class ClaudeCodeService(
         if (agent.MaxTurns.HasValue)
             args.Append($"--max-turns {agent.MaxTurns} ");
 
-        // Plan 模式：只分析规划，不执行代码修改
-        if (task.IsPlanMode)
-            args.Append("--plan ");
+        // Plan 模式已经在前文 --permission-mode 中处理，此处移除无效的 --plan 参数
 
         // 追加 --output-format stream-json --verbose 以便解析流式的事件与 session_id
         args.Append("--output-format stream-json --verbose ");
