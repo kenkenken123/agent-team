@@ -46,6 +46,9 @@ public class AgentTask
     /// <summary>任务输出日志文件路径</summary>
     public string? OutputFilePath { get; set; }
 
+    /// <summary>任务完成后的最终回答内容（用于快速展示，无需读取完整日志）</summary>
+    public string? FinalResult { get; set; }
+
     public DateTime? StartedAt { get; set; }
     public DateTime? CompletedAt { get; set; }
     public int? ExitCode { get; set; }

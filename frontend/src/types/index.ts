@@ -79,6 +79,7 @@ export interface AgentTask {
   outputTokens?: number;
   model?: string;
   isPlanMode?: boolean;
+  finalResult?: string;
   startedAt?: string;
   completedAt?: string;
   exitCode?: number;

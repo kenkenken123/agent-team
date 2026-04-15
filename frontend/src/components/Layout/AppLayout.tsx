@@ -50,7 +50,7 @@ const PAGE_MAP: Record<PageKey, React.ReactNode> = {
 
 const AppLayout: React.FC = () => {
   const { currentPage, setPage } = useAppStore();
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(true);
 
   // 初始化路由同步
   useEffect(() => {

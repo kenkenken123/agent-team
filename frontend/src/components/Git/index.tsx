@@ -157,7 +157,7 @@ const DiffModal: React.FC<DiffModalProps> = ({ open, file, diffText, loading, on
       footer={null}
       width="92vw"
       closable
-      maskClosable
+      mask={{ closable: true }}
       style={{ top: 20 }}
       styles={{ body: { padding: 0, backgroundColor: '#0D1117', overflow: 'hidden' } }}
       className="diff-modal"
@@ -371,7 +371,7 @@ export const GitDrawer: React.FC<GitDrawerProps> = ({ visible, onClose, workingD
         placement="right"
         onClose={onClose}
         open={visible}
-        width={380}
+        size="default"
         styles={{ body: { padding: 0, background: 'transparent' } }}
         className="git-drawer"
       >

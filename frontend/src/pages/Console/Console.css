@@ -476,3 +476,52 @@
 .chat-flow:hover::-webkit-scrollbar-thumb {
   background: #30363d;
 }
+
+/* Drag-over state for input wrapper */
+.chat-input-wrapper.drag-over {
+  border-color: #58A6FF !important;
+  background: rgba(88, 166, 255, 0.05) !important;
+  transition: all 0.2s ease;
+}
+
+/* File tree drag hint */
+.file-tree .ant-tree-node-content-wrapper {
+  cursor: grab !important;
+}
+
+.file-tree .ant-tree-node-content-wrapper:active {
+  cursor: grabbing !important;
+}
+
+/* Drag-over state for input wrapper */
+.chat-input-wrapper {
+  position: relative;
+  transition: all 0.2s ease;
+}
+
+.chat-input-wrapper.drag-over {
+  background: rgba(88, 166, 255, 0.08) !important;
+}
+
+.chat-input-wrapper.drag-over .chat-input-bar {
+  border-color: #58A6FF !important;
+  box-shadow: 0 0 0 2px rgba(88, 166, 255, 0.3), 0 8px 32px rgba(0, 0, 0, 0.4) !important;
+}
+
+.chat-input-wrapper.drag-over .chat-input-bar::after {
+  content: "释放以添加文件/目录引用";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(13, 17, 23, 0.9);
+  color: #58A6FF;
+  padding: 8px 20px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  pointer-events: none;
+  z-index: 100;
+  border: 1px dashed #58A6FF;
+  white-space: nowrap;
+}

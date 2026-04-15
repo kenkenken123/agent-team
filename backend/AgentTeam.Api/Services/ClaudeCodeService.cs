@@ -188,41 +188,49 @@ public class ClaudeCodeService(
                 freshTask.ExitCode = exitCode;
                 freshTask.CompletedAt = DateTime.UtcNow;
                 freshTask.Status = exitCode == 0 ? Models.TaskStatus.Completed : Models.TaskStatus.Failed;
-                await db.SaveChangesAsync();
-            }
 
-            lock (_lock) { _runningProcesses.Remove(task.Id); }
-
-            // 触发即时记忆评估
-            string? finalMessage = null;
-            lock (_lock)
-            {
-                // 此时进程已经结束，无论成功失败都必须清理助手消息缓存
-                if (_lastAssistantMessages.TryGetValue(task.Id, out var sb))
+                // 提取并保存最终结果
+                string? finalMessage = null;
+                lock (_lock)
                 {
-                    finalMessage = sb.ToString();
-                    _lastAssistantMessages.Remove(task.Id);
+                    if (_lastAssistantMessages.TryGetValue(task.Id, out var sb))
+                    {
+                        finalMessage = sb.ToString();
+                        _lastAssistantMessages.Remove(task.Id);
+                    }
                 }
-            }
 
-            if (exitCode == 0 && !string.IsNullOrWhiteSpace(finalMessage))
-            {
-                _ = Task.Run(async () =>
+                if (exitCode == 0 && !string.IsNullOrWhiteSpace(finalMessage))
                 {
-                    try
-                    {
-                        await butlerMemoryService.ImmediateEvaluationAsync(task.Prompt, finalMessage);
-                    }
-                    catch (Exception ex)
-                    {
-                        logger.LogError(ex, "[Task {TaskId}] 触发自动即时记忆评估失败", task.Id);
-                    }
-                });
-            }
+                    freshTask.FinalResult = finalMessage;
+                    await db.SaveChangesAsync();
 
-            var statusStr = exitCode == 0 ? "Completed" : "Failed";
-            await NotifyStatusAsync(task.Id, statusStr);
-            logger.LogInformation("任务 {TaskId} 结束，退出码: {ExitCode}", task.Id, exitCode);
+                    // 触发即时记忆评估
+                    _ = Task.Run(async () =>
+                    {
+                        try
+                        {
+                            await butlerMemoryService.ImmediateEvaluationAsync(task.Prompt, finalMessage);
+                        }
+                        catch (Exception ex)
+                        {
+                            logger.LogError(ex, "[Task {TaskId}] 触发自动即时记忆评估失败", task.Id);
+                        }
+                    });
+                }
+                else
+                {
+                    await db.SaveChangesAsync();
+                    // 即使没有最终消息也要清理缓存
+                    lock (_lock) { _lastAssistantMessages.Remove(task.Id); }
+                }
+
+                lock (_lock) { _runningProcesses.Remove(task.Id); }
+
+                var statusStr = exitCode == 0 ? "Completed" : "Failed";
+                await NotifyStatusAsync(task.Id, statusStr);
+                logger.LogInformation("任务 {TaskId} 结束，退出码: {ExitCode}", task.Id, exitCode);
+            }
         });
     }
 

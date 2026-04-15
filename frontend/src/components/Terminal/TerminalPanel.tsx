@@ -214,15 +214,45 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ task, onStatusChange }) =
   const taskId = task?.id;
   const taskStatus = task?.status;
 
+  // 清理 ANSI 转义码的工具函数
+  const cleanAnsi = useCallback((text: string) => {
+    return text
+      .replace(/\x1b\[[0-9;]*m/g, '')
+      .replace(/\x1b\[90m\[思考: [\s\S]*?\]\x1b\[0m\r?\n?/g, '')
+      .replace(/\[Claude 正在调用工具: [\s\S]*?\]\r?\n?/g, '[TOOL]')
+      .replace(/\[Claude 提问: [\s\S]*?\]\r?\n?/g, '')
+      .replace(/\[回答完成\]/g, '')
+      .replace(/\[系统错误\][\s\S]*?\r?\n?/g, '')
+      .replace(/┌─.*?\r?\n?/g, '')
+      .replace(/│.*?\r?\n?/g, '')
+      .replace(/└─.*?\r?\n?/g, '');
+  }, []);
+
   useEffect(() => {
     // 初始化或状态变更时的处理
     if (!task) return;
     const terminalStatus = task.status;
     const isFinished = (terminalStatus === 'Completed' || terminalStatus === 'Failed' || terminalStatus === 'Cancelled');
-    
+
+    // 优化：已完成任务且有最终结果时，直接展示结果，不加载完整日志
+    if (isFinished && terminalStatus === 'Completed' && task.finalResult) {
+      if (loadedTaskIdRef.current === task.id && loadedStatusRef.current === terminalStatus) return;
+
+      loadedTaskIdRef.current = task.id;
+      loadedStatusRef.current = terminalStatus;
+
+      // 清理 ANSI 码后直接展示最终结果
+      const cleanedResult = cleanAnsi(task.finalResult).trim();
+      setPreviewContent(cleanedResult);
+      setShowMarkdown(true);
+      setThinkingLogs([]);
+      thinkingCountRef.current = 0;
+      return;
+    }
+
     // 如果是切换了任务，或者任务从未加载过，或者任务刚完成，我们需要拉取历史/补全历史
     if (
-      task.id !== loadedTaskIdRef.current || 
+      task.id !== loadedTaskIdRef.current ||
       (isFinished && loadedStatusRef.current !== terminalStatus) ||
       (!loadedStatusRef.current && terminalStatus === 'Running')
     ) {
@@ -263,7 +293,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ task, onStatusChange }) =
         console.error('加载历史输出失败', err);
       });
     }
-  }, [taskId, taskStatus, clear, processOutput, write]);
+  }, [taskId, taskStatus, clear, processOutput, write, task?.finalResult, cleanAnsi]);
 
   // 处理“加载更多”逻辑
   useEffect(() => {

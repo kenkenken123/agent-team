@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import {
   Space, Select, Button, Modal, Input,
-  message, Popover, Spin, Tooltip
+  message, Popover, Popconfirm, Spin, Tooltip
 } from 'antd';
 import {
   LayoutDashboard,
@@ -18,6 +18,7 @@ import {
   PlayCircle,
   MoreHorizontal
 } from 'lucide-react';
+import { DeleteOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import utc from 'dayjs/plugin/utc';
@@ -25,6 +26,7 @@ import utc from 'dayjs/plugin/utc';
 import { agentApi } from '../../api/agentApi';
 import { taskApi } from '../../api/taskApi';
 import { useAppStore } from '../../stores/appStore';
+import { sortAgents } from '../../utils/sortAgents';
 import type { Agent, AgentTask, TaskStatus } from '../../types';
 import './Kanban.css';
 
@@ -51,6 +53,8 @@ interface KanbanSession {
   updatedAt: string;
   lastOutput?: string;
   isPlaceholder?: boolean;
+  /** 是否为空闲列的”新建会话”占位卡片 */
+  isNewSessionPlaceholder?: boolean;
 }
 
 const KanbanPage: React.FC = () => {
@@ -75,6 +79,26 @@ const KanbanPage: React.FC = () => {
 
   // 任务输出缓存：taskId -> 最后一行有意义的输出
   const [outputCache, setOutputCache] = useState<Record<string, string>>({});
+
+  // 已查看的会话 ID 集合（localStorage 持久化）
+  const [viewedSessionIds, setViewedSessionIds] = useState<Set<string>>(() => {
+    try {
+      const stored = localStorage.getItem('kanban_viewed_sessions');
+      return stored ? new Set(JSON.parse(stored)) : new Set<string>();
+    } catch {
+      return new Set<string>();
+    }
+  });
+
+  // 标记会话为已查看
+  const markAsViewed = (sessionId: string) => {
+    setViewedSessionIds(prev => {
+      const next = new Set(prev);
+      next.add(sessionId);
+      localStorage.setItem('kanban_viewed_sessions', JSON.stringify([...next]));
+      return next;
+    });
+  };
 
   // 加载基础数据
   const loadData = useCallback(async (quiet = false) => {
@@ -150,6 +174,29 @@ const KanbanPage: React.FC = () => {
     return list.sort((a, b) => parseTime(b.updatedAt).unix() - parseTime(a.updatedAt).unix());
   }, [sessions, filterAgentIds]);
 
+  // 空闲等待列的占位卡片: 为每个 Agent 生成"新建会话"入口
+  const idlePlaceholders = useMemo(() => {
+    const sorted = sortAgents(agents);
+    // 找出已有 Pending/Idle 状态真实会话的 agentId
+    const idleAgentIds = new Set(
+      filteredSessions
+        .filter(s => (s.status === 'Pending' || s.status === 'Idle') && !s.isPlaceholder)
+        .map(s => s.agentId)
+    );
+
+    return sorted
+      .filter(a => !idleAgentIds.has(a.id))
+      .map(a => ({
+        sessionId: '',
+        agentId: a.id,
+        agentName: a.name,
+        status: 'Idle' as const,
+        updatedAt: new Date().toISOString(),
+        isPlaceholder: true,
+        isNewSessionPlaceholder: true,
+      }));
+  }, [agents, filteredSessions]);
+
   useEffect(() => {
     const sessionsToLoad = filteredSessions.filter(s => {
       if (!s.latestTask?.id || s.isPlaceholder) return false;
@@ -183,7 +230,7 @@ const KanbanPage: React.FC = () => {
   }, [filteredSessions]);
 
   const columns = {
-    idle: filteredSessions.filter(s => s.status === 'Pending' || s.status === 'Idle'),
+    idle: [...idlePlaceholders, ...filteredSessions.filter(s => s.status === 'Pending' || s.status === 'Idle')],
     running: filteredSessions.filter(s => s.status === 'Running'),
     completed: filteredSessions.filter(s => s.status === 'Completed' || s.status === 'Failed' || s.status === 'Cancelled')
   };
@@ -254,9 +301,33 @@ const KanbanPage: React.FC = () => {
   };
 
   const goToDetail = (session: KanbanSession) => {
+    if (session.sessionId) {
+      markAsViewed(session.sessionId);
+    }
     setSelectedAgentId(session.agentId);
     setSelectedSessionId(session.sessionId || null);
     setPage('console');
+  };
+
+  const handleDeleteSession = async (session: KanbanSession) => {
+    if (!session.latestTask) return;
+    try {
+      await taskApi.deleteSession(session.sessionId || undefined, !session.sessionId ? session.latestTask.id : undefined);
+      message.success('会话已彻底删除');
+      // 清理已查看记录
+      if (session.sessionId) {
+        setViewedSessionIds(prev => {
+          const next = new Set(prev);
+          next.delete(session.sessionId);
+          localStorage.setItem('kanban_viewed_sessions', JSON.stringify([...next]));
+          return next;
+        });
+      }
+      loadData(true);
+      bumpDataSync();
+    } catch (e: any) {
+      message.error(e?.response?.data?.error ?? '删除会话失败');
+    }
   };
 
   const renderStatusInfo = (status: string) => {
@@ -300,8 +371,29 @@ const KanbanPage: React.FC = () => {
   };
 
   const renderCard = (session: KanbanSession) => {
+    // 渲染"新建会话"占位卡片
+    if (session.isNewSessionPlaceholder) {
+      return (
+        <Tooltip key={`new-${session.agentId}`} title={`为 ${session.agentName} 创建新会话`}>
+          <div
+            className="kanban-card kanban-card-placeholder"
+            onClick={() => {
+              setNewAgentId(session.agentId);
+              setIsAddModalOpen(true);
+            }}
+          >
+            <div className="placeholder-content">
+              <Plus size={20} />
+              <span className="placeholder-text">新建会话</span>
+              <span className="placeholder-agent">{session.agentName}</span>
+            </div>
+          </div>
+        </Tooltip>
+      );
+    }
+
     const statusInfo = renderStatusInfo(session.status);
-    
+
     const popoverContent = (
       <div className="card-hover-actions">
         <button
@@ -325,8 +417,22 @@ const KanbanPage: React.FC = () => {
         >
           <UserPlus size={16} /> 在此 Agent 新增会话
         </button>
+        <Popconfirm
+          title={session.status === 'Running' ? '会话中仍有任务在运行，确定要强制终止并删除整个会话吗？' : '确定删除此会话及其所有历史记录？'}
+          onConfirm={(e) => { e?.stopPropagation(); handleDeleteSession(session); }}
+          okText="彻底删除"
+          cancelText="取消"
+          okButtonProps={{ danger: true }}
+        >
+          <button className="action-btn action-btn-danger">
+            <DeleteOutlined /> 删除会话
+          </button>
+        </Popconfirm>
       </div>
     );
+
+    const isCompleted = session.status === 'Completed' || session.status === 'Failed' || session.status === 'Cancelled';
+    const isUnviewed = session.sessionId && isCompleted && !viewedSessionIds.has(session.sessionId);
 
     return (
       <Popover
@@ -336,15 +442,22 @@ const KanbanPage: React.FC = () => {
         placement="rightTop"
         overlayClassName="canvas-popover"
       >
-        <div className={`kanban-card group`}>
+        <div className={`kanban-card group ${isUnviewed ? 'kanban-card-unviewed' : ''}`}>
           <div className="card-header">
             <div className="agent-meta">
               <div className={`status-dot ${statusInfo.dotClass}`} />
               <span className="agent-name">{session.agentName}</span>
             </div>
-            {session.sessionId && (
-              <span className="session-id">#{session.sessionId.substring(0, 8)}</span>
-            )}
+            <div className="session-meta-right">
+              {isUnviewed && (
+                <span className="unviewed-badge" title="尚未查看结果">
+                  未查看
+                </span>
+              )}
+              {session.sessionId && (
+                <span className="session-id">#{session.sessionId.substring(0, 8)}</span>
+              )}
+            </div>
           </div>
 
           <div className="card-body">

@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import {
-  Layout, List, Button, Select, Typography, Space,
+  Layout, Button, Select, Typography, Space,
   message, Popconfirm, Badge, Spin, Empty, Tooltip, Input, Switch,
   Modal,
 } from 'antd';
@@ -10,13 +10,14 @@ import {
   RobotOutlined, ClockCircleOutlined, CheckCircleOutlined,
   CloseCircleOutlined, ExclamationCircleOutlined, DeleteOutlined, PictureOutlined,
   PushpinOutlined, PushpinFilled, DownOutlined, UpOutlined, SearchOutlined, BranchesOutlined,
-  SendOutlined,
+  SendOutlined, FolderOutlined,
 } from '@ant-design/icons';
 import { Upload, Mentions, AutoComplete } from 'antd';
 
 import { agentApi } from '../../api/agentApi';
 import { taskApi } from '../../api/taskApi';
 import { commonPathApi } from '../../api/commonPathApi';
+import FileTreeDrawer from '../../components/FileTreeDrawer';
 import type { Agent, AgentTask, CommonPath } from '../../types';
 import { useAppStore } from '../../stores/appStore';
 import TerminalPanel from '../../components/Terminal/TerminalPanel';
@@ -40,6 +41,11 @@ const ConsolePage: React.FC = () => {
   const [selectedModel, setSelectedModel] = useState<string | undefined>(undefined);
   const [selectedWorkingDirectory, setSelectedWorkingDirectory] = useState<string | undefined>(undefined);
   const [gitDrawerVisible, setGitDrawerVisible] = useState(false);
+  const [fileTreeDrawerVisible, setFileTreeDrawerVisible] = useState(false);
+  const [dragOverInput, setDragOverInput] = useState(false);
+  const inputWrapperRef = useRef<HTMLDivElement>(null);
+  const draggedFilePathRef = useRef<string | null>(null);
+  const draggedFileTypeRef = useRef<'file' | 'directory' | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const prevSessionTaskCountRef = useRef(0);
@@ -343,6 +349,75 @@ const ConsolePage: React.FC = () => {
   };
 
 
+  // 记录从目录树拖拽的文件/目录路径
+  const handleFileTreeDragStart = useCallback((filePath: string, fileType: 'file' | 'directory') => {
+    draggedFilePathRef.current = filePath;
+    draggedFileTypeRef.current = fileType;
+  }, []);
+
+  // 使用原生事件监听器处理拖拽（比 React synthetic event 更可靠）
+  useEffect(() => {
+    const wrapper = inputWrapperRef.current;
+    if (!wrapper) return;
+
+    const isInWrapper = (target: EventTarget | null): boolean => {
+      if (!target || !(target instanceof Node)) return false;
+      return wrapper.contains(target);
+    };
+
+    const handleDragOver = (e: DragEvent) => {
+      // 只处理在 wrapper 内部的事件
+      if (!isInWrapper(e.target)) return;
+      e.preventDefault();
+      setDragOverInput(true);
+    };
+
+    const handleDrop = (e: DragEvent) => {
+      if (!isInWrapper(e.target)) return;
+      e.preventDefault();
+      setDragOverInput(false);
+
+      // 优先使用 ref 中记录的路径（来自目录树的 onDragStart），其次尝试 dataTransfer
+      const filePath = draggedFilePathRef.current || e.dataTransfer?.getData('text/plain');
+      if (filePath) {
+        const fileName = filePath.split(/[\\/]/).pop() || filePath;
+        const fileType = draggedFileTypeRef.current;
+        // 有 fileType 时使用它（来自拖拽源头），无则标注为"路径引用"
+        let label = '路径';
+        if (fileType) {
+          label = fileType === 'directory' ? '目录' : '文件';
+        }
+        const pathRef = `[${label}](${filePath})`;
+        setPrompt(prev => (prev ? `${prev}\n${pathRef}` : pathRef));
+        message.success(`已添加${label}引用: ${fileName}`);
+      }
+      // 清除 ref
+      draggedFilePathRef.current = null;
+      draggedFileTypeRef.current = null;
+    };
+
+    // 离开页面可视区域时清除高亮
+    const handleDragEnd = () => {
+      setDragOverInput(false);
+      draggedFilePathRef.current = null;
+      draggedFileTypeRef.current = null;
+    };
+
+    // 使用捕获阶段，在 document 层级拦截，确保不被子组件阻止
+    document.addEventListener('dragover', handleDragOver, true);
+    document.addEventListener('drop', handleDrop, true);
+    document.addEventListener('dragend', handleDragEnd, true);
+    document.addEventListener('dragleave', handleDragEnd, true);
+
+    return () => {
+      document.removeEventListener('dragover', handleDragOver, true);
+      document.removeEventListener('drop', handleDrop, true);
+      document.removeEventListener('dragend', handleDragEnd, true);
+      document.removeEventListener('dragleave', handleDragEnd, true);
+    };
+  }, []);
+
+
   const handleStatusChange = useCallback((taskId: string, status: string) => {
     setTasks(prev => prev.map(t =>
       t.id === taskId ? { ...t, status: status as AgentTask['status'] } : t
@@ -483,67 +558,64 @@ const ConsolePage: React.FC = () => {
             )}
           </div>
           <Spin spinning={loadingTasks && tasks.length === 0}>
-            <List
-              className="task-list"
-              dataSource={siderTasks}
-              renderItem={task => (
-                <List.Item
-                  className={`task-list-item ${selectedTask?.id === task.id ? 'active' : ''}`}
-                  onClick={() => setSelectedTask(task)}
-                >
-                  <div className="task-item-content">
-                    <div className="task-item-header">
-                      <Space size={6}>
-                        {taskStatusIcon(task.status)}
-                        <Text strong style={{ color: '#C9D1D9', fontSize: 13 }}>
-                          {task.claudeSessionId ? `会话 #${task.claudeSessionId.substring(0, 6)}` : `任务 #${task.id.substring(0, 6)}`}
-                        </Text>
-                      </Space>
-                      <div className="task-item-actions">
-                        {task.status === 'Running' && (
-                          <Button
-                            className="cancel-btn"
-                            type="text" size="small" danger icon={<StopOutlined />}
-                            onClick={(e) => { e.stopPropagation(); handleCancel(task.id); }}
-                            title="停止任务"
-                          />
-                        )}
-                        {task.status !== 'Running' && task.claudeSessionId && (
-                          <Button
-                            className="reload-btn"
-                            type="text" size="small" icon={<ReloadOutlined style={{ color: '#58A6FF' }} />}
-                            onClick={(e) => { e.stopPropagation(); setContinueSession(task.claudeSessionId || null); }}
-                            title="在该会话续写"
-                          />
-                        )}
-                        <Popconfirm
-                          title={task.status === 'Running' ? "会话中仍有任务在运行，确定要强制终止并删除整个会话吗？" : "确定删除此会话及其所有历史记录？"}
-                          onConfirm={(e) => { e?.stopPropagation(); handleDeleteSession(task); }}
-                          onCancel={(e) => e?.stopPropagation()}
-                          okText="彻底删除"
-                          cancelText="取消"
-                          okButtonProps={{ danger: true }}
-                        >
-                          <Button
-                            className="delete-session-btn"
-                            type="text"
-                            size="small"
-                            icon={<DeleteOutlined />}
-                            onClick={(e) => e.stopPropagation()}
-                            title="删除会话"
-                          />
-                        </Popconfirm>
-                      </div>
-
-
-                    </div>
-                    <div className="task-prompt-preview">
-                      {task.claudeSessionId ? `最新: ${task.prompt}` : task.prompt}
+          <div className="task-list">
+            {siderTasks.map(task => (
+              <div
+                key={task.id}
+                className={`task-list-item ${selectedTask?.id === task.id ? 'active' : ''}`}
+                onClick={() => setSelectedTask(task)}
+              >
+                <div className="task-item-content">
+                  <div className="task-item-header">
+                    <Space size={6}>
+                      {taskStatusIcon(task.status)}
+                      <Text strong style={{ color: '#C9D1D9', fontSize: 13 }}>
+                        {task.claudeSessionId ? `会话 #${task.claudeSessionId.substring(0, 6)}` : `任务 #${task.id.substring(0, 6)}`}
+                      </Text>
+                    </Space>
+                    <div className="task-item-actions">
+                      {task.status === 'Running' && (
+                        <Button
+                          className="cancel-btn"
+                          type="text" size="small" danger icon={<StopOutlined />}
+                          onClick={(e) => { e.stopPropagation(); handleCancel(task.id); }}
+                          title="停止任务"
+                        />
+                      )}
+                      {task.status !== 'Running' && task.claudeSessionId && (
+                        <Button
+                          className="reload-btn"
+                          type="text" size="small" icon={<ReloadOutlined style={{ color: '#58A6FF' }} />}
+                          onClick={(e) => { e.stopPropagation(); setContinueSession(task.claudeSessionId || null); }}
+                          title="在该会话续写"
+                        />
+                      )}
+                      <Popconfirm
+                        title={task.status === 'Running' ? "会话中仍有任务在运行，确定要强制终止并删除整个会话吗？" : "确定删除此会话及其所有历史记录？"}
+                        onConfirm={(e) => { e?.stopPropagation(); handleDeleteSession(task); }}
+                        onCancel={(e) => e?.stopPropagation()}
+                        okText="彻底删除"
+                        cancelText="取消"
+                        okButtonProps={{ danger: true }}
+                      >
+                        <Button
+                          className="delete-session-btn"
+                          type="text"
+                          size="small"
+                          icon={<DeleteOutlined />}
+                          onClick={(e) => e.stopPropagation()}
+                          title="删除会话"
+                        />
+                      </Popconfirm>
                     </div>
                   </div>
-                </List.Item>
-              )}
-            />
+                  <div className="task-prompt-preview">
+                    {task.claudeSessionId ? `最新: ${task.prompt}` : task.prompt}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
           </Spin>
         </Sider>
 
@@ -590,7 +662,10 @@ const ConsolePage: React.FC = () => {
           </div>
 
 
-          <div className="chat-input-wrapper">
+          <div
+            ref={inputWrapperRef}
+            className={`chat-input-wrapper${dragOverInput ? ' drag-over' : ''}`}
+          >
             <div className="chat-input-options">
               <div className="options-left">
                 {selectedAgent ? (
@@ -631,6 +706,16 @@ const ConsolePage: React.FC = () => {
                           onClick={() => setGitDrawerVisible(true)}
                           disabled={!selectedWorkingDirectory}
                           className="git-btn"
+                        />
+                      </Tooltip>
+                      <Tooltip title="查看目录结构">
+                        <Button
+                          size="small"
+                          type="text"
+                          icon={<FolderOutlined />}
+                          onClick={() => setFileTreeDrawerVisible(true)}
+                          disabled={!selectedWorkingDirectory}
+                          className="file-tree-btn"
                         />
                       </Tooltip>
                     </div>
@@ -835,6 +920,12 @@ const ConsolePage: React.FC = () => {
         visible={gitDrawerVisible}
         onClose={() => setGitDrawerVisible(false)}
         workingDirectory={selectedWorkingDirectory || selectedAgent?.workingDirectory}
+      />
+      <FileTreeDrawer
+        visible={fileTreeDrawerVisible}
+        onClose={() => setFileTreeDrawerVisible(false)}
+        workingDirectory={selectedWorkingDirectory || selectedAgent?.workingDirectory}
+        onDragStart={handleFileTreeDragStart}
       />
     </div>
   );

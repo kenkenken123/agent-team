@@ -95,6 +95,7 @@ public record TaskDto(
     int? OutputTokens,
     string? Model,
     bool IsPlanMode,
+    string? FinalResult,
     DateTime? StartedAt,
     DateTime? CompletedAt,
     int? ExitCode,
@@ -134,4 +135,14 @@ public record AgentUsageDto(
     int InputTokens,
     int OutputTokens,
     int TotalTokens
+);
+
+// ───── File DTOs ─────
+
+public record FileEntryDto(
+    string Name,
+    string Type, // "file" or "directory"
+    long? Size, // null for directories
+    DateTime LastModified,
+    string Path
 );

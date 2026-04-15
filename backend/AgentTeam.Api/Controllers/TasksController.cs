@@ -220,6 +220,7 @@ public class TasksController(
         t.OutputTokens,
         t.Model,
         t.IsPlanMode,
+        t.FinalResult,
         t.StartedAt,
         t.CompletedAt,
         t.ExitCode,
