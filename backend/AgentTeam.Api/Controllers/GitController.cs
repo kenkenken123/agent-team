@@ -167,7 +167,31 @@ public class GitController : ControllerBase
             var status = await _gitService.GetStatusAsync(req.Path);
             var statusSummary = $"Branch: {status.Branch}\nChanges:\n{string.Join("\n", status.Files.Select(f => $"  [{f.Status}] {f.Path}"))}";
 
-            var message = await _router.GenerateCommitMessageAsync(statusSummary);
+            // 如果有变更文件，获取前几个文件的 diff 内容供 AI 分析
+            var diffContent = "";
+            if (status.Files.Any())
+            {
+                var filesToDiff = status.Files.Take(5).ToList();
+                var diffs = new List<string>();
+                foreach (var file in filesToDiff)
+                {
+                    try
+                    {
+                        var diff = await _gitService.GetDiffAsync(req.Path, file.Path);
+                        if (!string.IsNullOrEmpty(diff))
+                        {
+                            diffs.Add($"--- {file.Path} ---\n{diff}");
+                        }
+                    }
+                    catch { /* 忽略单个文件的 diff 失败 */ }
+                }
+                if (diffs.Any())
+                {
+                    diffContent = "\n\n以下是具体代码变更：\n" + string.Join("\n\n", diffs);
+                }
+            }
+
+            var message = await _router.GenerateCommitMessageAsync(statusSummary + diffContent);
 
             if (string.IsNullOrEmpty(message))
             {

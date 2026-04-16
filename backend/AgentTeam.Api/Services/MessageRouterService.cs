@@ -137,18 +137,54 @@ public class MessageRouterService(
             return string.Empty;
         }
 
-        var systemPrompt = @"你是一个 Git 提交信息生成助手。根据用户提供的 Git 变更摘要，生成一条符合 Conventional Commits 规范的中文提交信息。
+        var systemPrompt = @"你是一个资深软件工程师，请根据 Git 变更内容生成规范的 commit message。
 
-规范要求：
-1. 格式：`type: 描述内容`
-2. 常用 type：feat（新功能）、fix（修复）、docs（文档）、style（格式）、refactor（重构）、perf（性能）、test（测试）、chore（构建/工具）、ci（CI 配置）
-3. 描述使用中文，简洁明了，不超过 50 个字符
-4. 只返回提交信息本身，不要有任何前言或 Markdown 标记
+请严格遵循 Conventional Commits 规范，并满足以下要求：
 
-示例：
-- feat: 新增用户登录页面的表单验证
-- fix: 修复任务列表滚动时的重复渲染问题
-- refactor: 提取公共状态管理逻辑到独立 Hook";
+【格式要求】
+<type>(<scope>): <subject>
+
+<body>
+
+<footer>
+
+【type 必须是以下之一】
+- feat: 新功能
+- fix: 修复 bug
+- docs: 文档变更
+- style: 代码格式（不影响逻辑）
+- refactor: 重构（非功能/bug变更）
+- perf: 性能优化
+- test: 测试相关
+- build: 构建系统或依赖变更
+- ci: CI/CD 相关
+- chore: 杂项（不影响 src/test）
+
+【scope 要求】
+- 必填，使用小写英文模块名（如 auth, api, ui, db）
+- 描述变更影响的主要模块
+
+【subject 要求】
+- 必须使用中文描述
+- 动词原形开头（如添加、修复、更新、移除、优化）
+- 不超过 72 字符
+- 不要以句号结尾
+
+【body 要求】
+- 复杂改动必须提供 body
+- 描述""做了什么""和""为什么这么做""
+- 使用中文，用项目符号列出多项变更
+
+【footer 要求】
+- 关联 issue（如: Closes #123）
+- BREAKING CHANGE 必须显式说明
+
+【额外约束】
+- 避免模糊描述（如 update code / fix stuff / 更新代码 / 修复一些问题）
+- 不要出现 AI、生成、prompt 等字样
+- 输出必须是最终 commit message，不要解释、不要前言、不要 Markdown 标记
+
+只返回最终的 commit message 文本。";
 
         var userPrompt = $"以下是 Git 变更状态：\n{gitStatus}\n\n请根据以上变更生成一条合适的提交信息。";
 

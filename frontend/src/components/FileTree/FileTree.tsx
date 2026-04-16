@@ -89,12 +89,10 @@ const FileTree: React.FC<FileTreeProps> = ({ rootPath, onFileClick, onDragStart 
     await loadDirectory(treeNode.path, 1);
   };
 
-  // 节点点击事件
-  const onNodeClick: TreeProps['onClick'] = (_, node) => {
+  // 节点双击事件：文件和目录都支持
+  const onNodeDoubleClick: TreeProps['onDoubleClick'] = (_, node) => {
     const treeNode = node as TreeNode;
-    if (treeNode.isLeaf && onFileClick) {
-      onFileClick(treeNode.path);
-    }
+    onFileClick?.(treeNode.path);
   };
 
   // 拖拽开始事件
@@ -148,7 +146,7 @@ const FileTree: React.FC<FileTreeProps> = ({ rootPath, onFileClick, onDragStart 
           draggable
           loadData={loadData}
           treeData={treeData}
-          onClick={onNodeClick}
+          onDoubleClick={onNodeDoubleClick}
           onExpand={onExpand}
           onDragStart={onNodeDragStart}
           defaultExpandParent

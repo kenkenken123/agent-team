@@ -158,15 +158,6 @@
   box-shadow: 0 12px 24px rgba(0, 0, 0, 0.3), 0 0 8px rgba(88, 166, 255, 0.2);
 }
 
-/* 未查看会话卡片：左侧蓝色竖线标记 */
-.kanban-card-unviewed {
-  border-left: 3px solid #58a6ff !important;
-}
-
-.kanban-card-unviewed:hover {
-  border-left-color: #58a6ff !important;
-}
-
 .card-header {
   display: flex;
   justify-content: space-between;
@@ -214,30 +205,6 @@
   background: #21262d;
   padding: 2px 6px;
   border-radius: 4px;
-}
-
-/* 右侧元信息容器（未查看标记 + 会话 ID） */
-.session-meta-right {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-/* 未查看标记 */
-.unviewed-badge {
-  font-size: 10px;
-  font-weight: 600;
-  color: #58a6ff;
-  background: rgba(88, 166, 255, 0.12);
-  border: 1px solid rgba(88, 166, 255, 0.3);
-  padding: 1px 6px;
-  border-radius: 4px;
-  animation: badge-pulse 2s infinite;
-}
-
-@keyframes badge-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.6; }
 }
 
 .card-body {
@@ -493,10 +460,17 @@
 }
 
 .title-running { color: #58a6ff; }
-.count-running { 
-  background-color: rgba(88, 166, 255, 0.1); 
-  color: #58a6ff; 
-  border-color: rgba(88, 166, 255, 0.3); 
+.count-running {
+  background-color: rgba(88, 166, 255, 0.1);
+  color: #58a6ff;
+  border-color: rgba(88, 166, 255, 0.3);
+}
+
+.title-idle { color: #8b949e; }
+.count-idle {
+  background-color: rgba(139, 148, 158, 0.1);
+  color: #8b949e;
+  border-color: rgba(139, 148, 158, 0.3);
 }
 
 .title-completed { color: #3fb950; }
@@ -532,6 +506,101 @@
   color: #58a6ff;
 }
 
+/* 上次任务返回信息区域 */
+.last-output-section {
+  margin-bottom: 16px;
+}
+
+.output-section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.output-header-label {
+  color: #58a6ff;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.output-loading-text {
+  color: #6e7681;
+  font-size: 12px;
+}
+
+.last-output-content {
+  max-height: 200px;
+  overflow-y: auto;
+  background: rgba(13, 17, 23, 0.8);
+  border: 1px solid #21262d;
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.last-output-content::-webkit-scrollbar {
+  width: 4px;
+}
+
+.last-output-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.last-output-content::-webkit-scrollbar-thumb {
+  background: #30363d;
+  border-radius: 4px;
+}
+
+.output-pre {
+  margin: 0;
+  color: #c9d1d9;
+  font-size: 12px;
+  line-height: 1.6;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.output-empty {
+  color: #484f58;
+  font-size: 13px;
+}
+
+.output-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.skeleton-line {
+  height: 12px;
+  border-radius: 4px;
+  background: linear-gradient(90deg, #21262d 25%, #30363d 50%, #21262d 75%);
+  background-size: 200% 100%;
+  animation: skeleton-loading 1.5s infinite;
+}
+
+.skeleton-line-full { width: 100%; }
+.skeleton-line-medium { width: 70%; }
+
+@keyframes skeleton-loading {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* 新指令输入区域 */
+.modal-prompt-input {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.prompt-label {
+  color: #c9d1d9;
+  font-size: 13px;
+  font-weight: 600;
+}
+
 .modal-textarea {
   background-color: #0d1117 !important;
   border: 1px solid #30363d !important;
@@ -555,56 +624,5 @@
   font-weight: 500;
   margin-bottom: 8px;
   display: block;
-}
-
-/* 新建会话占位卡片 */
-.kanban-card-placeholder {
-  background: transparent;
-  border: 2px dashed rgba(255, 255, 255, 0.15);
-  border-radius: 12px;
-  padding: 16px;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 100px;
-  box-shadow: none;
-}
-
-.kanban-card-placeholder:hover {
-  background: rgba(255, 255, 255, 0.03);
-  border-color: #58a6ff;
-  transform: translateY(-2px);
-  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2), 0 0 8px rgba(88, 166, 255, 0.1);
-}
-
-.placeholder-content {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  color: #6e7681;
-  transition: color 0.3s;
-}
-
-.kanban-card-placeholder:hover .placeholder-content {
-  color: #58a6ff;
-}
-
-.placeholder-text {
-  font-size: 14px;
-  font-weight: 600;
-  letter-spacing: 0.5px;
-}
-
-.placeholder-agent {
-  font-size: 12px;
-  color: #484f58;
-  transition: color 0.3s;
-}
-
-.kanban-card-placeholder:hover .placeholder-agent {
-  color: #8b949e;
 }
 

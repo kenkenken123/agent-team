@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import {
-  Space, Select, Button, Modal, Input,
+  Select, Button, Modal, Input,
   message, Popover, Popconfirm, Spin, Tooltip
 } from 'antd';
 import {
@@ -16,7 +16,7 @@ import {
   AlertCircle,
   XCircle,
   PlayCircle,
-  MoreHorizontal
+  Bell
 } from 'lucide-react';
 import { DeleteOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
@@ -26,7 +26,6 @@ import utc from 'dayjs/plugin/utc';
 import { agentApi } from '../../api/agentApi';
 import { taskApi } from '../../api/taskApi';
 import { useAppStore } from '../../stores/appStore';
-import { sortAgents } from '../../utils/sortAgents';
 import type { Agent, AgentTask, TaskStatus } from '../../types';
 import './Kanban.css';
 
@@ -53,8 +52,6 @@ interface KanbanSession {
   updatedAt: string;
   lastOutput?: string;
   isPlaceholder?: boolean;
-  /** 是否为空闲列的”新建会话”占位卡片 */
-  isNewSessionPlaceholder?: boolean;
 }
 
 const KanbanPage: React.FC = () => {
@@ -73,6 +70,10 @@ const KanbanPage: React.FC = () => {
   const [newAgentId, setNewAgentId] = useState<string | undefined>(undefined);
   const [newPrompt, setNewPrompt] = useState('');
   const [processing, setProcessing] = useState(false);
+
+  // "继续聊天"弹框中展示的上次任务完整输出
+  const [lastOutputContent, setLastOutputContent] = useState<string | null>(null);
+  const [outputLoading, setOutputLoading] = useState(false);
 
   // 内存中维护的占位会话
   const [placeholders, setPlaceholders] = useState<KanbanSession[]>([]);
@@ -146,7 +147,7 @@ const KanbanPage: React.FC = () => {
 
       if (!existing || parseTime(triggerTime).isAfter(parseTime(existing.updatedAt))) {
         sessionMap.set(sid, {
-          sessionId: task.claudeSessionId || '',
+          sessionId: sid,
           agentId: task.agentId,
           agentName: task.agentName || 'Unknown Agent',
           latestTask: task,
@@ -174,29 +175,7 @@ const KanbanPage: React.FC = () => {
     return list.sort((a, b) => parseTime(b.updatedAt).unix() - parseTime(a.updatedAt).unix());
   }, [sessions, filterAgentIds]);
 
-  // 空闲等待列的占位卡片: 为每个 Agent 生成"新建会话"入口
-  const idlePlaceholders = useMemo(() => {
-    const sorted = sortAgents(agents);
-    // 找出已有 Pending/Idle 状态真实会话的 agentId
-    const idleAgentIds = new Set(
-      filteredSessions
-        .filter(s => (s.status === 'Pending' || s.status === 'Idle') && !s.isPlaceholder)
-        .map(s => s.agentId)
-    );
-
-    return sorted
-      .filter(a => !idleAgentIds.has(a.id))
-      .map(a => ({
-        sessionId: '',
-        agentId: a.id,
-        agentName: a.name,
-        status: 'Idle' as const,
-        updatedAt: new Date().toISOString(),
-        isPlaceholder: true,
-        isNewSessionPlaceholder: true,
-      }));
-  }, [agents, filteredSessions]);
-
+  // 加载任务输出缓存
   useEffect(() => {
     const sessionsToLoad = filteredSessions.filter(s => {
       if (!s.latestTask?.id || s.isPlaceholder) return false;
@@ -230,20 +209,29 @@ const KanbanPage: React.FC = () => {
   }, [filteredSessions]);
 
   const columns = {
-    idle: [...idlePlaceholders, ...filteredSessions.filter(s => s.status === 'Pending' || s.status === 'Idle')],
+    idle: filteredSessions.filter(s =>
+      s.isPlaceholder || (
+        (s.status === 'Completed' || s.status === 'Failed' || s.status === 'Cancelled') &&
+        viewedSessionIds.has(s.sessionId)
+      )
+    ),
     running: filteredSessions.filter(s => s.status === 'Running'),
-    completed: filteredSessions.filter(s => s.status === 'Completed' || s.status === 'Failed' || s.status === 'Cancelled')
+    completed: filteredSessions.filter(s =>
+      (s.status === 'Completed' || s.status === 'Failed' || s.status === 'Cancelled') &&
+      !s.isPlaceholder && !viewedSessionIds.has(s.sessionId)
+    )
   };
 
   const handleLaunch = async () => {
     if (!selectedSession || !launchPrompt.trim()) return;
     setProcessing(true);
     try {
+      const isRealSession = selectedSession.sessionId && !selectedSession.sessionId.startsWith('single-');
       await taskApi.create({
         agentId: selectedSession.agentId,
         prompt: launchPrompt.trim(),
-        resumeSessionId: selectedSession.sessionId || undefined,
-        forceNewSession: !selectedSession.sessionId
+        resumeSessionId: isRealSession ? selectedSession.sessionId : undefined,
+        forceNewSession: !isRealSession
       });
       message.success('任务已启动');
       setIsLaunchModalOpen(false);
@@ -309,13 +297,37 @@ const KanbanPage: React.FC = () => {
     setPage('console');
   };
 
+  // 打开"继续聊天"弹框，加载上次任务的完整输出
+  const handleOpenLaunch = async (session: KanbanSession) => {
+    setSelectedSession(session);
+    setLastOutputContent(null);
+    setIsLaunchModalOpen(true);
+
+    if (session.latestTask?.id) {
+      setOutputLoading(true);
+      try {
+        const raw = await taskApi.getOutput(session.latestTask.id);
+        const cleaned = (raw ?? '').replace(/\x1B\[[0-9;]*[a-zA-Z]/g, '');
+        setLastOutputContent(cleaned);
+      } catch {
+        setLastOutputContent('获取输出失败');
+      } finally {
+        setOutputLoading(false);
+      }
+    }
+  };
+
   const handleDeleteSession = async (session: KanbanSession) => {
     if (!session.latestTask) return;
     try {
-      await taskApi.deleteSession(session.sessionId || undefined, !session.sessionId ? session.latestTask.id : undefined);
+      const isRealSession = session.sessionId && !session.sessionId.startsWith('single-');
+      await taskApi.deleteSession(
+        isRealSession ? session.sessionId : undefined,
+        !isRealSession ? session.latestTask.id : undefined
+      );
       message.success('会话已彻底删除');
-      // 清理已查看记录
-      if (session.sessionId) {
+      // 清理已查看记录（仅真实会话ID需要清理）
+      if (isRealSession) {
         setViewedSessionIds(prev => {
           const next = new Set(prev);
           next.delete(session.sessionId);
@@ -371,34 +383,13 @@ const KanbanPage: React.FC = () => {
   };
 
   const renderCard = (session: KanbanSession) => {
-    // 渲染"新建会话"占位卡片
-    if (session.isNewSessionPlaceholder) {
-      return (
-        <Tooltip key={`new-${session.agentId}`} title={`为 ${session.agentName} 创建新会话`}>
-          <div
-            className="kanban-card kanban-card-placeholder"
-            onClick={() => {
-              setNewAgentId(session.agentId);
-              setIsAddModalOpen(true);
-            }}
-          >
-            <div className="placeholder-content">
-              <Plus size={20} />
-              <span className="placeholder-text">新建会话</span>
-              <span className="placeholder-agent">{session.agentName}</span>
-            </div>
-          </div>
-        </Tooltip>
-      );
-    }
-
     const statusInfo = renderStatusInfo(session.status);
 
     const popoverContent = (
       <div className="card-hover-actions">
         <button
           className="action-btn"
-          onClick={() => { setSelectedSession(session); setIsLaunchModalOpen(true); }}
+          onClick={() => handleOpenLaunch(session)}
         >
           <MessageSquare size={16} /> 继续聊天
         </button>
@@ -431,9 +422,6 @@ const KanbanPage: React.FC = () => {
       </div>
     );
 
-    const isCompleted = session.status === 'Completed' || session.status === 'Failed' || session.status === 'Cancelled';
-    const isUnviewed = session.sessionId && isCompleted && !viewedSessionIds.has(session.sessionId);
-
     return (
       <Popover
         key={session.sessionId || `card-${session.agentId}-${session.updatedAt}`}
@@ -442,22 +430,15 @@ const KanbanPage: React.FC = () => {
         placement="rightTop"
         overlayClassName="canvas-popover"
       >
-        <div className={`kanban-card group ${isUnviewed ? 'kanban-card-unviewed' : ''}`}>
+        <div className="kanban-card group">
           <div className="card-header">
             <div className="agent-meta">
               <div className={`status-dot ${statusInfo.dotClass}`} />
               <span className="agent-name">{session.agentName}</span>
             </div>
-            <div className="session-meta-right">
-              {isUnviewed && (
-                <span className="unviewed-badge" title="尚未查看结果">
-                  未查看
-                </span>
-              )}
-              {session.sessionId && (
-                <span className="session-id">#{session.sessionId.substring(0, 8)}</span>
-              )}
-            </div>
+            {session.sessionId && (
+              <span className="session-id">#{session.sessionId.substring(0, 8)}</span>
+            )}
           </div>
 
           <div className="card-body">
@@ -539,14 +520,14 @@ const KanbanPage: React.FC = () => {
         </div>
       ) : (
         <div className="kanban-board">
-          {/* 空闲等待 */}
+          {/* 空闲等待（已完成且已查看） */}
           <div className="kanban-column">
             <div className="column-header">
-              <div className="column-title">
+              <div className="column-title title-idle">
                 <PlayCircle size={16} />
                 <span>空闲等待</span>
               </div>
-              <span className="column-count">{columns.idle.length}</span>
+              <span className="column-count count-idle">{columns.idle.length}</span>
             </div>
             <div className="card-list">
               {columns.idle.map(renderCard)}
@@ -581,12 +562,12 @@ const KanbanPage: React.FC = () => {
             </div>
           </div>
 
-          {/* 已完成 */}
+          {/* 已完成但未查看 */}
           <div className="kanban-column">
             <div className="column-header">
               <div className="column-title title-completed">
-                <CheckCircle2 size={16} />
-                <span>已完成</span>
+                <Bell size={16} />
+                <span>待查看</span>
               </div>
               <span className="column-count count-completed">
                 {columns.completed.length}
@@ -596,8 +577,8 @@ const KanbanPage: React.FC = () => {
               {columns.completed.map(renderCard)}
               {columns.completed.length === 0 && (
                 <div className="empty-placeholder">
-                  <Clock />
-                  <span>暂无任务</span>
+                  <CheckCircle2 />
+                  <span>暂无未查看任务</span>
                 </div>
               )}
             </div>
@@ -619,19 +600,49 @@ const KanbanPage: React.FC = () => {
         confirmLoading={processing}
         okText="直接启动"
         className="dark-modal"
+        width={680}
       >
         <div className="modal-desc">
           <p className="modal-desc-text">
             正在向会话 <span className="modal-desc-id">{selectedSession?.sessionId?.substring(0, 8) || '新起点'}</span> 发送新指令
           </p>
         </div>
-        <Input.TextArea
-          placeholder="请输入任务内容..."
-          autoSize={{ minRows: 4, maxRows: 8 }}
-          value={launchPrompt}
-          onChange={e => setLaunchPrompt(e.target.value)}
-          className="modal-textarea"
-        />
+
+        {/* 上次任务返回信息 */}
+        {selectedSession?.latestTask && (
+          <div className="last-output-section">
+            <div className="output-section-header">
+              <span className="output-header-label">上次返回结果</span>
+              {outputLoading && <span className="output-loading-text">加载中...</span>}
+            </div>
+            <div className="last-output-content">
+              {outputLoading ? (
+                <div className="output-skeleton">
+                  <div className="skeleton-line skeleton-line-full" />
+                  <div className="skeleton-line skeleton-line-full" />
+                  <div className="skeleton-line skeleton-line-medium" />
+                  <div className="skeleton-line skeleton-line-full" />
+                  <div className="skeleton-line skeleton-line-medium" />
+                </div>
+              ) : lastOutputContent ? (
+                <pre className="output-pre">{lastOutputContent}</pre>
+              ) : (
+                <span className="output-empty">暂无输出内容</span>
+              )}
+            </div>
+          </div>
+        )}
+
+        <div className="modal-prompt-input">
+          <label className="prompt-label">新指令</label>
+          <Input.TextArea
+            placeholder="请输入任务内容..."
+            autoSize={{ minRows: 3, maxRows: 6 }}
+            value={launchPrompt}
+            onChange={e => setLaunchPrompt(e.target.value)}
+            className="modal-textarea"
+          />
+        </div>
       </Modal>
 
       {/* 新增会话弹框 */}

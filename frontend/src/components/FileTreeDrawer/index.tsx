@@ -13,7 +13,7 @@ interface FileTreeDrawerProps {
 const FileTreeDrawer: React.FC<FileTreeDrawerProps> = ({ visible, onClose, workingDirectory, onFileClick, onDragStart }) => {
   return (
     <Drawer
-      title="目录结构 (可拖拽文件/目录到输入框)"
+      title="目录结构 (双击文件/目录添加到输入框)"
       placement="right"
       size="default"
       open={visible}

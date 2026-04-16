@@ -355,6 +355,14 @@ const ConsolePage: React.FC = () => {
     draggedFileTypeRef.current = fileType;
   }, []);
 
+  // 双击文件/目录时，将路径插入输入框
+  const handleFileTreeFileClick = useCallback((filePath: string) => {
+    const name = filePath.split(/[\\/]/).pop() || filePath;
+    const pathRef = `[${name}](${filePath})`;
+    setPrompt(prev => (prev ? `${prev}\n${pathRef}` : pathRef));
+    message.success(`已添加引用: ${name}`);
+  }, []);
+
   // 使用原生事件监听器处理拖拽（比 React synthetic event 更可靠）
   useEffect(() => {
     const wrapper = inputWrapperRef.current;
@@ -925,6 +933,7 @@ const ConsolePage: React.FC = () => {
         visible={fileTreeDrawerVisible}
         onClose={() => setFileTreeDrawerVisible(false)}
         workingDirectory={selectedWorkingDirectory || selectedAgent?.workingDirectory}
+        onFileClick={handleFileTreeFileClick}
         onDragStart={handleFileTreeDragStart}
       />
     </div>
