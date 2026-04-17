@@ -15,9 +15,9 @@ export interface LongTermMemory {
 
 export const memoryApi = {
   getShortTermMemories: () => request.get<ShortTermMemory[]>('/api/memories/short-term').then(r => r.data),
-  getLongTermMemories: () => request.get<LongTermMemory[]>('/api/memories/long-term').then(r => r.data),
-  updateLongTermMemory: (id: string, content: string) => request.put<LongTermMemory>(`/api/memories/long-term/${id}`, { content }).then(r => r.data),
-  deleteLongTermMemory: (id: string) => request.delete(`/api/memories/long-term/${id}`).then(r => r.data),
+  getLongTermMemory: () => request.get<LongTermMemory[]>('/api/memories/long-term').then(r => r.data),
+  updateLongTermMemory: (content: string) => request.put<LongTermMemory>('/api/memories/long-term', { content }).then(r => r.data),
+  deleteLongTermMemory: () => request.delete('/api/memories/long-term').then(r => r.data),
   getUserProfile: () => request.get<any>('/api/memories/profile').then(r => r.data),
   updateUserProfile: (profileJson: string) => request.put('/api/memories/profile', { profileJson }).then(r => r.data),
 };

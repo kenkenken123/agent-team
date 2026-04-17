@@ -1,9 +1,15 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Net.Http;
 using System.Net.Http.Json;
+using System.IO;
+using System.Linq;
+using System.Threading.Tasks;
 using AgentTeam.Api.Data;
 using AgentTeam.Api.Models;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace AgentTeam.Api.Services;
 
@@ -16,6 +22,26 @@ public class ButlerMemoryService
     private readonly string _shortTermPath;
     private readonly string _userProfilePath;
 
+    /// <summary>
+    /// 长期记忆最大字符数
+    /// </summary>
+    private const int LongTermMemoryMaxChars = 2200;
+
+    /// <summary>
+    /// 短期记忆每条内容最大字符数（超出时截断）
+    /// </summary>
+    private const int ShortTermMemoryItemMaxChars = 500;
+
+    /// <summary>
+    /// 短期记忆最大条目数
+    /// </summary>
+    private const int ShortTermMemoryMaxItems = 10;
+
+    /// <summary>
+    /// 周期评估触发阈值（消息数）
+    /// </summary>
+    private const int PeriodicEvaluationThreshold = 10;
+
     public ButlerMemoryService(
         IServiceScopeFactory scopeFactory,
         IHttpClientFactory httpClientFactory,
@@ -24,12 +50,12 @@ public class ButlerMemoryService
         _scopeFactory = scopeFactory;
         _httpClientFactory = httpClientFactory;
         _logger = logger;
-        
+
         // Ensure directory exists
         _memoriesDir = Path.Combine(Directory.GetCurrentDirectory(), ".memories");
         if (!Directory.Exists(_memoriesDir))
             Directory.CreateDirectory(_memoriesDir);
-            
+
         _shortTermPath = Path.Combine(_memoriesDir, "butler_short_term.json");
         _userProfilePath = Path.Combine(_memoriesDir, "user_profile.json");
     }
@@ -41,34 +67,40 @@ public class ButlerMemoryService
         public DateTime Timestamp { get; set; } = DateTime.UtcNow;
     }
 
+    /// <summary>
+    /// 添加短期记忆，自动截断过长内容
+    /// </summary>
     public async Task AddShortTermMemoryAsync(string role, string content)
     {
         try
         {
-            var memories = await GetShortTermMemoriesAsync();
-            memories.Add(new ShortTermMemoryItem { Role = role, Content = content });
-            
-            // Keep only the last 10 memory items (5 interactions)
-            if (memories.Count > 10)
+            // 截断过长内容
+            if (content.Length > ShortTermMemoryItemMaxChars)
             {
-                memories = memories.Skip(memories.Count - 10).ToList();
+                content = TruncateContent(content, ShortTermMemoryItemMaxChars);
+            }
+
+            var memories = await GetShortTermMemoriesAsync();
+            memories.Add(new ShortTermMemoryItem { Role = role, Content = content, Timestamp = DateTime.UtcNow });
+
+            // Keep only the last N memory items
+            if (memories.Count > ShortTermMemoryMaxItems)
+            {
+                memories = memories.Skip(memories.Count - ShortTermMemoryMaxItems).ToList();
             }
 
             await File.WriteAllTextAsync(_shortTermPath, JsonSerializer.Serialize(memories, new JsonSerializerOptions { WriteIndented = true }));
-            
-            // Evaluate every 5th complete interaction (user+assistant = 1 interaction)
-            // We can just keep a simple counter file.
+
+            // Evaluate every Nth message
             var counterPath = Path.Combine(_memoriesDir, "cycle_counter.txt");
             int counter = 0;
             if (File.Exists(counterPath)) int.TryParse(File.ReadAllText(counterPath), out counter);
-            
+
             counter++;
             await File.WriteAllTextAsync(counterPath, counter.ToString());
 
-            // Since user+assistant = 2 messages per interaction, 5 interactions = 10 messages
-            if (counter >= 10)
+            if (counter >= PeriodicEvaluationThreshold)
             {
-                // Reset and trigger
                 await File.WriteAllTextAsync(counterPath, "0");
                 _ = Task.Run(async () =>
                 {
@@ -87,6 +119,26 @@ public class ButlerMemoryService
         {
             _logger.LogError(ex, "Error adding short term memory");
         }
+    }
+
+    /// <summary>
+    /// 截断内容，保留开头和结尾，中间用省略标记
+    /// </summary>
+    private string TruncateContent(string content, int maxChars)
+    {
+        if (content.Length <= maxChars) return content;
+
+        // 保留开头 60% 和结尾 30%，中间用 "...[已截断]..." 连接
+        var headLen = (int)(maxChars * 0.65);
+        var tailLen = (int)(maxChars * 0.30);
+        var separator = "...[已截断]...";
+        var separatorLen = separator.Length;
+
+        // 调整确保总长度不超
+        headLen = Math.Min(headLen, maxChars - tailLen - separatorLen);
+        tailLen = Math.Min(tailLen, maxChars - headLen - separatorLen);
+
+        return content.Substring(0, headLen) + separator + content.Substring(content.Length - tailLen);
     }
 
     public async Task<List<ShortTermMemoryItem>> GetShortTermMemoriesAsync()
@@ -121,12 +173,76 @@ public class ButlerMemoryService
         await File.WriteAllTextAsync(_userProfilePath, profileJson);
     }
 
-    public async Task<string> GetMemoryContextAsync(bool excludeLastUserMessage = false)
+    /// <summary>
+    /// 获取唯一的长期记忆（单条模式）
+    /// </summary>
+    public async Task<LongTermMemory?> GetSingleLongTermMemoryAsync()
     {
         using var scope = _scopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        
-        var longTermMemories = await db.Memories.OrderByDescending(m => m.CreatedAt).ToListAsync();
+        return await db.Memories.FirstOrDefaultAsync();
+    }
+
+    /// <summary>
+    /// 保存或更新唯一的长期记忆（单条模式），超2200字时由LLM压缩
+    /// </summary>
+    public async Task SaveSingleLongTermMemoryAsync(string content)
+    {
+        using var scope = _scopeFactory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+        // 硬截断保底（LLM压缩后的内容不应超过2200字，但以防万一）
+        if (content.Length > LongTermMemoryMaxChars)
+        {
+            content = content.Substring(0, LongTermMemoryMaxChars);
+            _logger.LogWarning("Long term memory truncated to {MaxChars} chars", LongTermMemoryMaxChars);
+        }
+
+        var existing = await db.Memories.FirstOrDefaultAsync();
+        if (existing == null)
+        {
+            existing = new LongTermMemory { Content = content };
+            db.Memories.Add(existing);
+        }
+        else
+        {
+            existing.Content = content;
+            existing.UpdatedAt = DateTime.UtcNow;
+        }
+        await db.SaveChangesAsync();
+    }
+
+    /// <summary>
+    /// 如果长期记忆内容超过2200字，触发LLM压缩
+    /// </summary>
+    public async Task CompressLongTermMemoryIfNeededAsync()
+    {
+        var memory = await GetSingleLongTermMemoryAsync();
+        if (memory == null || memory.Content.Length <= LongTermMemoryMaxChars) return;
+
+        _logger.LogInformation("Long term memory exceeds {MaxChars} chars ({ActualChars}), triggering LLM compression",
+            LongTermMemoryMaxChars, memory.Content.Length);
+
+        var prompt = $@"当前长期记忆内容已超过 {LongTermMemoryMaxChars} 字的限制（实际 {memory.Content.Length} 字）。
+请将以下长期记忆内容进行**压缩取舍**，保留最核心、最通用的规则和偏好，丢弃次要和过时的内容。
+压缩后的内容必须不超过 {LongTermMemoryMaxChars} 字。
+
+压缩原则：
+1. 优先保留：路由分配经验、项目核心路径、用户深层偏好、跨会话通用规则
+2. 可以丢弃：过时的项目信息、冗余的重复规则、非常具体的临时配置
+3. 合并同类：将多条相似规则合并为一条精炼的描述
+
+当前长期记忆内容：
+{memory.Content}
+
+请调用 update_long_term_memory 工具，传入压缩后的完整内容。";
+
+        await EvaluateWithLLMAsync(prompt, forceToolCall: true);
+    }
+
+    public async Task<string> GetMemoryContextAsync(bool excludeLastUserMessage = false)
+    {
+        var longTermMemory = await GetSingleLongTermMemoryAsync();
         var userProfile = await GetUserProfileAsync();
         var shortTermMemories = await GetShortTermMemoriesAsync();
 
@@ -136,16 +252,26 @@ public class ButlerMemoryService
         }
 
         var contextBuilder = new System.Text.StringBuilder();
-        
+
         contextBuilder.AppendLine("【用户画像】");
-        contextBuilder.AppendLine(userProfile);
+        if (string.IsNullOrWhiteSpace(userProfile) || userProfile == "{}")
+        {
+            contextBuilder.AppendLine("（暂无用户画像数据，需要从对话中提取并建立）");
+        }
+        else
+        {
+            contextBuilder.AppendLine(userProfile);
+        }
         contextBuilder.AppendLine();
 
         contextBuilder.AppendLine("【长期记忆（事实标准、偏好、经验）】");
-        if (longTermMemories.Count == 0) contextBuilder.AppendLine("暂无长期记忆。");
-        foreach (var m in longTermMemories)
+        if (longTermMemory == null)
         {
-            contextBuilder.AppendLine($"- [{m.Id}] {m.Content}");
+            contextBuilder.AppendLine("暂无长期记忆。");
+        }
+        else
+        {
+            contextBuilder.AppendLine(longTermMemory.Content);
         }
         contextBuilder.AppendLine();
 
@@ -161,22 +287,30 @@ public class ButlerMemoryService
 
     public async Task ImmediateEvaluationAsync(string userPrompt, string agentFinalAnswer)
     {
-        // 记录助手（Agent）的最终回答到短期记忆
+        // 记录助手的最终回答到短期记忆（已自动截断）
         await AddShortTermMemoryAsync("assistant", agentFinalAnswer);
 
-        var prompt = $@"请评估刚才的用户指令与具体的执行结果，判断是否需要更新沉淀长期记忆库或用户个人画像。
-如果有，请调用对应的工具（add_memory, replace_memory, remove_memory, update_user_profile）来保存。
+        var prompt = $@"请评估刚才的用户指令与具体的执行结果，判断是否需要更新长期记忆或用户画像。
 
 【核心筛选原则】：
-1. 长期记忆**仅关注通用性强**的偏好、习惯或跨会话底层架构规则（如“xx项目代码路径在 d:\foo”、“某个项目的专有命令”、“用户喜欢深色设计”等）。
-2. 特别关注与“路由切换和任务分配”相关的经验。若对话揭示了某种任务应该由哪个具体的逻辑处理，或某类框架需要怎么配工作目录，请沉淀下来。
-3. **绝对不要**记录临时的、碎片化的、只在本次对话中有用的详情（例如：“Agent帮我修复了一个xxx bug”，“刚才创建了 yyy.cs 文件”等一次性流水账）。
-4. 若毫无通用长期价值，请不要调用任何工具，直接返回空！
+1. 长期记忆**仅关注通用性强**的偏好、习惯或跨会话底层架构规则（如""xx项目代码路径在 d:\foo""、""某个项目的专有命令""、""用户喜欢深色设计""等）。
+2. 特别关注与""路由切换和任务分配""相关的经验。若对话揭示了某种任务应该由哪个具体的逻辑处理，或某类框架需要怎么配工作目录，请沉淀下来。
+3. **绝对不要**记录临时的、碎片化的、只在本次对话中有用的详情（例如：""Agent帮我修复了一个xxx bug""，""刚才创建了 yyy.cs 文件""等一次性流水账）。
+4. 若毫无通用长期价值，请不要调用任何长期记忆工具，直接返回空！
+
+【用户画像必须提取原则】：
+1. 任何对话都可能包含用户画像信息：技术偏好、使用习惯、项目偏好、常用命令、工作风格等
+2. 即使只有微小的画像更新（如发现用户偏好某个框架），也必须调用 update_user_profile 更新
+3. 用户画像 JSON 结构应包含：preferences（偏好）、skills（技能领域）、projectContext（项目上下文）、routingRules（路由规则）、habits（工作习惯）
+4. 如果当前画像为空，务必从对话中建立初始画像
 
 当前用户提问: {userPrompt}
 Agent返回结果/回答: {agentFinalAnswer}";
 
         await EvaluateWithLLMAsync(prompt);
+
+        // 评估后检查长期记忆是否超限，需要压缩
+        await CompressLongTermMemoryIfNeededAsync();
     }
 
     public async Task PeriodicEvaluationAsync()
@@ -186,21 +320,31 @@ Agent返回结果/回答: {agentFinalAnswer}";
 
         var history = string.Join("\n", memories.Select(m => $"{m.Role}: {m.Content}"));
         var prompt = $@"以下是最近的一连串连贯对话历史。请综合评估这段对话中是否包含值得提炼为通用长期记忆或更新用户个人画像的要点。
-若有，请调用工具（add_memory, replace_memory, update_user_profile等）将其整合记录下来。
 
 【归纳与提炼原则】：
 1. 提取能在别的会话中**通用**的经验：如业务核心流、宏观项目路径、核心配置文件位置、通用工作习惯等。
-2. 重点归纳未来可协助“管家智能路由分配 Agent”的经验规则（例如某种任务的固定分配对象）。
+2. 重点归纳未来可协助""管家智能路由分配 Agent""的经验规则（例如某种任务的固定分配对象）。
 3. 彻底丢弃那些仅针对本次聊天的代码分析、具体的临时错误排查步骤、修改某一行代码的情节等。
-4. 如果没有上述通用价值维度，绝不要盲目调用工具添加无价值记忆。
+4. 如果没有上述通用价值维度，绝不要盲目调用长期记忆工具添加无价值记忆。
+
+【用户画像必须提取原则】：
+1. 从对话历史中提取用户画像维度信息：技术栈偏好、工作习惯、项目上下文、路由分配经验
+2. 即使只有微小更新，也必须调用 update_user_profile 累积更新
+3. 不要让用户画像长期为空
 
 近期对话历史：
 {history}";
 
         await EvaluateWithLLMAsync(prompt);
+
+        // 评估后检查长期记忆是否超限，需要压缩
+        await CompressLongTermMemoryIfNeededAsync();
     }
 
-    private async Task EvaluateWithLLMAsync(string prompt)
+    /// <summary>
+    /// 通用LLM评估方法，支持强制工具调用模式
+    /// </summary>
+    private async Task EvaluateWithLLMAsync(string prompt, bool forceToolCall = false)
     {
         using var scope = _scopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -220,19 +364,35 @@ Agent返回结果/回答: {agentFinalAnswer}";
         }
 
         var currentProfile = await GetUserProfileAsync();
-        var longTermMemories = await db.Memories.ToListAsync();
-        var currentMemoriesStr = string.Join("\n", longTermMemories.Select(m => $"ID: {m.Id} | {m.Content}"));
+        var longTermMemory = await GetSingleLongTermMemoryAsync();
+        var currentMemoryStr = longTermMemory != null
+            ? $"现有长期记忆（单条，限{LongTermMemoryMaxChars}字）：\n{longTermMemory.Content}"
+            : "暂无长期记忆。";
 
         var systemPrompt = $@"你是一个高维度的智能记忆管家。你的唯一职责是从错综复杂的对话场景中，提取跨会话通用的关键规则、路由分发依据、项目结构抽象和用户的底层偏好。
 你**禁止**将单次沟通的具体对话细节、一时的 Bug 解决对白、零碎的文件创建流水作为记忆保存下来。记忆必须是【高度提纯的宏观法则】，用以直接指导未来的 Agent 路由、Prompt 补全组装。
 
-现有内存中长期记忆：
-{currentMemoriesStr}
+【长期记忆规则 - 极其重要】：
+- 系统只维护【1条】长期记忆，不超过{LongTermMemoryMaxChars}字
+- 新增信息必须与现有记忆合并（调用 update_long_term_memory），而不是 add_memory
+- 只有在确实没有任何长期记忆时，才使用 add_memory 创建第一条
+- 合并时需取舍：优先保留路由规则、核心偏好、通用架构规则；丢弃过时、冗余、碎片化信息
+
+【用户画像规则 - 极其重要】：
+- 用户画像必须从每次对话中提取和累积更新
+- 画像JSON结构必须包含以下字段：
+  - preferences: 用户偏好（如主题、代码风格、常用工具）
+  - skills: 技术技能领域（如前端、后端、DevOps）
+  - projectContext: 项目上下文（如项目路径、框架、技术栈）
+  - routingRules: 路由分配经验（如某类任务应分配给哪个Agent）
+  - habits: 工作习惯（如开发流程、沟通风格）
+- 不允许用户画像为空或只有""{{}}""，每次评估都必须尝试更新
+- 更新画像时必须保留已有信息，只增加或修正，不要丢失已有数据
+
+{currentMemoryStr}
 
 当前用户画像JSON：
-{currentProfile}
-
-你可以随时使用工具新增、替换由于规则改变而冲突的记忆，保持记忆库的通用、稳定与精简。";
+{currentProfile}";
 
         var tools = new object[]
         {
@@ -242,13 +402,13 @@ Agent返回结果/回答: {agentFinalAnswer}";
                 function = new
                 {
                     name = "add_memory",
-                    description = "添加新的单条长期记忆，不超过2000字，需将信息压缩合并。",
+                    description = $"创建第一条长期记忆（仅在系统中完全没有任何长期记忆时使用）。内容不超过{LongTermMemoryMaxChars}字，需将信息高度压缩合并。",
                     parameters = new
                     {
                         type = "object",
                         properties = new
                         {
-                            content = new { type = "string", description = "记忆内容" }
+                            content = new { type = "string", description = "记忆内容，不超过2200字" }
                         },
                         required = new[] { "content" }
                     }
@@ -259,35 +419,16 @@ Agent返回结果/回答: {agentFinalAnswer}";
                 type = "function",
                 function = new
                 {
-                    name = "replace_memory",
-                    description = "修改或替换一条旧有的长期记忆。当与原记忆冲突或可合并时使用。",
+                    name = "update_long_term_memory",
+                    description = $"更新/合并唯一的长期记忆条目。将新信息与已有记忆合并取舍，保留最核心的规则和偏好。这是最常用的长期记忆操作。内容不超过{LongTermMemoryMaxChars}字。",
                     parameters = new
                     {
                         type = "object",
                         properties = new
                         {
-                            id = new { type = "string", description = "需要替换的记忆ID" },
-                            newContent = new { type = "string", description = "新的合并压缩后的内容" }
+                            content = new { type = "string", description = "合并后的完整长期记忆内容，不超过2200字" }
                         },
-                        required = new[] { "id", "newContent" }
-                    }
-                }
-            },
-            new
-            {
-                type = "function",
-                function = new
-                {
-                    name = "remove_memory",
-                    description = "删除一条过时或错误的长期记忆。",
-                    parameters = new
-                    {
-                        type = "object",
-                        properties = new
-                        {
-                            id = new { type = "string", description = "需要删除的记忆ID" }
-                        },
-                        required = new[] { "id" }
+                        required = new[] { "content" }
                     }
                 }
             },
@@ -297,13 +438,13 @@ Agent返回结果/回答: {agentFinalAnswer}";
                 function = new
                 {
                     name = "update_user_profile",
-                    description = "更新用户画像的 JSON 结构，覆盖式的写入新的 JSON 文本。",
+                    description = "更新用户画像的 JSON 结构，覆盖式写入新的完整 JSON 文本。必须保留已有画像数据，只增加或修正。画像结构需包含 preferences、skills、projectContext、routingRules、habits 字段。",
                     parameters = new
                     {
                         type = "object",
                         properties = new
                         {
-                            profileJson = new { type = "string", description = "最新的完整用户画像 JSON 字符串" }
+                            profileJson = new { type = "string", description = "最新的完整用户画像 JSON 字符串，必须包含 preferences、skills、projectContext、routingRules、habits 五个字段" }
                         },
                         required = new[] { "profileJson" }
                     }
@@ -315,6 +456,9 @@ Agent返回结果/回答: {agentFinalAnswer}";
         {
             var client = _httpClientFactory.CreateClient();
             client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", apiKey);
+            client.Timeout = TimeSpan.FromSeconds(30);
+
+            var toolChoice = forceToolCall ? "required" : "auto";
 
             var requestBody = new
             {
@@ -325,13 +469,14 @@ Agent返回结果/回答: {agentFinalAnswer}";
                     new { role = "user", content = prompt }
                 },
                 tools = tools,
-                tool_choice = "auto"
+                tool_choice = toolChoice
             };
 
             var response = await client.PostAsJsonAsync($"{baseUrl.TrimEnd('/')}/chat/completions", requestBody);
             if (!response.IsSuccessStatusCode)
             {
-                _logger.LogWarning("LLM evaluation API call failed: {Status}", response.StatusCode);
+                var errorBody = await response.Content.ReadAsStringAsync();
+                _logger.LogWarning("LLM evaluation API call failed: {Status}, Body: {Body}", response.StatusCode, errorBody);
                 return;
             }
 
@@ -362,9 +507,6 @@ Agent返回结果/回答: {agentFinalAnswer}";
 
     private async Task HandleToolCallAsync(string name, string arguments)
     {
-        using var scope = _scopeFactory.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-
         try
         {
             using var doc = JsonDocument.Parse(arguments);
@@ -373,50 +515,54 @@ Agent返回结果/回答: {agentFinalAnswer}";
             switch (name)
             {
                 case "add_memory":
+                    // 仅在无任何长期记忆时创建第一条
                     if (root.TryGetProperty("content", out var c))
                     {
-                        db.Memories.Add(new LongTermMemory { Content = c.GetString() ?? "" });
-                        await db.SaveChangesAsync();
-                        _logger.LogInformation("Added new memory");
+                        await SaveSingleLongTermMemoryAsync(c.GetString() ?? "");
+                        _logger.LogInformation("Created first long term memory");
                     }
                     break;
-                case "replace_memory":
-                    if (root.TryGetProperty("id", out var idEl) && root.TryGetProperty("newContent", out var ncEl))
+
+                case "update_long_term_memory":
+                    // 合并更新唯一的长期记忆
+                    if (root.TryGetProperty("content", out var uc))
                     {
-                        if (Guid.TryParse(idEl.GetString(), out var id))
-                        {
-                            var mem = await db.Memories.FindAsync(id);
-                            if (mem != null)
-                            {
-                                mem.Content = ncEl.GetString() ?? "";
-                                mem.UpdatedAt = DateTime.UtcNow;
-                                await db.SaveChangesAsync();
-                                _logger.LogInformation("Replaced memory {Id}", id);
-                            }
-                        }
+                        await SaveSingleLongTermMemoryAsync(uc.GetString() ?? "");
+                        _logger.LogInformation("Updated long term memory (single entry mode)");
                     }
                     break;
-                case "remove_memory":
-                    if (root.TryGetProperty("id", out var ridEl))
-                    {
-                        if (Guid.TryParse(ridEl.GetString(), out var rid))
-                        {
-                            var mem = await db.Memories.FindAsync(rid);
-                            if (mem != null)
-                            {
-                                db.Memories.Remove(mem);
-                                await db.SaveChangesAsync();
-                                _logger.LogInformation("Removed memory {Id}", rid);
-                            }
-                        }
-                    }
-                    break;
+
                 case "update_user_profile":
                     if (root.TryGetProperty("profileJson", out var pj))
                     {
-                        await SaveUserProfileAsync(pj.GetString() ?? "{}");
-                        _logger.LogInformation("Updated user profile");
+                        var profileJson = pj.GetString() ?? "{}";
+                        // 验证JSON格式
+                        try
+                        {
+                            JsonDocument.Parse(profileJson);
+                            await SaveUserProfileAsync(profileJson);
+                            _logger.LogInformation("Updated user profile");
+                        }
+                        catch (JsonException ex)
+                        {
+                            _logger.LogWarning("Invalid user profile JSON received from LLM: {Error}", ex.Message);
+                        }
                     }
+                    break;
+
+                // 旧工具名兼容处理（replace_memory 和 remove_memory 在单条模式下不再使用）
+                case "replace_memory":
+                    // 兼容旧逻辑，映射到 update_long_term_memory
+                    if (root.TryGetProperty("newContent", out var ncEl))
+                    {
+                        await SaveSingleLongTermMemoryAsync(ncEl.GetString() ?? "");
+                        _logger.LogInformation("Replaced memory via compatibility mapping");
+                    }
+                    break;
+
+                case "remove_memory":
+                    // 单条模式下不支持删除，忽略
+                    _logger.LogWarning("remove_memory is not supported in single-entry mode, ignored");
                     break;
             }
         }

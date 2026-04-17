@@ -43,6 +43,7 @@ const ConsolePage: React.FC = () => {
   const [commonPaths, setCommonPaths] = useState<CommonPath[]>([]);
   const [selectedModel, setSelectedModel] = useState<string | undefined>(undefined);
   const [selectedWorkingDirectory, setSelectedWorkingDirectory] = useState<string | undefined>(undefined);
+  const [savedModels, setSavedModels] = useState<Record<string, string>>({}); // sessionId -> model
   const [gitDrawerVisible, setGitDrawerVisible] = useState(false);
   const [fileTreeDrawerVisible, setFileTreeDrawerVisible] = useState(false);
   const [openingTerminal, setOpeningTerminal] = useState(false);
@@ -268,6 +269,40 @@ const ConsolePage: React.FC = () => {
 
   const selectedAgent = agents.find(a => a.id === selectedAgentId);
 
+  // 从 localStorage 加载各会话的模型记忆
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('console_session_models');
+      if (saved) setSavedModels(JSON.parse(saved));
+    } catch { /* ignore */ }
+  }, []);
+
+  // 切换会话时恢复上次使用的模型
+  useEffect(() => {
+    const sessionId = selectedTask?.claudeSessionId;
+    if (!sessionId) return;
+
+    const savedModel = savedModels[sessionId];
+    if (savedModel) {
+      setSelectedModel(savedModel);
+    }
+  }, [selectedTask?.claudeSessionId, savedModels]);
+
+  // 保存模型选择到 localStorage
+  const saveModelForSession = useCallback((sessionId: string | undefined, model: string | undefined) => {
+    if (!sessionId) return;
+    setSavedModels(prev => {
+      const next = { ...prev, [sessionId]: model || '' };
+      try { localStorage.setItem('console_session_models', JSON.stringify(next)); } catch { /* ignore */ }
+      return next;
+    });
+  }, []);
+
+  const handleModelChange = useCallback((value: string) => {
+    setSelectedModel(value);
+    saveModelForSession(selectedTask?.claudeSessionId, value);
+  }, [selectedTask?.claudeSessionId, saveModelForSession]);
+
   // 仅当 Agent ID 真正切换时才重置模型和工作目录
   // 防止 setAgents 更新 lastUsedAt 导致 selectedAgent 引用变化而意外重置
   useEffect(() => {
@@ -313,6 +348,8 @@ const ConsolePage: React.FC = () => {
 
       // 这里的逻辑：启动后我们把这个新任务设为选中任务，后续的 conversationTasks 过滤就会带上它
       setSelectedTask(task);
+      // 保存模型到会话记忆（新会话）
+      if (task.claudeSessionId) saveModelForSession(task.claudeSessionId, selectedModel);
       setSessionTaskLimit(5); // 重置会话限制
       await loadTasks();
       // 通知看板等其他页面刷新
@@ -735,7 +772,7 @@ const ConsolePage: React.FC = () => {
                       <Select
                         size="small"
                         value={selectedModel}
-                        onChange={setSelectedModel}
+                        onChange={handleModelChange}
                         style={{ width: 140 }}
                         className="dark-select"
                         options={[

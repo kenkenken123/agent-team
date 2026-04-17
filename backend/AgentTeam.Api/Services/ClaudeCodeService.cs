@@ -508,7 +508,12 @@ public class ClaudeCodeService(
                                 }
                                 else if (itemType == "tool_use")
                                 {
-                                    sb.Append(ParseToolUse(item));
+                                    // 跳过 Agent 子智能体工具调用，不输出到控制台
+                                    var toolName = item.TryGetProperty("name", out var tNameEl) ? tNameEl.GetString() : "";
+                                    if (!string.Equals(toolName, "Agent", StringComparison.OrdinalIgnoreCase))
+                                    {
+                                        sb.Append(ParseToolUse(item));
+                                    }
                                 }
                                 else if (itemType == "AskUserQuestion")
                                 {
