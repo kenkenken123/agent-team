@@ -93,15 +93,7 @@
 }
 
 /* AI Optimization Button */
-.prompt-container {
-  position: relative;
-  width: 100%;
-}
-
 .ai-optimize-btn {
-  position: absolute;
-  right: 8px;
-  bottom: 8px;
   background: linear-gradient(135deg, #7c3aed 0%, #3b82f6 100%) !important;
   border: none !important;
   border-radius: 8px !important;
@@ -109,7 +101,7 @@
   box-shadow: 0 4px 12px rgba(124, 58, 237, 0.3);
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
   color: white !important;
-  display: flex !important;
+  display: inline-flex !important;
   align-items: center !important;
   font-weight: 500 !important;
   padding: 0 12px !important;

@@ -534,21 +534,22 @@ const AgentsPage: React.FC = () => {
             <Input placeholder="简要描述模板能力" />
           </Form.Item>
           <Form.Item name="systemPrompt" label="系统提示词" rules={[{ required: true, message: '请输入系统提示词' }]}>
-            <div className="prompt-container">
-              <TextArea
-                rows={6}
-                placeholder="你是一个专业的前端开发工程师，擅长 React 和 TypeScript..."
-              />
-              <Button
-                className="ai-optimize-btn"
-                icon={<ThunderboltOutlined />}
-                onClick={handleOptimizePrompt}
-                loading={optimizingPrompt}
-              >
-                AI 优化
-              </Button>
-            </div>
+            <TextArea
+              rows={6}
+              placeholder="你是一个专业的前端开发工程师，擅长 React 和 TypeScript..."
+              className="prompt-textarea"
+            />
           </Form.Item>
+          <div className="prompt-actions" style={{ textAlign: 'right', marginTop: -8, marginBottom: 16 }}>
+            <Button
+              className="ai-optimize-btn"
+              icon={<ThunderboltOutlined />}
+              onClick={handleOptimizePrompt}
+              loading={optimizingPrompt}
+            >
+              AI 优化
+            </Button>
+          </div>
           {editingTemplate && (
             <Form.Item name="isEnabled" label="启用" valuePropName="checked">
               <Switch />
