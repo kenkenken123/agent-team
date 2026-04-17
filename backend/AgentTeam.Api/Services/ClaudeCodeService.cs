@@ -352,7 +352,8 @@ public class ClaudeCodeService(
         if (agent.Template != null && !string.IsNullOrWhiteSpace(agent.Template.SystemPrompt))
         {
             args.Add("--system-prompt");
-            args.Add(agent.Template.SystemPrompt); // No need to escape for ArgumentList
+            var sanitizedSystemPrompt = agent.Template.SystemPrompt.Replace("\r\n", " ==>> ").Replace("\n", " ==>> ");
+            args.Add(sanitizedSystemPrompt);
         }
 
         if (agent.MaxTurns.HasValue)
@@ -371,7 +372,11 @@ public class ClaudeCodeService(
             var images = task.ImageUrls.Split(';');
             finalPrompt += "\n[附图: " + string.Join(", ", images) + "]";
         }
-        args.Add(finalPrompt);
+        
+        // 关键修复：claude-code CLI 在 --print 模式下，若 positional argument 包含换行符
+        // 可能会导致参数解析失败（提示 Input must be provided...）。将其替换为分隔符。
+        var sanitizedPrompt = finalPrompt.Replace("\r\n", " ==>> ").Replace("\n", " ==>> ");
+        args.Add(sanitizedPrompt);
 
         return args;
     }
