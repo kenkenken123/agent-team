@@ -6,6 +6,13 @@ using AgentTeam.Api.Services;
 using AgentTeam.Api.WebSockets;
 using Microsoft.EntityFrameworkCore;
 
+AppDomain.CurrentDomain.UnhandledException += (s, e) =>
+{
+    var ex = e.ExceptionObject as Exception;
+    Console.Error.WriteLine($"[UNHANDLED EXCEPTION] {ex}");
+    File.WriteAllText("unhandled_exception.log", ex?.ToString() ?? "Unknown error");
+};
+
 var builder = WebApplication.CreateBuilder(args);
 
 // 配置控制台日志
@@ -38,6 +45,7 @@ builder.Services.AddSingleton<ClaudeCodeService>();
 builder.Services.AddSingleton<TaskWebSocketManager>();
 builder.Services.AddSingleton<AgentTeam.Api.Services.PermissionHookService>();
 builder.Services.AddSingleton<GitService>();
+builder.Services.AddSingleton<TerminalService>();
 builder.Services.AddSingleton<WeChatBridgeService>(); // 新增
 builder.Services.AddScoped<MessageRouterService>();
 builder.Services.AddScoped<MessageIngestionService>();
@@ -150,8 +158,17 @@ app.Map("/ws/task/{taskId:guid}", async (HttpContext context, Guid taskId) =>
 });
 
 app.MapControllers();
-Console.WriteLine("Backend is running on http://0.0.0.0:5501 ...");
-app.Run("http://0.0.0.0:5501");
+try
+{
+    Console.WriteLine("Backend is running on http://0.0.0.0:5501 ...");
+    app.Run("http://0.0.0.0:5501");
+}
+catch (Exception ex)
+{
+    Console.Error.WriteLine($"[FATAL CRASH] {ex}");
+    File.WriteAllText("fatal_crash.log", ex.ToString());
+    throw;
+}
 
 // ─── 自定义 DateTime 序列化器：确保 UTC 时间带上 Z 标记 ─────────
 

@@ -1,15 +1,16 @@
 @echo off
 setlocal
+cd /d "%~dp0"
 title AgentConsole-Launcher
 
 echo ===========================================
 echo    Agent Console - All Services Restarter
 echo ===========================================
 
-echo [1/3] Cleaning up old processes
-rem --- Clean common ports ---
+echo [1/3] Cleaning up old processes...
+rem --- Clean common ports (5501: Backend, 5502: Frontend, 5503: PTY, 5504: WeChat) ---
 for %%p in (5501 5502 5503 5504) do (
-    for /f "tokens=5" %%a in ('netstat -aon ^| findstr :%%p ^| findstr LISTENING 2^>nul') do (
+    for /f "tokens=5" %%a in ('netstat -aon ^| findstr /R /C:":%%p[ ]" 2^>nul') do (
         echo Killing process on port %%p with PID %%a
         taskkill /F /PID %%a /T 2>nul
     )
@@ -18,10 +19,10 @@ for %%p in (5501 5502 5503 5504) do (
 timeout /t 2 /nobreak >nul
 
 echo [2/3] Starting Services
-start "PTY" cmd /c ".\run-pty.bat"
-start "Frontend" cmd /c ".\run-frontend.bat"
+powershell -WindowStyle Hidden -Command "Start-Process cmd -ArgumentList '/c .\run-pty.bat' -WindowStyle Hidden"
+powershell -WindowStyle Hidden -Command "Start-Process cmd -ArgumentList '/c .\run-frontend.bat' -WindowStyle Hidden"
 start "Backend" cmd /c ".\run-backend.bat"
-start "WeChat" cmd /c "wechat-service\run-wechat.bat"
+powershell -WindowStyle Hidden -Command "Start-Process cmd -ArgumentList '/c wechat-service\run-wechat.bat' -WindowStyle Hidden"
 
 echo [3/3] DONE
 echo Backend:  5501

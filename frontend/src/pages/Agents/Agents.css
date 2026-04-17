@@ -91,3 +91,56 @@
 .glass-tabs .ant-tabs-nav::before {
   border-bottom: 1px solid rgba(255, 255, 255, 0.05) !important;
 }
+
+/* AI Optimization Button */
+.prompt-container {
+  position: relative;
+  width: 100%;
+}
+
+.ai-optimize-btn {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  background: linear-gradient(135deg, #7c3aed 0%, #3b82f6 100%) !important;
+  border: none !important;
+  border-radius: 8px !important;
+  height: 32px !important;
+  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.3);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  color: white !important;
+  display: flex !important;
+  align-items: center !important;
+  font-weight: 500 !important;
+  padding: 0 12px !important;
+}
+
+.ai-optimize-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(124, 58, 237, 0.4);
+  filter: brightness(1.1);
+}
+
+.ai-optimize-btn:active {
+  transform: translateY(0);
+}
+
+.ai-optimize-btn .anticon {
+  font-size: 14px;
+}
+
+.agent-form .ant-input, 
+.agent-form .ant-input-number, 
+.agent-form .ant-select-selector {
+  background: rgba(13, 17, 23, 0.8) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  color: #E6EDF3 !important;
+  border-radius: 8px !important;
+}
+
+.agent-form .ant-input:focus, 
+.agent-form .ant-input-number:focus, 
+.agent-form .ant-select-selector:focus {
+  border-color: #58A6FF !important;
+  box-shadow: 0 0 0 2px rgba(88, 166, 255, 0.2) !important;
+}

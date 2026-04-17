@@ -198,6 +198,14 @@
   color: #f0f6fc;
 }
 
+.working-dir {
+  font-weight: 400;
+  font-size: 11px;
+  color: #8b949e;
+  margin-left: 6px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
 .session-id {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 11px;
@@ -599,6 +607,19 @@
   color: #c9d1d9;
   font-size: 13px;
   font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.shortcut-hint {
+  font-weight: 400;
+  font-size: 11px;
+  color: #8b949e;
+  background: #21262d;
+  padding: 1px 6px;
+  border-radius: 4px;
+  border: 1px solid #30363d;
 }
 
 .modal-textarea {

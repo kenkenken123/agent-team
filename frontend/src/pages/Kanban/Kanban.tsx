@@ -47,6 +47,7 @@ interface KanbanSession {
   sessionId: string;
   agentId: string;
   agentName: string;
+  workingDirectory?: string;
   latestTask?: AgentTask;
   status: TaskStatus | 'Idle';
   updatedAt: string;
@@ -81,22 +82,31 @@ const KanbanPage: React.FC = () => {
   // 任务输出缓存：taskId -> 最后一行有意义的输出
   const [outputCache, setOutputCache] = useState<Record<string, string>>({});
 
-  // 已查看的会话 ID 集合（localStorage 持久化）
-  const [viewedSessionIds, setViewedSessionIds] = useState<Set<string>>(() => {
+  // 已查看的会话记录：sessionId -> 查看时间戳（localStorage 持久化）
+  // 只有查看时间 > 任务完成时间，才算"已查看"
+  const [viewedSessions, setViewedSessions] = useState<Record<string, number>>(() => {
     try {
-      const stored = localStorage.getItem('kanban_viewed_sessions');
-      return stored ? new Set(JSON.parse(stored)) : new Set<string>();
+      const stored = localStorage.getItem('kanban_viewed_sessions_v2');
+      return stored ? JSON.parse(stored) : {};
     } catch {
-      return new Set<string>();
+      return {};
     }
   });
 
+  // 判断某个 session 是否已查看（查看时间是否晚于任务完成时间）
+  const isSessionViewed = useCallback((session: KanbanSession): boolean => {
+    if (session.isPlaceholder) return true;
+    const viewTime = viewedSessions[session.sessionId];
+    if (!viewTime || !session.latestTask) return false;
+    const taskTime = getTaskTriggerTime(session.latestTask);
+    return viewTime > parseTime(taskTime).valueOf();
+  }, [viewedSessions]);
+
   // 标记会话为已查看
   const markAsViewed = (sessionId: string) => {
-    setViewedSessionIds(prev => {
-      const next = new Set(prev);
-      next.add(sessionId);
-      localStorage.setItem('kanban_viewed_sessions', JSON.stringify([...next]));
+    setViewedSessions(prev => {
+      const next = { ...prev, [sessionId]: Date.now() };
+      localStorage.setItem('kanban_viewed_sessions_v2', JSON.stringify(next));
       return next;
     });
   };
@@ -150,6 +160,7 @@ const KanbanPage: React.FC = () => {
           sessionId: sid,
           agentId: task.agentId,
           agentName: task.agentName || 'Unknown Agent',
+          workingDirectory: task.workingDirectory,
           latestTask: task,
           status: task.status,
           updatedAt: triggerTime,
@@ -212,13 +223,13 @@ const KanbanPage: React.FC = () => {
     idle: filteredSessions.filter(s =>
       s.isPlaceholder || (
         (s.status === 'Completed' || s.status === 'Failed' || s.status === 'Cancelled') &&
-        viewedSessionIds.has(s.sessionId)
+        isSessionViewed(s)
       )
     ),
     running: filteredSessions.filter(s => s.status === 'Running'),
     completed: filteredSessions.filter(s =>
       (s.status === 'Completed' || s.status === 'Failed' || s.status === 'Cancelled') &&
-      !s.isPlaceholder && !viewedSessionIds.has(s.sessionId)
+      !s.isPlaceholder && !isSessionViewed(s)
     )
   };
 
@@ -303,6 +314,11 @@ const KanbanPage: React.FC = () => {
     setLastOutputContent(null);
     setIsLaunchModalOpen(true);
 
+    // 打开弹框即标记为已查看
+    if (session.sessionId) {
+      markAsViewed(session.sessionId);
+    }
+
     if (session.latestTask?.id) {
       setOutputLoading(true);
       try {
@@ -328,10 +344,10 @@ const KanbanPage: React.FC = () => {
       message.success('会话已彻底删除');
       // 清理已查看记录（仅真实会话ID需要清理）
       if (isRealSession) {
-        setViewedSessionIds(prev => {
-          const next = new Set(prev);
-          next.delete(session.sessionId);
-          localStorage.setItem('kanban_viewed_sessions', JSON.stringify([...next]));
+        setViewedSessions(prev => {
+          const next = { ...prev };
+          delete next[session.sessionId];
+          localStorage.setItem('kanban_viewed_sessions_v2', JSON.stringify(next));
           return next;
         });
       }
@@ -434,7 +450,12 @@ const KanbanPage: React.FC = () => {
           <div className="card-header">
             <div className="agent-meta">
               <div className={`status-dot ${statusInfo.dotClass}`} />
-              <span className="agent-name">{session.agentName}</span>
+              <span className="agent-name">
+                {session.agentName}
+                {session.workingDirectory && (
+                  <span className="working-dir">{session.workingDirectory}</span>
+                )}
+              </span>
             </div>
             {session.sessionId && (
               <span className="session-id">#{session.sessionId.substring(0, 8)}</span>
@@ -495,7 +516,7 @@ const KanbanPage: React.FC = () => {
             dropdownStyle={{ backgroundColor: '#161b22', border: '1px solid #30363d' }}
           >
             {agents.map(a => (
-              <Select.Option key={a.id} value={a.id}>{a.name}</Select.Option>
+              <Select.Option key={a.id} value={a.id}>{a.name}{a.workingDirectory && ` (${a.workingDirectory})`}</Select.Option>
             ))}
           </Select>
           <Button
@@ -634,12 +655,18 @@ const KanbanPage: React.FC = () => {
         )}
 
         <div className="modal-prompt-input">
-          <label className="prompt-label">新指令</label>
+          <label className="prompt-label">新指令 <span className="shortcut-hint">Ctrl+Enter 启动</span></label>
           <Input.TextArea
             placeholder="请输入任务内容..."
             autoSize={{ minRows: 3, maxRows: 6 }}
             value={launchPrompt}
             onChange={e => setLaunchPrompt(e.target.value)}
+            onKeyDown={e => {
+              if (e.ctrlKey && e.key === 'Enter') {
+                e.preventDefault();
+                handleLaunch();
+              }
+            }}
             className="modal-textarea"
           />
         </div>
@@ -671,7 +698,7 @@ const KanbanPage: React.FC = () => {
               dropdownStyle={{ backgroundColor: '#161b22', border: '1px solid #30363d' }}
             >
               {agents.map(a => (
-                <Select.Option key={a.id} value={a.id}>{a.name}</Select.Option>
+                <Select.Option key={a.id} value={a.id}>{a.name}{a.workingDirectory && ` (${a.workingDirectory})`}</Select.Option>
               ))}
             </Select>
           </div>

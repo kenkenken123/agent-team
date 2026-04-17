@@ -6,7 +6,8 @@ import {
 } from 'antd';
 import {
   PlusOutlined, EditOutlined, DeleteOutlined,
-  FolderOpenOutlined, RobotOutlined, FileTextOutlined
+  FolderOpenOutlined, RobotOutlined, FileTextOutlined,
+  ThunderboltOutlined,
 } from '@ant-design/icons';
 
 import type { ColumnsType } from 'antd/es/table';
@@ -26,7 +27,7 @@ const { TabPane } = Tabs;
 
 const AgentsPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState('agents');
-  
+
   const [agents, setAgents] = useState<Agent[]>([]);
   const [templates, setTemplates] = useState<AgentTemplate[]>([]);
   const [commonPaths, setCommonPaths] = useState<CommonPath[]>([]);
@@ -45,6 +46,8 @@ const AgentsPage: React.FC = () => {
   const [agentForm] = Form.useForm();
   const [templateForm] = Form.useForm();
   const [commonPathForm] = Form.useForm();
+
+  const [optimizingPrompt, setOptimizingPrompt] = useState(false);
 
   const loadAll = async () => {
     setLoading(true);
@@ -69,21 +72,52 @@ const AgentsPage: React.FC = () => {
   // -- Template Handlers --
   const openCreateTemplate = () => {
     setEditingTemplate(null);
-    templateForm.resetFields();
-    templateForm.setFieldsValue({ isEnabled: true });
     setTemplateDrawerOpen(true);
   };
 
   const openEditTemplate = (tmpl: AgentTemplate) => {
     setEditingTemplate(tmpl);
-    templateForm.setFieldsValue(tmpl);
     setTemplateDrawerOpen(true);
   };
+
+  // 表单数据填充：Drawer 打开后确保 Form 已准备好再设值
+  useEffect(() => {
+    if (!templateDrawerOpen) return;
+    if (editingTemplate) {
+      templateForm.setFieldsValue({
+        name: editingTemplate.name,
+        description: editingTemplate.description,
+        systemPrompt: editingTemplate.systemPrompt,
+        isEnabled: editingTemplate.isEnabled,
+      });
+    } else {
+      templateForm.resetFields();
+      templateForm.setFieldsValue({ isEnabled: true });
+    }
+  }, [templateDrawerOpen, editingTemplate]);
 
   const handleDeleteTemplate = async (id: string) => {
     await agentTemplateApi.delete(id);
     message.success('模板已删除');
     loadAll();
+  };
+
+  const handleOptimizePrompt = async () => {
+    const currentPrompt = templateForm.getFieldValue('systemPrompt');
+    if (!currentPrompt || !currentPrompt.trim()) {
+      message.warning('请先输入提示词内容');
+      return;
+    }
+    setOptimizingPrompt(true);
+    try {
+      const optimized = await agentTemplateApi.optimizePrompt(currentPrompt.trim());
+      templateForm.setFieldValue('systemPrompt', optimized);
+      message.success('提示词已优化');
+    } catch (e: any) {
+      message.error(e.response?.data?.message || e.message || '优化失败');
+    } finally {
+      setOptimizingPrompt(false);
+    }
   };
 
   const handleSaveTemplate = async () => {
@@ -111,8 +145,8 @@ const AgentsPage: React.FC = () => {
   const openEditAgent = (agent: Agent) => {
     setEditingAgent(agent);
     setDirValid(agent.workingDirectory ? true : null);
-    agentForm.setFieldsValue({ 
-      ...agent, 
+    agentForm.setFieldsValue({
+      ...agent,
       templateId: agent.templateId,
       allowedModels: agent.allowedModels?.split(',') || ['claude-3-7-sonnet-20250219']
     });
@@ -276,12 +310,12 @@ const AgentsPage: React.FC = () => {
         <Typography.Title level={3} style={{ margin: 0, color: '#E6EDF3', fontWeight: 800 }}>Agent 管理</Typography.Title>
       </div>
 
-      <Tabs 
-        activeKey={activeTab} 
-        onChange={setActiveTab} 
+      <Tabs
+        activeKey={activeTab}
+        onChange={setActiveTab}
         className="glass-tabs"
         tabBarExtraContent={
-          activeTab === 'agents' 
+          activeTab === 'agents'
             ? <Button type="primary" icon={<PlusOutlined />} onClick={openCreateAgent} style={{ borderRadius: 8 }}>新建 Agent 实例</Button>
             : activeTab === 'templates'
               ? <Button type="primary" icon={<PlusOutlined />} onClick={openCreateTemplate} style={{ borderRadius: 8 }}>新建 模板</Button>
@@ -300,41 +334,41 @@ const AgentsPage: React.FC = () => {
         </TabPane>
         <TabPane tab="常用目录" key="common-paths">
           <div className="agents-table-container">
-            <Table 
-              className="agents-table" 
+            <Table
+              className="agents-table"
               dataSource={commonPaths}
               rowKey="id"
               columns={[
-                { 
-                  title: '目录全路径', 
-                  dataIndex: 'path', 
-                  key: 'path', 
+                {
+                  title: '目录全路径',
+                  dataIndex: 'path',
+                  key: 'path',
                   ellipsis: true,
-                  render: p => <code style={{ color: '#8B949E' }}>{p}</code> 
+                  render: p => <code style={{ color: '#8B949E' }}>{p}</code>
                 },
-                { 
-                  title: '别名/说明', 
-                  dataIndex: 'name', 
-                  key: 'name', 
+                {
+                  title: '别名/说明',
+                  dataIndex: 'name',
+                  key: 'name',
                   width: 250,
-                  render: n => <span style={{ color: '#E6EDF3', fontWeight: 600 }}>{n}</span> 
+                  render: n => <span style={{ color: '#E6EDF3', fontWeight: 600 }}>{n}</span>
                 },
-                { 
-                  title: '添加时间', 
-                  dataIndex: 'createdAt', 
-                  key: 'createdAt', 
+                {
+                  title: '添加时间',
+                  dataIndex: 'createdAt',
+                  key: 'createdAt',
                   width: 200,
-                  render: d => <span style={{ color: '#8B949E', fontSize: 13 }}>{new Date(d).toLocaleString()}</span> 
+                  render: d => <span style={{ color: '#8B949E', fontSize: 13 }}>{new Date(d).toLocaleString()}</span>
                 },
-                { 
-                  title: '操作', 
-                  key: 'actions', 
+                {
+                  title: '操作',
+                  key: 'actions',
                   width: 100,
                   render: (_, r) => (
                     <Popconfirm title="移除常用路径？" onConfirm={() => handleDeleteCommonPath(r.id)}>
                       <Button type="text" icon={<DeleteOutlined />} danger size="small" />
                     </Popconfirm>
-                  ) 
+                  )
                 }
               ]}
             />
@@ -359,7 +393,20 @@ const AgentsPage: React.FC = () => {
             <Input placeholder="简要描述模板能力" />
           </Form.Item>
           <Form.Item name="systemPrompt" label="系统提示词" rules={[{ required: true, message: '请输入系统提示词' }]}>
-            <TextArea rows={5} placeholder="你是一个专业的前端开发工程师，擅长 React 和 TypeScript..." />
+            <div className="prompt-container">
+              <TextArea
+                rows={6}
+                placeholder="你是一个专业的前端开发工程师，擅长 React 和 TypeScript..."
+              />
+              <Button
+                className="ai-optimize-btn"
+                icon={<ThunderboltOutlined />}
+                onClick={handleOptimizePrompt}
+                loading={optimizingPrompt}
+              >
+                AI 优化
+              </Button>
+            </div>
           </Form.Item>
           {editingTemplate && (
             <Form.Item name="isEnabled" label="启用" valuePropName="checked">
@@ -383,9 +430,9 @@ const AgentsPage: React.FC = () => {
             <Input placeholder="例如：前端应用-1" />
           </Form.Item>
           <Form.Item name="templateId" label="选择模板" rules={[{ required: true, message: '请选择基于的模板' }]}>
-             <Select placeholder="选择关联的模板">
-                {templates.map(t => <Select.Option key={t.id} value={t.id}>{t.name}</Select.Option>)}
-             </Select>
+            <Select placeholder="选择关联的模板">
+              {templates.map(t => <Select.Option key={t.id} value={t.id}>{t.name}</Select.Option>)}
+            </Select>
           </Form.Item>
           <Form.Item
             name="workingDirectory"

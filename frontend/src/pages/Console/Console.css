@@ -273,23 +273,30 @@
   max-width: 800px;
   margin: 0 auto 8px auto;
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 12px;
   padding: 0 4px;
 }
 
-.options-left, .options-right {
+.options-left {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.options-left::-webkit-scrollbar {
+  height: 0;
 }
 
 .option-item {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-shrink: 0;
 }
 
 .option-label {
@@ -314,6 +321,17 @@
 .git-btn:hover {
   color: #58A6FF;
   border-color: #58A6FF;
+}
+
+.terminal-btn {
+  background: transparent;
+  border-color: #30363D;
+  color: #8B949E;
+}
+
+.terminal-btn:hover {
+  color: #3FB950;
+  border-color: #3FB950;
 }
 
 .toggle-item {

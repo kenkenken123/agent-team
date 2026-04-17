@@ -7,4 +7,5 @@ export const agentTemplateApi = {
   create: (req: CreateAgentTemplateRequest) => api.post<AgentTemplate>('/api/agent-templates', req).then(r => r.data),
   update: (id: string, req: UpdateAgentTemplateRequest) => api.put<AgentTemplate>(`/api/agent-templates/${id}`, req).then(r => r.data),
   delete: (id: string) => api.delete(`/api/agent-templates/${id}`),
+  optimizePrompt: (prompt: string) => api.post<{ systemPrompt: string }>('/api/agent-templates/optimize-prompt', { systemPrompt: prompt }).then(r => r.data.systemPrompt),
 };

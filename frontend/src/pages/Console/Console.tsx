@@ -10,13 +10,14 @@ import {
   RobotOutlined, ClockCircleOutlined, CheckCircleOutlined,
   CloseCircleOutlined, ExclamationCircleOutlined, DeleteOutlined, PictureOutlined,
   PushpinOutlined, PushpinFilled, DownOutlined, UpOutlined, SearchOutlined, BranchesOutlined,
-  SendOutlined, FolderOutlined,
+  SendOutlined, FolderOutlined, DesktopOutlined,
 } from '@ant-design/icons';
 import { Upload, Mentions, AutoComplete } from 'antd';
 
 import { agentApi } from '../../api/agentApi';
 import { taskApi } from '../../api/taskApi';
 import { commonPathApi } from '../../api/commonPathApi';
+import { terminalApi } from '../../api/terminalApi';
 import FileTreeDrawer from '../../components/FileTreeDrawer';
 import type { Agent, AgentTask, CommonPath } from '../../types';
 import { useAppStore } from '../../stores/appStore';
@@ -42,6 +43,7 @@ const ConsolePage: React.FC = () => {
   const [selectedWorkingDirectory, setSelectedWorkingDirectory] = useState<string | undefined>(undefined);
   const [gitDrawerVisible, setGitDrawerVisible] = useState(false);
   const [fileTreeDrawerVisible, setFileTreeDrawerVisible] = useState(false);
+  const [openingTerminal, setOpeningTerminal] = useState(false);
   const [dragOverInput, setDragOverInput] = useState(false);
   const inputWrapperRef = useRef<HTMLDivElement>(null);
   const draggedFilePathRef = useRef<string | null>(null);
@@ -348,6 +350,18 @@ const ConsolePage: React.FC = () => {
     }
   };
 
+  // 打开终端
+  const handleOpenTerminal = async () => {
+    if (!selectedWorkingDirectory) return;
+    setOpeningTerminal(true);
+    try {
+      await terminalApi.open(selectedWorkingDirectory);
+    } catch (e: any) {
+      message.error(e?.message || '打开终端失败');
+    } finally {
+      setOpeningTerminal(false);
+    }
+  };
 
   // 记录从目录树拖拽的文件/目录路径
   const handleFileTreeDragStart = useCallback((filePath: string, fileType: 'file' | 'directory') => {
@@ -677,7 +691,7 @@ const ConsolePage: React.FC = () => {
             <div className="chat-input-options">
               <div className="options-left">
                 {selectedAgent ? (
-                  <Space size={16}>
+                  <Space size={8}>
                     <div className="option-item">
                       <Text className="option-label">执行模型:</Text>
                       <Select
@@ -706,6 +720,17 @@ const ConsolePage: React.FC = () => {
                           ...commonPaths.map(p => ({ label: `${p.name} (${p.path})`, value: p.path }))
                         ]}
                       />
+                      <Tooltip title="打开终端">
+                        <Button
+                          size="small"
+                          type="text"
+                          icon={<DesktopOutlined />}
+                          onClick={handleOpenTerminal}
+                          disabled={!selectedWorkingDirectory}
+                          loading={openingTerminal}
+                          className="terminal-btn"
+                        />
+                      </Tooltip>
                       <Tooltip title="查看 Git 变更">
                         <Button
                           size="small"
@@ -727,6 +752,32 @@ const ConsolePage: React.FC = () => {
                         />
                       </Tooltip>
                     </div>
+                    <div className="toggle-item">
+                      <Tooltip title="使用 AI 优化指令以获得更精准的执行结果">
+                        <span className="toggle-label">优化 Prompt</span>
+                      </Tooltip>
+                      <Switch
+                        size="small"
+                        checked={optimizePrompt}
+                        onChange={setOptimizePrompt}
+                        className="premium-switch optimize-switch"
+                        checkedChildren="开"
+                        unCheckedChildren="关"
+                      />
+                    </div>
+                    <div className="toggle-item">
+                      <Tooltip title="仅进行分析与规划，不执行代码修改操作">
+                        <span className="toggle-label">Plan 模式</span>
+                      </Tooltip>
+                      <Switch
+                        size="small"
+                        checked={planMode}
+                        onChange={setPlanMode}
+                        className="premium-switch plan-switch"
+                        checkedChildren="开"
+                        unCheckedChildren="关"
+                      />
+                    </div>
                   </Space>
                 ) : (
                   <Space size={8} style={{ color: '#8B949E', fontSize: 12 }}>
@@ -734,37 +785,6 @@ const ConsolePage: React.FC = () => {
                     <span>请从侧边栏选择 Agent</span>
                   </Space>
                 )}
-              </div>
-
-              <div className="options-right">
-                <Space size={16}>
-                  <div className="toggle-item">
-                    <Tooltip title="使用 AI 优化指令以获得更精准的执行结果">
-                      <span className="toggle-label">优化 Prompt</span>
-                    </Tooltip>
-                    <Switch
-                      size="small"
-                      checked={optimizePrompt}
-                      onChange={setOptimizePrompt}
-                      className="premium-switch optimize-switch"
-                      checkedChildren="开"
-                      unCheckedChildren="关"
-                    />
-                  </div>
-                  <div className="toggle-item">
-                    <Tooltip title="仅进行分析与规划，不执行代码修改操作">
-                      <span className="toggle-label">Plan 模式</span>
-                    </Tooltip>
-                    <Switch
-                      size="small"
-                      checked={planMode}
-                      onChange={setPlanMode}
-                      className="premium-switch plan-switch"
-                      checkedChildren="开"
-                      unCheckedChildren="关"
-                    />
-                  </div>
-                </Space>
               </div>
 
               {!selectedWorkingDirectory && (!selectedAgent || !selectedAgent.workingDirectory) && (
