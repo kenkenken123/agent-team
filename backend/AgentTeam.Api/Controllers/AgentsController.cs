@@ -15,10 +15,11 @@ public class AgentsController(AppDbContext db) : ControllerBase
     {
         var agents = await db.Agents
             .Include(a => a.Template)
-            .Include(a => a.Tasks) // Include tasks to check status
+            .Include(a => a.Tasks)
+            .Include(a => a.Group)
             .OrderByDescending(a => a.UpdatedAt)
             .ToListAsync();
-        
+
         var dtos = agents.Select(a => ToDto(a)).ToList();
         return Ok(dtos);
     }
@@ -29,8 +30,9 @@ public class AgentsController(AppDbContext db) : ControllerBase
         var a = await db.Agents
             .Include(a => a.Template)
             .Include(a => a.Tasks)
+            .Include(a => a.Group)
             .FirstOrDefaultAsync(x => x.Id == id);
-            
+
         if (a == null) return NotFound();
         return Ok(ToDto(a));
     }
@@ -51,7 +53,8 @@ public class AgentsController(AppDbContext db) : ControllerBase
             Template = template,
             WorkingDirectory = req.WorkingDirectory,
             AllowedModels = req.AllowedModels,
-            MaxTurns = req.MaxTurns
+            MaxTurns = req.MaxTurns,
+            GroupId = req.GroupId
         };
         db.Agents.Add(agent);
         await db.SaveChangesAsync();
@@ -61,7 +64,7 @@ public class AgentsController(AppDbContext db) : ControllerBase
     [HttpPut("{id:guid}")]
     public async Task<IActionResult> Update(Guid id, [FromBody] UpdateAgentRequest req)
     {
-        var agent = await db.Agents.Include(a => a.Template).Include(a => a.Tasks).FirstOrDefaultAsync(a => a.Id == id);
+        var agent = await db.Agents.Include(a => a.Template).Include(a => a.Tasks).Include(a => a.Group).FirstOrDefaultAsync(a => a.Id == id);
         if (agent == null) return NotFound();
 
         if (!string.IsNullOrEmpty(req.WorkingDirectory) && !Directory.Exists(req.WorkingDirectory))
@@ -77,6 +80,7 @@ public class AgentsController(AppDbContext db) : ControllerBase
         agent.AllowedModels = req.AllowedModels;
         agent.MaxTurns = req.MaxTurns;
         agent.IsEnabled = req.IsEnabled;
+        agent.GroupId = req.GroupId;
         agent.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync();
         return Ok(ToDto(agent));
@@ -106,16 +110,26 @@ public class AgentsController(AppDbContext db) : ControllerBase
     {
         var status = a.Tasks?.Any(t => t.Status == Models.TaskStatus.Running) ?? false ? "working" : "idle";
         var latestTask = a.Tasks?.OrderByDescending(t => t.CreatedAt).FirstOrDefault();
-        
+
+        AgentGroupDto? groupDto = null;
+        if (a.Group != null)
+        {
+            groupDto = new AgentGroupDto(
+                a.Group.Id, a.Group.Name, a.Group.Description, a.Group.Color,
+                a.Group.SortOrder, 0, a.Group.CreatedAt, a.Group.UpdatedAt);
+        }
+
         return new AgentDto(
-            a.Id, a.Name, a.TemplateId, 
-            a.Template == null ? null : new AgentTemplateDto(a.Template.Id, a.Template.Name, a.Template.Description, a.Template.SystemPrompt, a.Template.IsEnabled, a.Template.CreatedAt, a.Template.UpdatedAt), 
-            a.WorkingDirectory, a.AllowedModels, a.MaxTurns, a.IsEnabled, 
+            a.Id, a.Name, a.TemplateId,
+            a.Template == null ? null : new AgentTemplateDto(a.Template.Id, a.Template.Name, a.Template.Description, a.Template.SystemPrompt, a.Template.IsEnabled, a.Template.CreatedAt, a.Template.UpdatedAt),
+            a.WorkingDirectory, a.AllowedModels, a.MaxTurns, a.IsEnabled,
             status,
             latestTask?.Prompt,
             latestTask?.Id,
             a.IsPinned,
             a.LastUsedAt,
+            a.GroupId,
+            groupDto,
             a.CreatedAt, a.UpdatedAt);
     }
 }

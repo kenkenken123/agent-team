@@ -8,6 +8,32 @@ export interface AgentTemplate {
   updatedAt: string;
 }
 
+// Agent Group 类型
+export interface AgentGroup {
+  id: string;
+  name: string;
+  description?: string;
+  color?: string;
+  sortOrder: number;
+  agentCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateAgentGroupRequest {
+  name: string;
+  description?: string;
+  color?: string;
+  sortOrder?: number;
+}
+
+export interface UpdateAgentGroupRequest {
+  name: string;
+  description?: string;
+  color?: string;
+  sortOrder: number;
+}
+
 export interface CreateAgentTemplateRequest {
   name: string;
   description: string;
@@ -33,6 +59,8 @@ export interface Agent {
   status: string;
   latestTaskPrompt?: string;
   latestTaskId?: string;
+  groupId?: string;
+  group?: AgentGroup;
   createdAt: string;
   updatedAt: string;
 }
@@ -43,6 +71,7 @@ export interface CreateAgentRequest {
   workingDirectory?: string;
   allowedModels: string;
   maxTurns?: number;
+  groupId?: string;
 }
 
 export interface UpdateAgentRequest extends CreateAgentRequest {
@@ -77,6 +106,8 @@ export interface AgentTask {
   tokensUsed?: number;
   inputTokens?: number;
   outputTokens?: number;
+  cacheReadTokens?: number;
+  cacheCreationTokens?: number;
   model?: string;
   isPlanMode?: boolean;
   finalResult?: string;
@@ -107,6 +138,8 @@ export interface AgentUsage {
   taskCount: number;
   inputTokens: number;
   outputTokens: number;
+  cacheReadTokens: number;
+  cacheCreationTokens: number;
   totalTokens: number;
 }
 
@@ -116,6 +149,8 @@ export interface OverviewStats {
   periodTasks: number;
   periodInputTokens: number;
   periodOutputTokens: number;
+  periodCacheReadTokens: number;
+  periodCacheCreationTokens: number;
 }
 
 // WebSocket 消息类型

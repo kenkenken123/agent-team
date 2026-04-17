@@ -42,6 +42,10 @@ public class AgentTask
     public int? TokensUsed { get; set; }
     public int? InputTokens { get; set; }
     public int? OutputTokens { get; set; }
+    /// <summary>输入缓存命中 token（读取缓存，通常优惠计费）</summary>
+    public int? CacheReadTokens { get; set; }
+    /// <summary>输入缓存创建 token（写入缓存，计费同普通 input）</summary>
+    public int? CacheCreationTokens { get; set; }
 
     /// <summary>任务输出日志文件路径</summary>
     public string? OutputFilePath { get; set; }

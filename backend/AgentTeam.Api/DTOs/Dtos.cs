@@ -1,5 +1,32 @@
 namespace AgentTeam.Api.DTOs;
 
+// ───── Agent Group DTOs ─────
+
+public record AgentGroupDto(
+    Guid Id,
+    string Name,
+    string? Description,
+    string? Color,
+    int SortOrder,
+    int AgentCount,
+    DateTime CreatedAt,
+    DateTime UpdatedAt
+);
+
+public record CreateAgentGroupRequest(
+    string Name,
+    string? Description,
+    string? Color,
+    int SortOrder = 0
+);
+
+public record UpdateAgentGroupRequest(
+    string Name,
+    string? Description,
+    string? Color,
+    int SortOrder
+);
+
 // ───── Agent DTOs ─────
 
 public record AgentTemplateDto(
@@ -39,6 +66,8 @@ public record AgentDto(
     Guid? LatestTaskId,
     bool IsPinned,
     DateTime? LastUsedAt,
+    Guid? GroupId,
+    AgentGroupDto? Group,
     DateTime CreatedAt,
     DateTime UpdatedAt
 );
@@ -48,7 +77,8 @@ public record CreateAgentRequest(
     Guid TemplateId,
     string? WorkingDirectory,
     string AllowedModels,
-    int? MaxTurns
+    int? MaxTurns,
+    Guid? GroupId = null
 );
 
 public record UpdateAgentRequest(
@@ -57,7 +87,8 @@ public record UpdateAgentRequest(
     string? WorkingDirectory,
     string AllowedModels,
     int? MaxTurns,
-    bool IsEnabled
+    bool IsEnabled,
+    Guid? GroupId = null
 );
 
 // ───── Common Path DTOs ─────
@@ -93,6 +124,8 @@ public record TaskDto(
     int? TokensUsed,
     int? InputTokens,
     int? OutputTokens,
+    int? CacheReadTokens,
+    int? CacheCreationTokens,
     string? Model,
     bool IsPlanMode,
     string? FinalResult,
@@ -125,7 +158,9 @@ public record OverviewStats(
     int RunningTasks,
     int PeriodTasks, // 改名为 Period 以支持区间
     int PeriodInputTokens,
-    int PeriodOutputTokens
+    int PeriodOutputTokens,
+    int PeriodCacheReadTokens,
+    int PeriodCacheCreationTokens
 );
 
 public record AgentUsageDto(
@@ -134,6 +169,8 @@ public record AgentUsageDto(
     int TaskCount,
     int InputTokens,
     int OutputTokens,
+    int CacheReadTokens,
+    int CacheCreationTokens,
     int TotalTokens
 );
 

@@ -103,7 +103,7 @@ const Dashboard: React.FC = () => {
                                 <DeploymentUnitOutlined className="stat-icon" style={{ color: '#A371F7' }} />
                             </div>
                             <div className="stat-value">
-                                {formatNum((stats?.periodInputTokens ?? 0) + (stats?.periodOutputTokens ?? 0))}
+                                {formatNum((stats?.periodInputTokens ?? 0) + (stats?.periodOutputTokens ?? 0) + (stats?.periodCacheReadTokens ?? 0) + (stats?.periodCacheCreationTokens ?? 0))}
                                 <span className="stat-unit">tokens</span>
                             </div>
                         </div>
@@ -121,6 +121,14 @@ const Dashboard: React.FC = () => {
                                 <div className="usage-item">
                                     <div className="usage-label">输出 (Output)</div>
                                     <div className="usage-value output">{formatNum(stats?.periodOutputTokens ?? 0)}</div>
+                                </div>
+                                <div className="usage-item">
+                                    <div className="usage-label">缓存读取 (Cache Read)</div>
+                                    <div className="usage-value" style={{ color: '#A371F7' }}>{formatNum(stats?.periodCacheReadTokens ?? 0)}</div>
+                                </div>
+                                <div className="usage-item">
+                                    <div className="usage-label">缓存创建 (Cache Create)</div>
+                                    <div className="usage-value" style={{ color: '#D29922' }}>{formatNum(stats?.periodCacheCreationTokens ?? 0)}</div>
                                 </div>
                             </div>
                         </div>
@@ -141,7 +149,7 @@ const Dashboard: React.FC = () => {
                                             <div className="agent-tokens">
                                                 <div className="token-total">{formatNum(agent.totalTokens)}</div>
                                                 <div className="token-breakdown">
-                                                    In: {formatNum(agent.inputTokens)} | Out: {formatNum(agent.outputTokens)}
+                                                    In: {formatNum(agent.inputTokens)} | Out: {formatNum(agent.outputTokens)} | CacheR: {formatNum(agent.cacheReadTokens)} | CacheW: {formatNum(agent.cacheCreationTokens)}
                                                 </div>
                                             </div>
                                             <div className="usage-progress-bar">

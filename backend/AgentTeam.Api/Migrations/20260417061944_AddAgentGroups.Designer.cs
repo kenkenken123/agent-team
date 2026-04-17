@@ -3,6 +3,7 @@ using System;
 using AgentTeam.Api.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -10,9 +11,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace AgentTeam.Api.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260417061944_AddAgentGroups")]
+    partial class AddAgentGroups
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.5");
@@ -109,12 +112,6 @@ namespace AgentTeam.Api.Migrations
 
                     b.Property<Guid>("AgentId")
                         .HasColumnType("TEXT");
-
-                    b.Property<int?>("CacheCreationTokens")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int?>("CacheReadTokens")
-                        .HasColumnType("INTEGER");
 
                     b.Property<string>("ClaudeSessionId")
                         .HasColumnType("TEXT");

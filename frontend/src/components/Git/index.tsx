@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Drawer, List, Typography, Space, Button, Modal, Spin, Tag, Input, message, Alert } from 'antd';
-import { ReloadOutlined, FileTextOutlined, BranchesOutlined, ScanOutlined, CloudUploadOutlined, ThunderboltOutlined } from '@ant-design/icons';
+import { Drawer, List, Typography, Space, Button, Modal, Spin, Tag, Input, message, Alert, Popconfirm, Dropdown } from 'antd';
+import { ReloadOutlined, FileTextOutlined, BranchesOutlined, ScanOutlined, CloudUploadOutlined, ThunderboltOutlined, UndoOutlined, CheckOutlined, DownOutlined } from '@ant-design/icons';
 import { gitApi } from '../../api/gitApi';
-import type { GitStatusInfo, GitFileStatus } from '../../api/gitApi';
+import type { GitStatusInfo, GitFileStatus, GitBranchInfo } from '../../api/gitApi';
 import './index.css';
 
 const { Text } = Typography;
@@ -326,6 +326,53 @@ export const GitDrawer: React.FC<GitDrawerProps> = ({ visible, onClose, workingD
     }
   };
 
+  const [revertingFiles, setRevertingFiles] = useState<Set<string>>(new Set());
+  const [branches, setBranches] = useState<GitBranchInfo[]>([]);
+  const [loadingBranches, setLoadingBranches] = useState(false);
+  const [branchMenuOpen, setBranchMenuOpen] = useState(false);
+
+  const handleRevertFile = async (file: GitFileStatus) => {
+    if (!workingDirectory) return;
+    setRevertingFiles(prev => new Set(prev).add(file.path));
+    try {
+      await gitApi.revertFile(workingDirectory, file.path, file.status);
+      message.success(`已撤销: ${file.path}`);
+      fetchStatus();
+    } catch (error: any) {
+      message.error(error.message || '撤销失败');
+    } finally {
+      setRevertingFiles(prev => {
+        const next = new Set(prev);
+        next.delete(file.path);
+        return next;
+      });
+    }
+  };
+
+  const loadBranches = async () => {
+    if (!workingDirectory) return;
+    setLoadingBranches(true);
+    try {
+      const data = await gitApi.getBranches(workingDirectory);
+      setBranches(data);
+    } catch (error: any) {
+      message.error(error.message || '获取分支列表失败');
+    } finally {
+      setLoadingBranches(false);
+    }
+  };
+
+  const handleSwitchBranch = async (branchName: string) => {
+    if (!workingDirectory) return;
+    try {
+      await gitApi.switchBranch(workingDirectory, branchName);
+      message.success(`已切换到 ${branchName}`);
+      fetchStatus();
+    } catch (error: any) {
+      message.error(error.message || '切换分支失败');
+    }
+  };
+
   const handleCommitPush = async () => {
     if (!workingDirectory) return;
     if (!commitMessage.trim()) {
@@ -383,13 +430,50 @@ export const GitDrawer: React.FC<GitDrawerProps> = ({ visible, onClose, workingD
           <div className="git-content" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
             {/* Branch header */}
             <div className="git-header" style={{ padding: '16px 20px' }}>
-              <Space>
-                <BranchesOutlined style={{ color: '#A371F7' }} />
-                <Text strong style={{ color: '#E6EDF3', fontSize: 14 }}>{statusInfo?.branch || 'Unknown'}</Text>
-                {changeCount > 0 && (
-                  <Tag bordered={false} style={{ background: 'rgba(88, 166, 255, 0.1)', color: '#58A6FF', borderRadius: 4, fontSize: 11 }}>{changeCount} changes</Tag>
-                )}
-              </Space>
+              <Dropdown
+                menu={{
+                  items: branches.map(b => ({
+                    key: b.name,
+                    label: (
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <Space>
+                          {b.isRemote && <span style={{ color: '#8B949E', fontSize: 11 }}>remotes/</span>}
+                          <Text style={{ fontSize: 13 }}>{b.name.replace(/^remotes\//, '')}</Text>
+                        </Space>
+                        {b.isCurrent && <CheckOutlined style={{ color: '#3FB950', fontSize: 12 }} />}
+                      </div>
+                    ),
+                    onClick: () => {
+                      if (!b.isCurrent) {
+                        handleSwitchBranch(b.name);
+                      }
+                    },
+                    disabled: b.isCurrent,
+                  })),
+                  style: { maxHeight: 400, overflowY: 'auto' },
+                }}
+                trigger={['click']}
+                onOpenChange={(open) => {
+                  setBranchMenuOpen(open);
+                  if (open) loadBranches();
+                }}
+              >
+                <Button
+                  type="text"
+                  size="small"
+                  className="branch-switch-btn"
+                  loading={loadingBranches && branchMenuOpen}
+                >
+                  <Space>
+                    <BranchesOutlined style={{ color: '#A371F7' }} />
+                    <Text strong style={{ color: '#E6EDF3', fontSize: 14 }}>{statusInfo?.branch || 'Unknown'}</Text>
+                    <DownOutlined style={{ fontSize: 10, color: '#8B949E' }} />
+                  </Space>
+                </Button>
+              </Dropdown>
+              {changeCount > 0 && (
+                <Tag bordered={false} style={{ marginLeft: 8, background: 'rgba(88, 166, 255, 0.1)', color: '#58A6FF', borderRadius: 4, fontSize: 11 }}>{changeCount} changes</Tag>
+              )}
             </div>
 
             {/* Action buttons bar */}
@@ -455,21 +539,44 @@ export const GitDrawer: React.FC<GitDrawerProps> = ({ visible, onClose, workingD
                 <List
                   size="small"
                   dataSource={statusInfo?.files || []}
-                  renderItem={(item) => (
-                    <List.Item
-                      className="git-list-item"
-                      onClick={() => handleViewDiff(item)}
-                      style={{ cursor: 'pointer', padding: '12px 20px' }}
-                    >
-                      <Space style={{ width: '100%', justifyContent: 'space-between' }}>
-                        <Space>
-                          {renderStatusTag(item.status)}
-                          <FileTextOutlined style={{ color: '#8B949E' }} />
-                          <Text style={{ color: '#C9D1D9', fontSize: 13, fontFamily: 'JetBrains Mono, monospace' }}>{item.path}</Text>
+                  renderItem={(item) => {
+                    const isReverting = revertingFiles.has(item.path);
+                    return (
+                      <List.Item
+                        className="git-list-item"
+                        onClick={() => handleViewDiff(item)}
+                        style={{ cursor: 'pointer', padding: '12px 20px' }}
+                      >
+                        <Space style={{ width: '100%', justifyContent: 'space-between' }}>
+                          <Space>
+                            {renderStatusTag(item.status)}
+                            <FileTextOutlined style={{ color: '#8B949E' }} />
+                            <Text style={{ color: '#C9D1D9', fontSize: 13, fontFamily: 'JetBrains Mono, monospace' }}>{item.path}</Text>
+                          </Space>
+                          <Space size={4}>
+                            <Popconfirm
+                              title={`确定撤销 "${item.path}" 的变更？`}
+                              description="此操作不可恢复"
+                              onConfirm={(e) => { e?.stopPropagation(); handleRevertFile(item); }}
+                              onCancel={(e) => e?.stopPropagation()}
+                              okText="撤销"
+                              cancelText="取消"
+                              okButtonProps={{ danger: true, loading: isReverting }}
+                            >
+                              <Button
+                                type="text"
+                                size="small"
+                                icon={<UndoOutlined />}
+                                loading={isReverting}
+                                onClick={(e) => e.stopPropagation()}
+                                className="git-revert-btn"
+                              />
+                            </Popconfirm>
+                          </Space>
                         </Space>
-                      </Space>
-                    </List.Item>
-                  )}
+                      </List.Item>
+                    );
+                  }}
                   locale={{ emptyText: <div style={{ padding: 40, color: '#484F58' }}>No local changes</div> }}
                 />
               </Spin>

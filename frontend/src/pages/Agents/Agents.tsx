@@ -2,21 +2,22 @@ import React, { useEffect, useState } from 'react';
 import {
   Table, Button, Tag, Drawer, Form, Input, InputNumber,
   Switch, Space, Popconfirm, message, Typography, Tooltip,
-  Select, Tabs,
+  Select, Tabs, ColorPicker,
 } from 'antd';
 import {
   PlusOutlined, EditOutlined, DeleteOutlined,
   FolderOpenOutlined, RobotOutlined, FileTextOutlined,
-  ThunderboltOutlined,
+  ThunderboltOutlined, TeamOutlined,
 } from '@ant-design/icons';
 
 import type { ColumnsType } from 'antd/es/table';
 import { agentApi } from '../../api/agentApi';
+import { agentGroupApi } from '../../api/agentGroupApi';
 import { agentTemplateApi } from '../../api/agentTemplateApi';
 import { commonPathApi } from '../../api/commonPathApi';
 import { statsApi } from '../../api/taskApi';
 import { getModelConfigs } from '../../api/configApi';
-import type { Agent, AgentTemplate, CommonPath, CreateAgentRequest, UpdateAgentRequest, CreateAgentTemplateRequest, UpdateAgentTemplateRequest, CreateCommonPathRequest } from '../../types';
+import type { Agent, AgentTemplate, CommonPath, CreateAgentRequest, UpdateAgentRequest, CreateAgentTemplateRequest, UpdateAgentTemplateRequest, CreateCommonPathRequest, AgentGroup, CreateAgentGroupRequest, UpdateAgentGroupRequest } from '../../types';
 import './Agents.css';
 
 const { Title, Text } = Typography;
@@ -29,21 +30,25 @@ const AgentsPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState('agents');
 
   const [agents, setAgents] = useState<Agent[]>([]);
+  const [groups, setGroups] = useState<AgentGroup[]>([]);
   const [templates, setTemplates] = useState<AgentTemplate[]>([]);
   const [commonPaths, setCommonPaths] = useState<CommonPath[]>([]);
   const [availableModels, setAvailableModels] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
 
   const [agentDrawerOpen, setAgentDrawerOpen] = useState(false);
+  const [groupDrawerOpen, setGroupDrawerOpen] = useState(false);
   const [templateDrawerOpen, setTemplateDrawerOpen] = useState(false);
   const [commonPathDrawerOpen, setCommonPathDrawerOpen] = useState(false);
 
   const [editingAgent, setEditingAgent] = useState<Agent | null>(null);
+  const [editingGroup, setEditingGroup] = useState<AgentGroup | null>(null);
   const [editingTemplate, setEditingTemplate] = useState<AgentTemplate | null>(null);
 
   const [dirValid, setDirValid] = useState<boolean | null>(null);
 
   const [agentForm] = Form.useForm();
+  const [groupForm] = Form.useForm();
   const [templateForm] = Form.useForm();
   const [commonPathForm] = Form.useForm();
 
@@ -52,16 +57,18 @@ const AgentsPage: React.FC = () => {
   const loadAll = async () => {
     setLoading(true);
     try {
-      const [ts, as, ps, ms] = await Promise.all([
+      const [ts, as, ps, ms, gs] = await Promise.all([
         agentTemplateApi.getAll(),
         agentApi.getAll(),
         commonPathApi.getAll(),
-        getModelConfigs()
+        getModelConfigs(),
+        agentGroupApi.getAll()
       ]);
       setTemplates(ts);
       setAgents(as);
       setCommonPaths(ps);
       setAvailableModels(ms.data.map(m => m.modelId));
+      setGroups(gs);
     } finally {
       setLoading(false);
     }
@@ -133,6 +140,62 @@ const AgentsPage: React.FC = () => {
     loadAll();
   };
 
+  // -- Group Handlers --
+  const openCreateGroup = () => {
+    setEditingGroup(null);
+    groupForm.resetFields();
+    groupForm.setFieldsValue({ sortOrder: 0 });
+    setGroupDrawerOpen(true);
+  };
+
+  const openEditGroup = (group: AgentGroup) => {
+    setEditingGroup(group);
+    groupForm.setFieldsValue({
+      name: group.name,
+      description: group.description,
+      color: group.color,
+      sortOrder: group.sortOrder
+    });
+    setGroupDrawerOpen(true);
+  };
+
+  const handleDeleteGroup = async (id: string) => {
+    await agentGroupApi.delete(id);
+    message.success('工作组已删除');
+    loadAll();
+  };
+
+  const handleSaveGroup = async () => {
+    const values = await groupForm.validateFields();
+    // ColorPicker returns a Color object, we need to convert to hex string
+    if (values.color && typeof values.color === 'object') {
+      values.color = values.color.toHexString();
+    }
+    if (editingGroup) {
+      await agentGroupApi.update(editingGroup.id, values as UpdateAgentGroupRequest);
+      message.success('工作组已更新');
+    } else {
+      await agentGroupApi.create(values as CreateAgentGroupRequest);
+      message.success('工作组已创建');
+    }
+    setGroupDrawerOpen(false);
+    loadAll();
+  };
+
+  useEffect(() => {
+    if (!groupDrawerOpen) return;
+    if (editingGroup) {
+      groupForm.setFieldsValue({
+        name: editingGroup.name,
+        description: editingGroup.description,
+        sortOrder: editingGroup.sortOrder
+      });
+    } else {
+      groupForm.resetFields();
+      groupForm.setFieldsValue({ sortOrder: 0 });
+    }
+  }, [groupDrawerOpen, editingGroup]);
+
   // -- Agent Handlers --
   const openCreateAgent = () => {
     setEditingAgent(null);
@@ -148,7 +211,8 @@ const AgentsPage: React.FC = () => {
     agentForm.setFieldsValue({
       ...agent,
       templateId: agent.templateId,
-      allowedModels: agent.allowedModels?.split(',') || ['claude-3-7-sonnet-20250219']
+      allowedModels: agent.allowedModels?.split(',') || ['claude-3-7-sonnet-20250219'],
+      groupId: agent.groupId
     });
     setAgentDrawerOpen(true);
   };
@@ -204,6 +268,54 @@ const AgentsPage: React.FC = () => {
     setDirValid(exists);
     if (!exists) message.warning('目录不存在，请检查路径');
   };
+
+  const groupColumns: ColumnsType<AgentGroup> = [
+    {
+      title: '工作组名称',
+      dataIndex: 'name',
+      key: 'name',
+      render: (name, rec) => (
+        <Space>
+          {rec.color && <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: rec.color }} />}
+          <span style={{ color: '#C9D1D9', fontWeight: 500 }}>{name}</span>
+        </Space>
+      ),
+    },
+    {
+      title: '描述',
+      dataIndex: 'description',
+      key: 'description',
+      ellipsis: true,
+      render: (desc) => <span style={{ color: '#8B949E' }}>{desc || '-'}</span>,
+    },
+    {
+      title: 'Agent 数量',
+      dataIndex: 'agentCount',
+      key: 'agentCount',
+      width: 100,
+      render: (count) => <Tag color="blue">{count || 0}</Tag>,
+    },
+    {
+      title: '排序',
+      dataIndex: 'sortOrder',
+      key: 'sortOrder',
+      width: 80,
+      render: (order) => <span style={{ color: '#8B949E' }}>{order}</span>,
+    },
+    {
+      title: '操作',
+      key: 'actions',
+      width: 140,
+      render: (_, record) => (
+        <Space>
+          <Button type="text" icon={<EditOutlined />} size="small" onClick={() => openEditGroup(record)} style={{ color: '#58A6FF' }} />
+          <Popconfirm title="删除工作组后，组内 Agent 将变为未分组。确认删除？" onConfirm={() => handleDeleteGroup(record.id)} okText="删除" cancelText="取消" okButtonProps={{ danger: true }}>
+            <Button type="text" icon={<DeleteOutlined />} size="small" danger />
+          </Popconfirm>
+        </Space>
+      ),
+    },
+  ];
 
   const templateColumns: ColumnsType<AgentTemplate> = [
     {
@@ -266,6 +378,16 @@ const AgentsPage: React.FC = () => {
       render: (_, rec) => <span style={{ color: '#8B949E' }}>{rec.template?.name || '未知模板'}</span>,
     },
     {
+      title: '工作组',
+      key: 'groupName',
+      width: 120,
+      render: (_, rec) => rec.group ? (
+        <Tag color={rec.group.color || 'blue'}>{rec.group.name}</Tag>
+      ) : (
+        <span style={{ color: '#8B949E' }}>未分组</span>
+      ),
+    },
+    {
       title: '工作目录',
       dataIndex: 'workingDirectory',
       key: 'workingDirectory',
@@ -317,14 +439,33 @@ const AgentsPage: React.FC = () => {
         tabBarExtraContent={
           activeTab === 'agents'
             ? <Button type="primary" icon={<PlusOutlined />} onClick={openCreateAgent} style={{ borderRadius: 8 }}>新建 Agent 实例</Button>
-            : activeTab === 'templates'
-              ? <Button type="primary" icon={<PlusOutlined />} onClick={openCreateTemplate} style={{ borderRadius: 8 }}>新建 模板</Button>
-              : <Button type="primary" icon={<PlusOutlined />} onClick={openCreateCommonPath} style={{ borderRadius: 8 }}>添加常用目录</Button>
+            : activeTab === 'groups'
+              ? <Button type="primary" icon={<PlusOutlined />} onClick={openCreateGroup} style={{ borderRadius: 8 }}>新建工作组</Button>
+              : activeTab === 'templates'
+                ? <Button type="primary" icon={<PlusOutlined />} onClick={openCreateTemplate} style={{ borderRadius: 8 }}>新建 模板</Button>
+                : <Button type="primary" icon={<PlusOutlined />} onClick={openCreateCommonPath} style={{ borderRadius: 8 }}>添加常用目录</Button>
         }
       >
         <TabPane tab="Agent 实例" key="agents">
           <div className="agents-table-container">
             <Table className="agents-table" columns={agentColumns} dataSource={agents} rowKey="id" loading={loading} pagination={{ pageSize: 10 }} />
+          </div>
+        </TabPane>
+        <TabPane tab={
+          <span>
+            <TeamOutlined style={{ marginRight: 4 }} />
+            工作组
+          </span>
+        } key="groups">
+          <div className="agents-table-container">
+            <Table
+              className="agents-table"
+              columns={groupColumns}
+              dataSource={groups}
+              rowKey="id"
+              loading={loading}
+              pagination={{ pageSize: 10 }}
+            />
           </div>
         </TabPane>
         <TabPane tab="Agent 模板" key="templates">
@@ -434,6 +575,11 @@ const AgentsPage: React.FC = () => {
               {templates.map(t => <Select.Option key={t.id} value={t.id}>{t.name}</Select.Option>)}
             </Select>
           </Form.Item>
+          <Form.Item name="groupId" label="工作组">
+            <Select placeholder="选择所属工作组（可选）" allowClear>
+              {groups.map(g => <Select.Option key={g.id} value={g.id}>{g.name}</Select.Option>)}
+            </Select>
+          </Form.Item>
           <Form.Item
             name="workingDirectory"
             label={<span>操作目录 <Tooltip title="留空则表示每次启动任务时手动选择"><Text type="secondary" style={{ fontSize: 12 }}>(可选)</Text></Tooltip></span>}
@@ -453,6 +599,31 @@ const AgentsPage: React.FC = () => {
               <Switch />
             </Form.Item>
           )}
+        </Form>
+      </Drawer>
+
+      {/* --- 工作组 Drawer --- */}
+      <Drawer
+        title={editingGroup ? '编辑工作组' : '新建工作组'}
+        open={groupDrawerOpen}
+        onClose={() => setGroupDrawerOpen(false)}
+        width={480}
+        extra={<Button type="primary" onClick={handleSaveGroup}>保存</Button>}
+        styles={{ body: { background: '#0D1117' }, header: { background: '#161B22', borderBottom: '1px solid #21262D' } }}
+      >
+        <Form form={groupForm} layout="vertical" className="agent-form">
+          <Form.Item name="name" label="工作组名称" rules={[{ required: true, message: '请输入工作组名称' }]}>
+            <Input placeholder="例如：前端团队、后端开发" />
+          </Form.Item>
+          <Form.Item name="description" label="描述">
+            <Input placeholder="简要描述该工作组的用途" />
+          </Form.Item>
+          <Form.Item name="color" label="颜色标识">
+            <Input type="color" placeholder="#4676e5" />
+          </Form.Item>
+          <Form.Item name="sortOrder" label="排序">
+            <InputNumber min={0} max={999} placeholder="数字越小越靠前" style={{ width: '100%' }} />
+          </Form.Item>
         </Form>
       </Drawer>
 

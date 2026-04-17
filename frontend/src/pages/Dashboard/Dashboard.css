@@ -178,9 +178,15 @@
 }
 
 /* Token Usage Section */
+.usage-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+}
+
 .usage-item {
-  padding-bottom: 24px;
-  margin-bottom: 24px;
+  padding-bottom: 16px;
+  margin-bottom: 16px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.05);
 }
 
@@ -195,7 +201,7 @@
 }
 
 .usage-value {
-  font-size: 36px;
+  font-size: 24px;
   font-weight: 800;
   font-family: 'Outfit', sans-serif;
 }

@@ -434,15 +434,19 @@ public class ClaudeCodeService(
             // ===== 提取 usage / token 统计 =====
             if (root.TryGetProperty("usage", out var usageEl))
             {
-                int inputTokens = 0, outputTokens = 0;
+                int inputTokens = 0, outputTokens = 0, cacheReadTokens = 0, cacheCreationTokens = 0;
                 if (usageEl.TryGetProperty("input_tokens", out var inEl) && inEl.ValueKind == JsonValueKind.Number)
                     inputTokens = inEl.GetInt32();
                 if (usageEl.TryGetProperty("output_tokens", out var outEl) && outEl.ValueKind == JsonValueKind.Number)
                     outputTokens = outEl.GetInt32();
+                if (usageEl.TryGetProperty("cache_read_input_tokens", out var crEl) && crEl.ValueKind == JsonValueKind.Number)
+                    cacheReadTokens = crEl.GetInt32();
+                if (usageEl.TryGetProperty("cache_creation_input_tokens", out var ccEl) && ccEl.ValueKind == JsonValueKind.Number)
+                    cacheCreationTokens = ccEl.GetInt32();
 
-                if (inputTokens > 0 || outputTokens > 0)
+                if (inputTokens > 0 || outputTokens > 0 || cacheReadTokens > 0 || cacheCreationTokens > 0)
                 {
-                    UpdateTaskUsage(taskId, inputTokens, outputTokens);
+                    UpdateTaskUsage(taskId, inputTokens, outputTokens, cacheReadTokens, cacheCreationTokens);
                 }
             }
 
@@ -574,7 +578,7 @@ public class ClaudeCodeService(
         return $"\r\n\x1b[36m[Claude 正在调用工具: {toolName}{detail}]\x1b[0m\r\n";
     }
 
-    private void UpdateTaskUsage(Guid taskId, int input, int output)
+    private void UpdateTaskUsage(Guid taskId, int input, int output, int cacheRead, int cacheCreation)
     {
         _ = Task.Run(async () =>
         {
@@ -585,7 +589,9 @@ public class ClaudeCodeService(
             {
                 t.InputTokens = (t.InputTokens ?? 0) + input;
                 t.OutputTokens = (t.OutputTokens ?? 0) + output;
-                t.TokensUsed = t.InputTokens + t.OutputTokens;
+                t.CacheReadTokens = (t.CacheReadTokens ?? 0) + cacheRead;
+                t.CacheCreationTokens = (t.CacheCreationTokens ?? 0) + cacheCreation;
+                t.TokensUsed = t.InputTokens + t.OutputTokens + t.CacheReadTokens + t.CacheCreationTokens;
                 await db.SaveChangesAsync();
             }
         });

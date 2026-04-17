@@ -16,6 +16,7 @@ interface AppState {
   selectedAgentId: string | null;
   selectedSessionId: string | null;
   initialConsoleTab: 'output' | 'terminal' | null;
+  selectedGroupId: string | null;
 
   // 跨页面同步：当某页面修改了任务数据（删除/新建），其他页面可监听此值触发刷新
   dataSyncVersion: number;
@@ -28,6 +29,7 @@ interface AppState {
   setSelectedAgentId: (id: string | null) => void;
   setSelectedSessionId: (id: string | null) => void;
   setInitialConsoleTab: (tab: 'output' | 'terminal' | null) => void;
+  setSelectedGroupId: (id: string | null) => void;
   bumpDataSync: () => void;
   setQueuedMessage: (msg: QueuedMessage | null) => void;
 }
@@ -39,11 +41,18 @@ const getInitialPage = (): PageKey => {
   return (hash && validPages.includes(hash as PageKey)) ? (hash as PageKey) : 'butler';
 };
 
+// 从 localStorage 读取上次使用的工作组 ID
+const getInitialGroupId = (): string | null => {
+  if (typeof window === 'undefined') return null;
+  return localStorage.getItem('selectedAgentGroupId') || null;
+};
+
 export const useAppStore = create<AppState>((set) => ({
   currentPage: getInitialPage(),
   selectedAgentId: null,
   selectedSessionId: null,
   initialConsoleTab: null,
+  selectedGroupId: getInitialGroupId(),
   dataSyncVersion: 0,
   queuedMessage: null,
 
@@ -51,6 +60,16 @@ export const useAppStore = create<AppState>((set) => ({
   setSelectedAgentId: (id) => set({ selectedAgentId: id }),
   setSelectedSessionId: (id) => set({ selectedSessionId: id }),
   setInitialConsoleTab: (tab) => set({ initialConsoleTab: tab }),
+  setSelectedGroupId: (id) => {
+    if (typeof window !== 'undefined') {
+      if (id) {
+        localStorage.setItem('selectedAgentGroupId', id);
+      } else {
+        localStorage.removeItem('selectedAgentGroupId');
+      }
+    }
+    set({ selectedGroupId: id });
+  },
   bumpDataSync: () => set((state) => ({ dataSyncVersion: state.dataSyncVersion + 1 })),
   setQueuedMessage: (msg) => set({ queuedMessage: msg }),
 }));

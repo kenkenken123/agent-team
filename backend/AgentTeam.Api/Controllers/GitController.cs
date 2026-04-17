@@ -49,6 +49,57 @@ public class GitController : ControllerBase
         }
     }
 
+    /// <summary>
+    /// 获取所有分支列表
+    /// </summary>
+    [HttpGet("branches")]
+    public async Task<IActionResult> GetBranches([FromQuery] string path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return BadRequest("Path is required");
+        }
+
+        try
+        {
+            var branches = await _gitService.GetBranchesAsync(path);
+            return Ok(branches);
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { error = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// 切换分支
+    /// </summary>
+    [HttpPost("switch-branch")]
+    public async Task<IActionResult> SwitchBranch([FromBody] SwitchBranchRequest req)
+    {
+        if (string.IsNullOrWhiteSpace(req.Path) || string.IsNullOrWhiteSpace(req.Branch))
+        {
+            return BadRequest("Path and branch are required");
+        }
+
+        try
+        {
+            var (success, message) = await _gitService.SwitchBranchAsync(req.Path, req.Branch);
+            if (success)
+            {
+                return Ok(new { message });
+            }
+            else
+            {
+                return BadRequest(new { error = message });
+            }
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { error = ex.Message });
+        }
+    }
+
     [HttpGet("diff")]
     public async Task<IActionResult> GetDiff([FromQuery] string path, [FromQuery] string filePath)
     {
@@ -240,9 +291,40 @@ public class GitController : ControllerBase
             return StatusCode(500, new { error = ex.Message });
         }
     }
+
+    /// <summary>
+    /// 撤销单个文件的变更
+    /// </summary>
+    [HttpPost("revert-file")]
+    public async Task<IActionResult> RevertFile([FromBody] RevertFileRequest req)
+    {
+        if (string.IsNullOrWhiteSpace(req.Path) || string.IsNullOrWhiteSpace(req.FilePath))
+        {
+            return BadRequest("Path and filePath are required");
+        }
+
+        try
+        {
+            var (success, message) = await _gitService.RevertFileAsync(req.Path, req.FilePath, req.Status);
+            if (success)
+            {
+                return Ok(new { message });
+            }
+            else
+            {
+                return BadRequest(new { error = message });
+            }
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { error = ex.Message });
+        }
+    }
 }
 
 // Request DTOs
 public record CodeReviewRequest(string Path);
 public record CommitPushRequest(string Path, string Message);
 public record GenerateCommitMessageRequest(string Path);
+public record RevertFileRequest(string Path, string FilePath, string Status);
+public record SwitchBranchRequest(string Path, string Branch);

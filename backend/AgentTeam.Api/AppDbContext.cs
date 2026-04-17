@@ -10,6 +10,7 @@ public class AppDbContext : DbContext
     }
 
     public DbSet<Agent> Agents { get; set; } = null!;
+    public DbSet<AgentGroup> AgentGroups { get; set; } = null!;
     public DbSet<AgentTemplate> AgentTemplates { get; set; } = null!;
     public DbSet<AgentTask> Tasks { get; set; } = null!;
     public DbSet<CommonPath> CommonPaths { get; set; } = null!;
@@ -29,6 +30,13 @@ public class AppDbContext : DbContext
             e.Property(t => t.Name).IsRequired().HasMaxLength(100);
             e.Property(t => t.SystemPrompt).IsRequired();
             e.HasMany(t => t.Agents).WithOne(a => a.Template).HasForeignKey(a => a.TemplateId);
+        });
+
+        modelBuilder.Entity<AgentGroup>(e =>
+        {
+            e.HasKey(g => g.Id);
+            e.Property(g => g.Name).IsRequired().HasMaxLength(100);
+            e.HasMany(g => g.Agents).WithOne(a => a.Group).HasForeignKey(a => a.GroupId).OnDelete(DeleteBehavior.SetNull);
         });
 
         modelBuilder.Entity<Agent>(e =>

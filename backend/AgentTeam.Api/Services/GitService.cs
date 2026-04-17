@@ -15,6 +15,13 @@ public class GitStatusInfo
     public List<GitFileStatus> Files { get; set; } = new();
 }
 
+public class GitBranchInfo
+{
+    public string Name { get; set; } = string.Empty;
+    public bool IsRemote { get; set; }
+    public bool IsCurrent { get; set; }
+}
+
 public class GitService
 {
     private readonly ILogger<GitService> _logger;
@@ -107,6 +114,81 @@ public class GitService
         return info;
     }
 
+    /// <summary>
+    /// 获取所有本地和远程分支列表
+    /// </summary>
+    public async Task<List<GitBranchInfo>> GetBranchesAsync(string workingDirectory)
+    {
+        var branches = new List<GitBranchInfo>();
+
+        // 本地分支
+        var (localCode, localOutput, _) = await RunGitCommandAsync(workingDirectory,
+            ["branch", "--format=%(refname:short)"]);
+        if (localCode == 0)
+        {
+            var lines = localOutput.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+            foreach (var line in lines.Select(l => l.Trim()))
+            {
+                if (!string.IsNullOrWhiteSpace(line))
+                    branches.Add(new GitBranchInfo { Name = line, IsRemote = false, IsCurrent = false });
+            }
+        }
+
+        // 远程分支
+        var (remoteCode, remoteOutput, _) = await RunGitCommandAsync(workingDirectory,
+            ["branch", "-r", "--format=%(refname:short)"]);
+        if (remoteCode == 0)
+        {
+            var lines = remoteOutput.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+            foreach (var line in lines.Select(l => l.Trim()))
+            {
+                if (!string.IsNullOrWhiteSpace(line) && !line.EndsWith("/HEAD"))
+                    branches.Add(new GitBranchInfo { Name = line, IsRemote = true, IsCurrent = false });
+            }
+        }
+
+        // 获取当前分支标记
+        var (currentCode, currentOutput, _) = await RunGitCommandAsync(workingDirectory,
+            ["branch", "--show-current"]);
+        if (currentCode == 0)
+        {
+            var current = currentOutput.Trim();
+            foreach (var b in branches)
+            {
+                b.IsCurrent = b.Name == current;
+            }
+        }
+
+        return branches;
+    }
+
+    /// <summary>
+    /// 切换分支
+    /// </summary>
+    public async Task<(bool Success, string Message)> SwitchBranchAsync(string workingDirectory, string branchName)
+    {
+        if (string.IsNullOrWhiteSpace(branchName))
+        {
+            return (false, "分支名不能为空");
+        }
+
+        // 先暂存当前未提交的更改
+        var (stashCode, _, stashErr) = await RunGitCommandAsync(workingDirectory,
+            ["stash", "push", "-m", "auto-stash-before-switch"]);
+        // stash 没有更改时也会返回 0，不用检查
+
+        // 切换分支
+        var (switchCode, switchOut, switchErr) = await RunGitCommandAsync(workingDirectory,
+            ["switch", branchName]);
+        if (switchCode != 0)
+        {
+            _logger.LogError($"Git switch failed: {switchErr}");
+            return (false, $"切换分支失败: {switchErr}");
+        }
+
+        return (true, $"已切换到分支: {branchName}");
+    }
+
     public async Task<string> GetDiffAsync(string workingDirectory, string filePath)
     {
         // First check if it is untracked using status
@@ -190,5 +272,66 @@ public class GitService
 
         var commitLine = commitOut.Split('\n').FirstOrDefault(l => !string.IsNullOrWhiteSpace(l)) ?? "提交成功";
         return (true, $"提交并推送成功: {commitLine}");
+    }
+
+    /// <summary>
+    /// 撤销单个文件的变更
+    /// </summary>
+    public async Task<(bool Success, string Message)> RevertFileAsync(string workingDirectory, string filePath, string status)
+    {
+        // 路径安全校验
+        var fullPath = Path.GetFullPath(Path.Combine(workingDirectory, filePath));
+        var fullWorkingDir = Path.GetFullPath(workingDirectory);
+        if (!fullPath.StartsWith(fullWorkingDir + Path.DirectorySeparatorChar) &&
+            !fullPath.StartsWith(fullWorkingDir + Path.AltDirectorySeparatorChar) &&
+            !fullPath.Equals(fullWorkingDir, StringComparison.OrdinalIgnoreCase))
+        {
+            return (false, "文件路径超出工作目录范围，拒绝访问");
+        }
+
+        var trimmedStatus = status.Trim();
+
+        // 未跟踪文件：直接删除
+        if (trimmedStatus == "??")
+        {
+            try
+            {
+                if (File.Exists(fullPath))
+                    File.Delete(fullPath);
+                else if (Directory.Exists(fullPath))
+                    Directory.Delete(fullPath, true);
+                return (true, $"已删除未跟踪文件: {filePath}");
+            }
+            catch (Exception ex)
+            {
+                return (false, $"删除文件失败: {ex.Message}");
+            }
+        }
+
+        // 暂存区的文件：先取消暂存，再恢复
+        if (trimmedStatus.EndsWith("M") || trimmedStatus.EndsWith("A") || trimmedStatus.EndsWith("D"))
+        {
+            // 取消暂存
+            var (unstagedCode, _, unstagedErr) = await RunGitCommandAsync(workingDirectory,
+                ["restore", "--staged", "--", filePath]);
+            if (unstagedCode != 0)
+            {
+                _logger.LogWarning($"Git restore --staged warning: {unstagedErr}");
+            }
+        }
+
+        // 已修改、已删除的文件：恢复为 HEAD 版本
+        if (trimmedStatus.Contains("M") || trimmedStatus.Contains("D"))
+        {
+            var (restoreCode, _, restoreErr) = await RunGitCommandAsync(workingDirectory,
+                ["restore", "--", filePath]);
+            if (restoreCode != 0)
+            {
+                _logger.LogError($"Git restore failed for {filePath}: {restoreErr}");
+                return (false, $"撤销失败: {restoreErr}");
+            }
+        }
+
+        return (true, $"已撤销: {filePath}");
     }
 }

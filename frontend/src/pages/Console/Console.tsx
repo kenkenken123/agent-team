@@ -10,16 +10,17 @@ import {
   RobotOutlined, ClockCircleOutlined, CheckCircleOutlined,
   CloseCircleOutlined, ExclamationCircleOutlined, DeleteOutlined, PictureOutlined,
   PushpinOutlined, PushpinFilled, DownOutlined, UpOutlined, SearchOutlined, BranchesOutlined,
-  SendOutlined, FolderOutlined, DesktopOutlined,
+  SendOutlined, FolderOutlined, DesktopOutlined, TeamOutlined,
 } from '@ant-design/icons';
 import { Upload, Mentions, AutoComplete } from 'antd';
 
 import { agentApi } from '../../api/agentApi';
+import { agentGroupApi } from '../../api/agentGroupApi';
 import { taskApi } from '../../api/taskApi';
 import { commonPathApi } from '../../api/commonPathApi';
 import { terminalApi } from '../../api/terminalApi';
 import FileTreeDrawer from '../../components/FileTreeDrawer';
-import type { Agent, AgentTask, CommonPath } from '../../types';
+import type { Agent, AgentTask, CommonPath, AgentGroup } from '../../types';
 import { useAppStore } from '../../stores/appStore';
 import TerminalPanel from '../../components/Terminal/TerminalPanel';
 import { GitDrawer } from '../../components/Git';
@@ -30,8 +31,9 @@ const { Text } = Typography;
 
 
 const ConsolePage: React.FC = () => {
-  const { selectedAgentId, setSelectedAgentId, selectedSessionId, setSelectedSessionId, dataSyncVersion, bumpDataSync, queuedMessage, setQueuedMessage, optimizePrompt, setOptimizePrompt } = useAppStore();
+  const { selectedAgentId, setSelectedAgentId, selectedSessionId, setSelectedSessionId, dataSyncVersion, bumpDataSync, queuedMessage, setQueuedMessage, optimizePrompt, setOptimizePrompt, selectedGroupId, setSelectedGroupId } = useAppStore();
   const [agents, setAgents] = useState<Agent[]>([]);
+  const [groups, setGroups] = useState<AgentGroup[]>([]);
   const [tasks, setTasks] = useState<AgentTask[]>([]);
   const [selectedTask, setSelectedTask] = useState<AgentTask | null>(null);
   const [prompt, setPrompt] = useState('');
@@ -138,14 +140,22 @@ const ConsolePage: React.FC = () => {
   useEffect(() => {
     Promise.all([
       agentApi.getAll(),
-      commonPathApi.getAll()
-    ]).then(([agentsData, pathsData]) => {
+      commonPathApi.getAll(),
+      agentGroupApi.getAll()
+    ]).then(([agentsData, pathsData, groupsData]) => {
       const activeAgents = agentsData.filter(a => a.isEnabled);
       setAgents(activeAgents);
       setCommonPaths(pathsData);
-      // 如果当前没选，且有可用的 Agent，自动选第一个并同步 ref
+      setGroups(groupsData);
+
+      // 如果上次选择的工作组不存在于当前列表中，则清空
+      if (selectedGroupId && !groupsData.find(g => g.id === selectedGroupId)) {
+        setSelectedGroupId(null);
+      }
+
+      // 如果当前没选，且有可用的 Agent，自动选第一个
+      // 注意：不设置 prevAgentIdRef，让下面的 useEffect 自然触发并填充模型/工作目录
       if (!selectedAgentId && activeAgents.length > 0) {
-        prevAgentIdRef.current = activeAgents[0].id;
         setSelectedAgentId(activeAgents[0].id);
       }
     }).catch(err => {
@@ -205,6 +215,10 @@ const ConsolePage: React.FC = () => {
 
   const sortedAgents = useMemo(() => {
     let list = [...agents];
+    // 根据选中的工作组过滤 Agent
+    if (selectedGroupId) {
+      list = list.filter(a => a.groupId === selectedGroupId);
+    }
     if (agentSearch) {
       list = list.filter(a => a.name.toLowerCase().includes(agentSearch.toLowerCase()));
     }
@@ -215,7 +229,7 @@ const ConsolePage: React.FC = () => {
       if (aTime !== bTime) return bTime - aTime;
       return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
     });
-  }, [agents, agentSearch]);
+  }, [agents, agentSearch, selectedGroupId]);
 
   const displayedAgents = useMemo(() => {
     if (showAllAgents || agentSearch) return sortedAgents;
@@ -529,14 +543,38 @@ const ConsolePage: React.FC = () => {
           <div className="task-sider-header">
             <div className="agent-selector-header">
               <Text strong style={{ color: '#8B949E', fontSize: 12 }}>我的 Agent</Text>
-              <div style={{ display: 'flex', gap: 4 }}>
+              <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                <Select
+                  size="small"
+                  value={selectedGroupId || undefined}
+                  onChange={(val) => {
+                    setSelectedGroupId(val || null);
+                    // 切换工作组时，如果当前选中的 Agent 不在新组内，清空选中
+                    setSelectedAgentId(null);
+                  }}
+                  style={{ width: 90, fontSize: 11 }}
+                  className="dark-select"
+                  placeholder="全部"
+                  allowClear
+                  options={[
+                    ...groups.map(g => ({
+                      label: (
+                        <span>
+                          {g.color && <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: g.color, marginRight: 4 }} />}
+                          {g.name}
+                        </span>
+                      ),
+                      value: g.id
+                    }))
+                  ]}
+                />
                 <Input
                   size="small"
                   placeholder="搜索..."
                   prefix={<SearchOutlined style={{ fontSize: 10 }} />}
                   value={agentSearch}
                   onChange={e => setAgentSearch(e.target.value)}
-                  style={{ width: 80, fontSize: 11, background: '#0D1117', border: 'none' }}
+                  style={{ width: 70, fontSize: 11, background: '#0D1117', border: 'none' }}
                 />
               </div>
             </div>

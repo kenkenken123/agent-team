@@ -23,15 +23,18 @@ public class StatsController(AppDbContext db) : ControllerBase
 
         var periodTokens = await db.Tasks
             .Where(t => t.CreatedAt >= start && t.CreatedAt < end)
-            .Select(t => new { t.InputTokens, t.OutputTokens })
+            .Select(t => new { t.InputTokens, t.OutputTokens, t.CacheReadTokens, t.CacheCreationTokens })
             .ToListAsync();
 
         var periodInputTokens = periodTokens.Sum(t => t.InputTokens ?? 0);
         var periodOutputTokens = periodTokens.Sum(t => t.OutputTokens ?? 0);
+        var periodCacheReadTokens = periodTokens.Sum(t => t.CacheReadTokens ?? 0);
+        var periodCacheCreationTokens = periodTokens.Sum(t => t.CacheCreationTokens ?? 0);
 
         return Ok(new OverviewStats(
             totalAgents, runningTasks, periodTasks,
-            periodInputTokens, periodOutputTokens));
+            periodInputTokens, periodOutputTokens,
+            periodCacheReadTokens, periodCacheCreationTokens));
     }
 
     [HttpGet("agents")]
@@ -49,7 +52,9 @@ public class StatsController(AppDbContext db) : ControllerBase
                 AgentId = g.Key,
                 TaskCount = g.Count(),
                 InputTokens = g.Sum(t => t.InputTokens ?? 0),
-                OutputTokens = g.Sum(t => t.OutputTokens ?? 0)
+                OutputTokens = g.Sum(t => t.OutputTokens ?? 0),
+                CacheReadTokens = g.Sum(t => t.CacheReadTokens ?? 0),
+                CacheCreationTokens = g.Sum(t => t.CacheCreationTokens ?? 0)
             })
             .ToListAsync();
 
@@ -62,7 +67,9 @@ public class StatsController(AppDbContext db) : ControllerBase
             s.TaskCount,
             s.InputTokens,
             s.OutputTokens,
-            s.InputTokens + s.OutputTokens
+            s.CacheReadTokens,
+            s.CacheCreationTokens,
+            s.InputTokens + s.OutputTokens + s.CacheReadTokens + s.CacheCreationTokens
         ))
         .OrderByDescending(s => s.TotalTokens)
         .ToList();
@@ -85,6 +92,8 @@ public class StatsController(AppDbContext db) : ControllerBase
                 Date = g.Key,
                 InputTokens = g.Sum(t => t.InputTokens ?? 0),
                 OutputTokens = g.Sum(t => t.OutputTokens ?? 0),
+                CacheReadTokens = g.Sum(t => t.CacheReadTokens ?? 0),
+                CacheCreationTokens = g.Sum(t => t.CacheCreationTokens ?? 0),
                 Tasks = g.Count()
             })
             .OrderBy(g => g.Date)

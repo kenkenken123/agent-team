@@ -29,3 +29,5 @@ data/
 wechat-service/.wechatbot-data/
 backend/AgentTeam.Api/.memories/*
 temp/*
+CLAUDE.md
+AGENT.md

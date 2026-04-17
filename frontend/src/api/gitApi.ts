@@ -8,6 +8,12 @@ export interface GitStatusInfo {
     files: GitFileStatus[];
 }
 
+export interface GitBranchInfo {
+    name: string;
+    isRemote: boolean;
+    isCurrent: boolean;
+}
+
 export interface CodeReviewResponse {
     taskId: string;
     agentName: string;
@@ -82,6 +88,44 @@ export const gitApi = {
         if (!res.ok) {
             const err = await res.json().catch(() => ({}));
             throw new Error(err.error || '生成提交信息失败');
+        }
+        return res.json();
+    },
+
+    async revertFile(path: string, filePath: string, status: string): Promise<{ message: string }> {
+        const url = 'http://localhost:5501/api/git/revert-file';
+        const res = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ path, filePath, status })
+        });
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            throw new Error(err.error || '撤销文件变更失败');
+        }
+        return res.json();
+    },
+
+    async getBranches(path: string): Promise<GitBranchInfo[]> {
+        const url = `http://localhost:5501/api/git/branches?path=${encodeURIComponent(path)}`;
+        const res = await fetch(url);
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            throw new Error(err.error || '获取分支列表失败');
+        }
+        return res.json();
+    },
+
+    async switchBranch(path: string, branch: string): Promise<{ message: string }> {
+        const url = 'http://localhost:5501/api/git/switch-branch';
+        const res = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ path, branch })
+        });
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            throw new Error(err.error || '切换分支失败');
         }
         return res.json();
     }

@@ -30,6 +30,40 @@
   background-color: rgba(255, 255, 255, 0.05) !important;
 }
 
+.git-revert-btn {
+  color: #8B949E;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.git-list-item:hover .git-revert-btn {
+  opacity: 1;
+}
+
+.git-revert-btn:hover {
+  color: #F85149 !important;
+}
+
+.branch-switch-btn {
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: background 0.2s;
+}
+
+.branch-switch-btn:hover {
+  background: rgba(255, 255, 255, 0.06) !important;
+}
+
+.branch-switch-btn .ant-btn-icon {
+  margin-inline-end: 6px;
+}
+
+/* Git dropdown menu styling */
+.git-branch-dropdown .ant-dropdown-menu {
+  background: rgba(13, 17, 23, 0.95) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+
 /* Git Actions and Commit Section */
 .git-actions-bar {
   background: rgba(255, 255, 255, 0.01) !important;

@@ -35,66 +35,37 @@ interface GameState {
 
 const TILE_SIZE = 48;
 
-// 16x12 地图
-const INITIAL_MAP: TileType[][] = [
-  [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-  [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-  [1, 0, 2, 2, 2, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-  [1, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 1],
-  [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-  [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-  [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-  [1, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 1],
-  [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-  [1, 0, 0, 0, 0, 0, 0, 0, 0, 3, 3, 0, 0, 0, 0, 1],
-  [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-  [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-];
-
-const INITIAL_AGENTS: Agent[] = [
-  {
-    id: 'agent-1',
-    name: 'Claude 3.5 Sonnet',
-    status: 'idle',
-    color: 0x58A6FF,
-    gridX: 2,
-    gridY: 4,
-    targetX: 2,
-    targetY: 4,
-    pixelX: 2 * TILE_SIZE,
-    pixelY: 4 * TILE_SIZE,
-  },
-  {
-    id: 'agent-2',
-    name: 'Gemini 1.5 Pro',
-    status: 'idle',
-    color: 0xBC8CFF,
-    gridX: 13,
-    gridY: 8,
-    targetX: 13,
-    targetY: 8,
-    pixelX: 13 * TILE_SIZE,
-    pixelY: 8 * TILE_SIZE,
-  }
-];
-
 export const useGameStore = create<GameState>((set) => ({
-  companyMap: INITIAL_MAP,
+  companyMap: [],
   agents: [],
   workstations: [],
   restSpots: [],
 
-  moveAgent: (agentId, targetX, targetY) => set((state) => ({
-    agents: state.agents.map((a) =>
-      a.id === agentId ? { ...a, targetX, targetY, status: 'walking' } : a
-    )
-  })),
+  moveAgent: (agentId, targetX, targetY) => set((state) => {
+    // 优化：仅当目标位置变化时才更新
+    const agent = state.agents.find(a => a.id === agentId);
+    if (agent && agent.targetX === targetX && agent.targetY === targetY && agent.status === 'walking') {
+      return {}; // 无变化，跳过更新
+    }
+    return {
+      agents: state.agents.map((a) =>
+        a.id === agentId ? { ...a, targetX, targetY, status: 'walking' } : a
+      )
+    };
+  }),
 
-  updateAgentPixelPosition: (agentId, pixelX, pixelY) => set((state) => ({
-    agents: state.agents.map((a) =>
-      a.id === agentId ? { ...a, pixelX, pixelY } : a
-    )
-  })),
+  updateAgentPixelPosition: (agentId, pixelX, pixelY) => set((state) => {
+    // 优化：仅当像素位置变化时才更新
+    const agent = state.agents.find(a => a.id === agentId);
+    if (agent && agent.pixelX === pixelX && agent.pixelY === pixelY) {
+      return {}; // 无变化，跳过更新
+    }
+    return {
+      agents: state.agents.map((a) =>
+        a.id === agentId ? { ...a, pixelX, pixelY } : a
+      )
+    };
+  }),
 
   arriveAtTarget: (agentId) => set((state) => ({
     agents: state.agents.map((a) => {
@@ -111,11 +82,18 @@ export const useGameStore = create<GameState>((set) => ({
     })
   })),
 
-  setAgentStatus: (agentId, status) => set((state) => ({
-    agents: state.agents.map((a) =>
-      a.id === agentId ? { ...a, status } : a
-    )
-  })),
+  setAgentStatus: (agentId, status) => set((state) => {
+    // 优化：仅当状态变化时才更新
+    const agent = state.agents.find(a => a.id === agentId);
+    if (agent && agent.status === status) {
+      return {}; // 无变化，跳过更新
+    }
+    return {
+      agents: state.agents.map((a) =>
+        a.id === agentId ? { ...a, status } : a
+      )
+    };
+  }),
 
   refreshAgents: async () => {
     try {
@@ -124,23 +102,54 @@ export const useGameStore = create<GameState>((set) => ({
       const backendAgents = await response.json();
 
       set((state) => {
+        // 优化：深度比较检测数据是否真正变化
+        let hasChanges = false;
+
+        // 检查数量变化
+        if (backendAgents.length !== state.agents.length) {
+          hasChanges = true;
+        } else {
+          // 检查每个 agent 的关键字段
+          for (const ba of backendAgents) {
+            const existing = state.agents.find(a => a.id === ba.id);
+            if (!existing) {
+              hasChanges = true; // 新 agent
+              break;
+            }
+            // 检查可能变化的字段
+            if (
+              existing.name !== ba.name ||
+              existing.status !== ba.status ||
+              existing.workingDirectory !== ba.workingDirectory ||
+              existing.latestTaskPrompt !== ba.latestTaskPrompt ||
+              existing.latestTaskId !== ba.latestTaskId
+            ) {
+              hasChanges = true;
+              break;
+            }
+          }
+        }
+
+        // 如果数据无变化，跳过更新（避免触发不必要的重渲染）
+        if (!hasChanges) {
+          return {};
+        }
+
         const updatedAgents = backendAgents.map((ba: any) => {
           const existing = state.agents.find(a => a.id === ba.id);
-          
+
           // Determine status from backend if it's 'working', otherwise keep existing or 'idle'
           // If the agent is currently walking, keep it walking until it arrives
-          let status: AgentStatus = ba.status as AgentStatus;
-          if (existing?.status === 'walking') {
-            status = 'walking';
-          }
+          const effectiveStatus: AgentStatus =
+            existing?.status === 'walking' ? 'walking' : (ba.status as AgentStatus);
 
           if (existing) {
             // Keep current positions, only update status and info
-            return { 
-              ...existing, 
-              name: ba.name, 
+            return {
+              ...existing,
+              name: ba.name,
               workingDirectory: ba.workingDirectory,
-              status: ba.status as AgentStatus,
+              status: effectiveStatus,
               latestTaskPrompt: ba.latestTaskPrompt,
               latestTaskId: ba.latestTaskId,
             };
@@ -149,11 +158,11 @@ export const useGameStore = create<GameState>((set) => ({
             const color = [0x58A6FF, 0xBC8CFF, 0x3FB950, 0xD29922, 0xF85149, 0x8B949E][state.agents.length % 6];
             const x = 2 + (state.agents.length % 10);
             const y = 4;
-            
+
             return {
               id: ba.id,
               name: ba.name,
-              status: ba.status as AgentStatus,
+              status: effectiveStatus,
               color: color,
               gridX: x,
               gridY: y,

@@ -15,5 +15,9 @@ public class Agent
 
     public bool IsPinned { get; set; } = false;
     public DateTime? LastUsedAt { get; set; }
+
+    public Guid? GroupId { get; set; }
+    public AgentGroup? Group { get; set; }
+
     public ICollection<AgentTask> Tasks { get; set; } = [];
 }

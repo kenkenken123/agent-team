@@ -572,8 +572,27 @@ export class OfficeState {
     }
   }
 
+  /** 优化：缓存上次重建的家具状态，避免不必要的重复重建 */
+  private lastFurnitureStateHash = '';
+
   /** Rebuild furniture instances with auto-state applied (active agents turn electronics ON) */
   private rebuildFurnitureInstances(): void {
+    // 优化：计算当前状态哈希，仅在实际变化时重建
+    let activeAgentCount = 0;
+    for (const ch of this.characters.values()) {
+      if (ch.isActive && ch.seatId) activeAgentCount++;
+    }
+
+    // 生成简单状态哈希
+    const currentStateHash = `${activeAgentCount}-${Math.floor(this.furnitureAnimTimer / FURNITURE_ANIM_INTERVAL_SEC)}`;
+
+    // 如果状态未变化，跳过重建
+    if (currentStateHash === this.lastFurnitureStateHash && this.furniture.length > 0) {
+      return;
+    }
+
+    this.lastFurnitureStateHash = currentStateHash;
+
     // Collect tiles where active agents face desks
     const autoOnTiles = new Set<string>();
     for (const ch of this.characters.values()) {
@@ -738,12 +757,59 @@ export class OfficeState {
     return Array.from(this.characters.values());
   }
 
+  /** 优化：缓存排序后的角色列表，仅在角色位置变化时更新 */
+  private sortedCharactersCache: Character[] | null = null;
+  private lastCharacterPositions = new Map<number, { x: number; y: number; state: CharacterState }>();
+
+  /** 获取按 Y 坐标排序的角色列表（带缓存优化） */
+  private getSortedCharacters(): Character[] {
+    // 检查是否有角色位置变化
+    let needsResort = this.sortedCharactersCache === null;
+
+    if (!needsResort) {
+      for (const ch of this.characters.values()) {
+        const lastPos = this.lastCharacterPositions.get(ch.id);
+        if (!lastPos || lastPos.x !== ch.x || lastPos.y !== ch.y || lastPos.state !== ch.state) {
+          needsResort = true;
+          break;
+        }
+      }
+      // 检查是否有角色被移除
+      if (!needsResort && this.lastCharacterPositions.size !== this.characters.size) {
+        needsResort = true;
+      }
+    }
+
+    if (needsResort) {
+      // 重新排序并更新缓存
+      this.sortedCharactersCache = Array.from(this.characters.values()).sort((a, b) => b.y - a.y);
+      // 更新位置缓存
+      this.lastCharacterPositions.clear();
+      for (const ch of this.sortedCharactersCache) {
+        this.lastCharacterPositions.set(ch.id, { x: ch.x, y: ch.y, state: ch.state });
+      }
+    }
+
+    return this.sortedCharactersCache!;
+  }
+
   /** Get character at pixel position (for hit testing). Returns id or null. */
   getCharacterAt(worldX: number, worldY: number): number | null {
-    const chars = this.getCharacters().sort((a, b) => b.y - a.y);
+    // 优化：使用缓存的排序列表，避免每帧排序
+    const chars = this.getSortedCharacters();
+
+    // 优化：使用简单的 Y 范围快速过滤
+    // 角色 sprite 高度约 24 像素，TILE_SIZE=16
+    const minY = worldY + CHARACTER_HIT_HEIGHT - TILE_SIZE;
+    const maxY = worldY + TILE_SIZE;
+
     for (const ch of chars) {
+      // 快速 Y 范围过滤
+      if (ch.y < minY || ch.y > maxY) continue;
+
       // Skip characters that are despawning
       if (ch.matrixEffect === 'despawn') continue;
+
       // Character sprite is 16x24, anchored bottom-center
       // Apply sitting offset to match visual position
       const sittingOffset = ch.state === CharacterState.TYPE ? CHARACTER_SITTING_OFFSET_PX : 0;

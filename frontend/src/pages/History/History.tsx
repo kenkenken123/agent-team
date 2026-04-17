@@ -101,6 +101,20 @@ const HistoryPage: React.FC = () => {
       render: (v) => <span style={{ color: '#3FB950', fontFamily: 'JetBrains Mono, monospace', fontWeight: 500 }}>{v?.toLocaleString() ?? '0'}</span>,
     },
     {
+      title: 'Cache Read',
+      dataIndex: 'cacheReadTokens',
+      key: 'cacheReadTokens',
+      width: 110,
+      render: (v) => <span style={{ color: '#A371F7', fontFamily: 'JetBrains Mono, monospace', fontWeight: 500 }}>{v?.toLocaleString() ?? '0'}</span>,
+    },
+    {
+      title: 'Cache Create',
+      dataIndex: 'cacheCreationTokens',
+      key: 'cacheCreationTokens',
+      width: 120,
+      render: (v) => <span style={{ color: '#D29922', fontFamily: 'JetBrains Mono, monospace', fontWeight: 500 }}>{v?.toLocaleString() ?? '0'}</span>,
+    },
+    {
       title: '创建时间',
       dataIndex: 'createdAt',
       key: 'createdAt',

@@ -104,6 +104,50 @@ interface ZDrawable {
   draw: (ctx: CanvasRenderingContext2D) => void;
 }
 
+// ─── 优化：Z 索引缓存，避免每帧全量排序 ─────────────────────────────────────
+
+/** Z 可绘制对象缓存 */
+let lastDrawableCount = 0;
+let lastDrawableZOrder: number[] = [];
+
+/**
+ * 优化：仅当对象位置变化时才重新排序
+ * 返回排序后的索引数组，避免重建整个 drawables 数组
+ */
+function getSortedIndices(drawables: ZDrawable[]): number[] {
+  const count = drawables.length;
+
+  // 如果数量变化，必须重新排序
+  if (count !== lastDrawableCount) {
+    lastDrawableCount = count;
+    const indices = Array.from({ length: count }, (_, i) => i);
+    indices.sort((a, b) => drawables[a].zY - drawables[b].zY);
+    lastDrawableZOrder = indices;
+    return indices;
+  }
+
+  // 检查 Z 值是否变化
+  let needsResort = false;
+  for (let i = 0; i < count; i++) {
+    const idx = lastDrawableZOrder[i];
+    if (idx >= drawables.length || drawables[idx].zY !== (drawables as any).lastZValues?.[idx]) {
+      needsResort = true;
+      break;
+    }
+  }
+
+  if (needsResort) {
+    const indices = Array.from({ length: count }, (_, i) => i);
+    indices.sort((a, b) => drawables[a].zY - drawables[b].zY);
+    lastDrawableZOrder = indices;
+  }
+
+  // 缓存当前 Z 值用于下次比较
+  (drawables as any).lastZValues = drawables.map(d => d.zY);
+
+  return lastDrawableZOrder;
+}
+
 export function renderScene(
   ctx: CanvasRenderingContext2D,
   furniture: FurnitureInstance[],
@@ -201,11 +245,11 @@ export function renderScene(
     });
   }
 
-  // Sort by Y (lower = in front = drawn later)
-  drawables.sort((a, b) => a.zY - b.zY);
+  // 优化：使用缓存排序，仅当对象位置变化时重新排序
+  const sortedIndices = getSortedIndices(drawables);
 
-  for (const d of drawables) {
-    d.draw(ctx);
+  for (const idx of sortedIndices) {
+    drawables[idx].draw(ctx);
   }
 }
 

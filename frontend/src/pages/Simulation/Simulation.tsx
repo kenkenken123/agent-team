@@ -1,6 +1,6 @@
-import React, { useEffect, useState, useRef, useCallback } from 'react';
+import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { useGameStore } from '../../stores/gameStore';
-import { Card, Typography, Tag, Space, Spin, Drawer, Button } from 'antd';
+import { Typography, Tag, Spin, Drawer, Button } from 'antd';
 import { RobotOutlined, MessageOutlined, CodeOutlined } from '@ant-design/icons';
 import { OfficeState } from '../../office/engine/officeState.js';
 import { OfficeCanvas } from '../../office/components/OfficeCanvas.js';
@@ -13,7 +13,66 @@ import { CharacterState } from '../../office/types.js';
 import { useAppStore } from '../../stores/appStore';
 import './Simulation.css';
 
+// 优化：将 hover 卡片提取为独立组件，使用 React.memo 避免不必要的重渲染
+const AgentHoverCard = React.memo(({
+  agent,
+  position,
+  getFunnyIdleMessage
+}: {
+  agent: any;
+  position: { x: number; y: number };
+  getFunnyIdleMessage: (id: string) => string;
+}) => {
+  if (!agent || !position) return null;
+
+  return (
+    <div
+      className="agent-hover-card"
+      style={{
+        left: position.x,
+        top: position.y,
+      }}
+    >
+      <div className="card-glare" />
+      <div className="card-header">
+        <RobotOutlined className="card-icon" style={{ color: `#${agent.color.toString(16).padStart(6, '0')}` }} />
+        <div className="card-title">{agent.name}</div>
+      </div>
+      <div className="card-body">
+        <div className="info-item">
+          <span className="label">状态:</span>
+          <Tag color={
+            agent.status === 'working' ? 'success' :
+            agent.status === 'walking' ? 'processing' : 'default'
+          }>
+            {agent.status === 'working' ? '工作中' :
+             agent.status === 'walking' ? '移动中' :
+             agent.status === 'resting' ? '休息中' : '空闲'}
+          </Tag>
+        </div>
+        <div className="info-item">
+          <span className="label">执行目录:</span>
+          <div className="path-text" title={agent.workingDirectory}>
+            {agent.workingDirectory}
+          </div>
+        </div>
+        <div className="info-item">
+          <span className="label">最新进度:</span>
+          <div className="progress-text" style={{ color: '#58A6FF', fontSize: 12, marginTop: 4 }}>
+            {agent.status === 'working'
+              ? (agent.latestTaskPrompt ? (agent.latestTaskPrompt.length > 50 ? agent.latestTaskPrompt.substring(0, 47) + '...' : agent.latestTaskPrompt) : '同步中...')
+              : getFunnyIdleMessage(agent.id)}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+});
+
+AgentHoverCard.displayName = 'AgentHoverCard';
+
 const SimulationPage: React.FC = () => {
+  // 优化：使用选择器订阅 agents 数组长度和具体内容，减少不必要重渲染
   const agents = useGameStore(state => state.agents);
   const refreshAgents = useGameStore(state => state.refreshAgents);
   const [assetsLoaded, setAssetsLoaded] = useState(false);
@@ -25,15 +84,17 @@ const SimulationPage: React.FC = () => {
     const interval = setInterval(() => {
       refreshAgents();
     }, 5000); // Poll every 5s
-    
+
     return () => clearInterval(interval);
   }, [refreshAgents]);
-  
+
   // Zoom and Pan state for OfficeCanvas
   const [zoom, setZoom] = useState(2); // Pixel art usually looks better at 2x or 3x
   const panRef = useRef({ x: 0, y: 0 });
-  const [hoveredAgentInfo, setHoveredAgentInfo] = useState<{ id: string; x: number; y: number } | null>(null);
-  
+  // 优化：使用 useRef 存储 hover 位置，避免频繁 setState 触发重渲染
+  const hoverPositionRef = useRef<{ x: number; y: number } | null>(null);
+  const [hoverAgentId, setHoverAgentId] = useState<string | null>(null);
+
   // Detail Panel State
   const [detailVisible, setDetailVisible] = useState(false);
   const [selectedDetailAgentId, setSelectedDetailAgentId] = useState<string | null>(null);
@@ -44,52 +105,94 @@ const SimulationPage: React.FC = () => {
     let mounted = true;
     loadAllAssets().then(assets => {
       if (!mounted) return;
-      
+
       // Initialize global sprite data
       setCharacterTemplates(assets.characters);
       setFloorSprites(assets.floors);
       setWallSprites(assets.walls);
       buildDynamicCatalog({ catalog: assets.furnitureCatalog, sprites: Object.fromEntries(assets.furnitureSprites) });
-      
+
       // Initialize OfficeState with default layout
       const os = new OfficeState(assets.defaultLayout);
       officeStateRef.current = os;
-      
+
       setAssetsLoaded(true);
     }).catch(err => {
       console.error('Failed to load assets:', err);
     });
-    
+
     return () => { mounted = false; };
   }, []);
 
-  // Stable mapping from GUID to Numeric ID for OfficeState
-  const [guidToNumericMap] = useState<Map<string, number>>(new Map());
+  // 优化：使用 useRef 存储映射，避免每次 render 创建新对象
+  const guidToNumericMap = useRef<Map<string, number>>(new Map());
   const numericToGuidMap = useRef<Map<number, string>>(new Map());
+  // 优化：存储上次处理的 agents 快照，用于变化检测
+  const lastAgentsSnapshot = useRef<Map<string, { status: string; workingDirectory?: string; latestTaskPrompt?: string; latestTaskId?: string }>>(new Map());
 
-  // 2. Sync Zustand Agents to OfficeState
+  // 2. Sync Zustand Agents to OfficeState (优化：仅在数据真正变化时执行)
   useEffect(() => {
     if (!assetsLoaded || !officeStateRef.current) return;
     const os = officeStateRef.current;
 
+    // 优化：检测 agents 是否真正变化
+    let hasSignificantChanges = false;
+
+    for (const agent of agents) {
+      const snapshot = lastAgentsSnapshot.current.get(agent.id);
+      if (!snapshot) {
+        hasSignificantChanges = true; // 新 agent
+        break;
+      }
+      if (
+        snapshot.status !== agent.status ||
+        snapshot.workingDirectory !== agent.workingDirectory ||
+        snapshot.latestTaskPrompt !== agent.latestTaskPrompt ||
+        snapshot.latestTaskId !== agent.latestTaskId
+      ) {
+        hasSignificantChanges = true;
+        break;
+      }
+    }
+
+    // 检查是否有 agent 被移除
+    if (!hasSignificantChanges && agents.length !== lastAgentsSnapshot.current.size) {
+      hasSignificantChanges = true;
+    }
+
+    // 更新快照
+    const newSnapshot = new Map();
+    for (const agent of agents) {
+      newSnapshot.set(agent.id, {
+        status: agent.status,
+        workingDirectory: agent.workingDirectory,
+        latestTaskPrompt: agent.latestTaskPrompt,
+        latestTaskId: agent.latestTaskId,
+      });
+    }
+    lastAgentsSnapshot.current = newSnapshot;
+
+    // 如果无显著变化，跳过 OfficeState 同步
+    if (!hasSignificantChanges) return;
+
     agents.forEach((agent) => {
       // Ensure numeric ID exists
-      let numericId = guidToNumericMap.get(agent.id);
+      let numericId = guidToNumericMap.current.get(agent.id);
       if (numericId === undefined) {
-          numericId = guidToNumericMap.size + 1;
-          guidToNumericMap.set(agent.id, numericId);
+          numericId = guidToNumericMap.current.size + 1;
+          guidToNumericMap.current.set(agent.id, numericId);
           numericToGuidMap.current.set(numericId, agent.id);
       }
-      
+
       if (!os.characters.has(numericId)) {
         os.addAgent(numericId, numericId % 6);
       }
-      
+
       const ch = os.characters.get(numericId);
       if (!ch) return;
 
       const isWorking = agent.status === 'working';
-      
+
       // If status is working, Ensure character is at their seat or moving to it
       if (isWorking) {
         if (!ch.isActive) {
@@ -111,7 +214,7 @@ const SimulationPage: React.FC = () => {
       } else {
          if (ch.isActive) os.setAgentActive(numericId, false);
       }
-      
+
       // Handle manual walking target from store (if any)
       if (agent.status === 'walking') {
         if (ch.tileCol !== agent.targetX || ch.tileRow !== agent.targetY) {
@@ -121,10 +224,15 @@ const SimulationPage: React.FC = () => {
     });
 
 
-  }, [agents, assetsLoaded, guidToNumericMap]);
+  }, [agents, assetsLoaded]);
 
   const { setPage, setSelectedAgentId, setInitialConsoleTab } = useAppStore();
-  const detailAgent = agents.find(a => a.id === selectedDetailAgentId);
+
+  // 优化：使用 useMemo 缓存 detailAgent 查找
+  const detailAgent = useMemo(() =>
+    agents.find(a => a.id === selectedDetailAgentId),
+    [agents, selectedDetailAgentId]
+  );
 
   const handleAgentClick = (id: number) => {
     const guid = numericToGuidMap.current.get(id);
@@ -150,18 +258,27 @@ const SimulationPage: React.FC = () => {
     return messages[hash % messages.length];
   }, []);
 
+  // 优化：使用 useMemo 缓存当前 hover agent 查找
+  const currentHoveredAgent = useMemo(() =>
+    hoverAgentId ? agents.find(a => a.id === hoverAgentId) : null,
+    [agents, hoverAgentId]
+  );
+
   const handleHover = useCallback((id: number | null, x?: number, y?: number) => {
     if (id === null || x === undefined || y === undefined) {
-      setHoveredAgentInfo(null);
+      setHoverAgentId(null);
+      hoverPositionRef.current = null;
     } else {
       const guid = numericToGuidMap.current.get(id);
       if (guid) {
-        setHoveredAgentInfo({ id: guid, x, y });
+        setHoverAgentId(guid);
+        hoverPositionRef.current = { x, y };
       } else {
-        setHoveredAgentInfo(null);
+        setHoverAgentId(null);
+        hoverPositionRef.current = null;
       }
     }
-  }, [numericToGuidMap]);
+  }, []);
 
   if (!assetsLoaded) {
     return (
@@ -170,8 +287,6 @@ const SimulationPage: React.FC = () => {
       </div>
     );
   }
-
-  const currentHoveredAgent = hoveredAgentInfo ? agents.find(a => a.id === hoveredAgentInfo.id) : null;
 
   return (
     <div className="simulation-page">
@@ -195,49 +310,13 @@ const SimulationPage: React.FC = () => {
             panRef={panRef}
           />
 
-          {/* Hover Detail Card */}
-          {currentHoveredAgent && hoveredAgentInfo && (
-            <div 
-              className="agent-hover-card"
-              key={currentHoveredAgent.id}
-              style={{
-                left: hoveredAgentInfo.x,
-                top: hoveredAgentInfo.y,
-              }}
-            >
-              <div className="card-glare" />
-              <div className="card-header">
-                <RobotOutlined className="card-icon" style={{ color: `#${currentHoveredAgent.color.toString(16).padStart(6, '0')}` }} />
-                <div className="card-title">{currentHoveredAgent.name}</div>
-              </div>
-              <div className="card-body">
-                <div className="info-item">
-                  <span className="label">状态:</span>
-                  <Tag color={
-                    currentHoveredAgent.status === 'working' ? 'success' : 
-                    currentHoveredAgent.status === 'walking' ? 'processing' : 'default'
-                  }>
-                    {currentHoveredAgent.status === 'working' ? '工作中' : 
-                     currentHoveredAgent.status === 'walking' ? '移动中' : 
-                     currentHoveredAgent.status === 'resting' ? '休息中' : '空闲'}
-                  </Tag>
-                </div>
-                <div className="info-item">
-                  <span className="label">执行目录:</span>
-                  <div className="path-text" title={currentHoveredAgent.workingDirectory}>
-                    {currentHoveredAgent.workingDirectory}
-                  </div>
-                </div>
-                <div className="info-item">
-                  <span className="label">最新进度:</span>
-                  <div className="progress-text" style={{ color: '#58A6FF', fontSize: 12, marginTop: 4 }}>
-                    {currentHoveredAgent.status === 'working' 
-                      ? (currentHoveredAgent.latestTaskPrompt ? (currentHoveredAgent.latestTaskPrompt.length > 50 ? currentHoveredAgent.latestTaskPrompt.substring(0, 47) + '...' : currentHoveredAgent.latestTaskPrompt) : '同步中...')
-                      : getFunnyIdleMessage(currentHoveredAgent.id)}
-                  </div>
-                </div>
-              </div>
-            </div>
+          {/* 优化：使用 React.memo 组件避免不必要的重渲染 */}
+          {currentHoveredAgent && hoverPositionRef.current && (
+            <AgentHoverCard
+              agent={currentHoveredAgent}
+              position={hoverPositionRef.current}
+              getFunnyIdleMessage={getFunnyIdleMessage}
+            />
           )}
         </div>
       </div>
@@ -247,19 +326,19 @@ const SimulationPage: React.FC = () => {
       <Drawer
         title={
           <div className="detail-drawer-header">
-            <RobotOutlined style={{ 
-              fontSize: 28, 
+            <RobotOutlined style={{
+              fontSize: 28,
               color: detailAgent ? `#${detailAgent.color.toString(16).padStart(6, '0')}` : '#58A6FF',
               filter: 'drop-shadow(0 0 8px rgba(88, 166, 255, 0.4))'
             }} />
             <div className="title-area">
               <div className="agent-name">{detailAgent?.name || 'Agent 详情'}</div>
               <Tag color={
-                detailAgent?.status === 'working' ? 'success' : 
+                detailAgent?.status === 'working' ? 'success' :
                 detailAgent?.status === 'walking' ? 'processing' : 'default'
               }>
-                {detailAgent?.status === 'working' ? '正在工作中' : 
-                 detailAgent?.status === 'walking' ? '正在移动' : 
+                {detailAgent?.status === 'working' ? '正在工作中' :
+                 detailAgent?.status === 'walking' ? '正在移动' :
                  detailAgent?.status === 'resting' ? '正在休息' : '空闲待命'}
               </Tag>
             </div>
@@ -278,13 +357,13 @@ const SimulationPage: React.FC = () => {
               <div className="info-grid">
                 <div className="grid-item">
                   <span className="label">状态</span>
-                  <span className="value" style={{ 
-                    color: detailAgent.status === 'working' ? '#3FB950' : 
-                           detailAgent.status === 'walking' ? '#58A6FF' : 
+                  <span className="value" style={{
+                    color: detailAgent.status === 'working' ? '#3FB950' :
+                           detailAgent.status === 'walking' ? '#58A6FF' :
                            detailAgent.status === 'resting' ? '#D29922' : '#8B949E'
                   }}>
-                    {detailAgent.status === 'working' ? '工作中' : 
-                     detailAgent.status === 'walking' ? '移动中' : 
+                    {detailAgent.status === 'working' ? '工作中' :
+                     detailAgent.status === 'walking' ? '移动中' :
                      detailAgent.status === 'resting' ? '休息中' : '待命'}
                   </span>
                 </div>
@@ -305,16 +384,16 @@ const SimulationPage: React.FC = () => {
             <div className="section">
               <div className="section-title">活跃任务 / 状态</div>
               <div className="prompt-display">
-                {detailAgent.status === 'working' 
+                {detailAgent.status === 'working'
                   ? (detailAgent.latestTaskPrompt || '任务载入中...')
                   : getFunnyIdleMessage(detailAgent.id)}
               </div>
             </div>
 
             <div className="drawer-footer-actions">
-              <Button 
-                type="primary" 
-                block 
+              <Button
+                type="primary"
+                block
                 size="large"
                 icon={<MessageOutlined />}
                 onClick={() => jumpToConsole('output')}
@@ -322,8 +401,8 @@ const SimulationPage: React.FC = () => {
               >
                 跳转到控制台对话框
               </Button>
-              <Button 
-                block 
+              <Button
+                block
                 size="large"
                 icon={<CodeOutlined />}
                 onClick={() => jumpToConsole('terminal')}

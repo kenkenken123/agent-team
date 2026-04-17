@@ -218,6 +218,8 @@ public class TasksController(
         t.TokensUsed,
         t.InputTokens,
         t.OutputTokens,
+        t.CacheReadTokens,
+        t.CacheCreationTokens,
         t.Model,
         t.IsPlanMode,
         t.FinalResult,
