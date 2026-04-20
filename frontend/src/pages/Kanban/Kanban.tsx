@@ -93,6 +93,19 @@ const KanbanPage: React.FC = () => {
     }
   });
 
+  // 各会话保存的模型选择（与控制台共享 localStorage 键）
+  const [savedModels, setSavedModels] = useState<Record<string, string>>(() => {
+    try {
+      const stored = localStorage.getItem('console_session_models');
+      return stored ? JSON.parse(stored) : {};
+    } catch {
+      return {};
+    }
+  });
+
+  // 继续聊天弹框中选中的模型
+  const [launchModel, setLaunchModel] = useState<string | undefined>(undefined);
+
   // 判断某个 session 是否已查看（查看时间是否晚于任务完成时间）
   const isSessionViewed = useCallback((session: KanbanSession): boolean => {
     if (session.isPlaceholder) return true;
@@ -238,15 +251,26 @@ const KanbanPage: React.FC = () => {
     setProcessing(true);
     try {
       const isRealSession = selectedSession.sessionId && !selectedSession.sessionId.startsWith('single-');
+      const sessionId = isRealSession ? selectedSession.sessionId : undefined;
       await taskApi.create({
         agentId: selectedSession.agentId,
         prompt: launchPrompt.trim(),
-        resumeSessionId: isRealSession ? selectedSession.sessionId : undefined,
-        forceNewSession: !isRealSession
+        resumeSessionId: sessionId,
+        forceNewSession: !isRealSession,
+        model: launchModel
       });
+      // 保存模型到会话记忆，与控制台共享
+      if (sessionId) {
+        setSavedModels(prev => {
+          const next = { ...prev, [sessionId]: launchModel || '' };
+          try { localStorage.setItem('console_session_models', JSON.stringify(next)); } catch { /* ignore */ }
+          return next;
+        });
+      }
       message.success('任务已启动');
       setIsLaunchModalOpen(false);
       setLaunchPrompt('');
+      setLaunchModel(undefined);
       if (selectedSession.isPlaceholder) {
         setPlaceholders(prev => prev.filter(p => p.agentId !== selectedSession.agentId));
       }
@@ -313,6 +337,14 @@ const KanbanPage: React.FC = () => {
     setSelectedSession(session);
     setLastOutputContent(null);
     setIsLaunchModalOpen(true);
+
+    // 恢复该会话上次使用的模型
+    const sessionId = session.sessionId;
+    if (sessionId && savedModels[sessionId]) {
+      setLaunchModel(savedModels[sessionId]);
+    } else {
+      setLaunchModel(undefined);
+    }
 
     // 打开弹框即标记为已查看
     if (session.sessionId) {
@@ -628,6 +660,30 @@ const KanbanPage: React.FC = () => {
             正在向会话 <span className="modal-desc-id">{selectedSession?.sessionId?.substring(0, 8) || '新起点'}</span> 发送新指令
           </p>
         </div>
+
+        {/* 模型选择 */}
+        {(() => {
+          const agent = agents.find(a => a.id === selectedSession?.agentId);
+          const models = agent?.allowedModels?.split(',').map(m => m.trim()).filter(m => m !== '') || [];
+          if (models.length === 0) return null;
+          return (
+            <div className="modal-form-item" style={{ marginBottom: 16 }}>
+              <label>执行模型</label>
+              <Select
+                style={{ width: '100%' }}
+                placeholder="系统默认"
+                value={launchModel}
+                onChange={setLaunchModel}
+                dropdownStyle={{ backgroundColor: '#161b22', border: '1px solid #30363d' }}
+              >
+                {models.map(m => (
+                  <Select.Option key={m} value={m}>{m}</Select.Option>
+                ))}
+                <Select.Option value="">系统默认 (本地配置)</Select.Option>
+              </Select>
+            </div>
+          );
+        })()}
 
         {/* 上次任务返回信息 */}
         {selectedSession?.latestTask && (

@@ -8,7 +8,7 @@ import type { FileEntry } from '../../api/fileApi';
 interface FileTreeProps {
   rootPath: string;
   onFileClick?: (filePath: string) => void;
-  onDragStart?: (filePath: string, fileType: 'file' | 'directory') => void;
+  onDragStart?: (filePath: string) => void;
 }
 
 interface TreeNode extends DataNode {
@@ -99,7 +99,7 @@ const FileTree: React.FC<FileTreeProps> = ({ rootPath, onFileClick, onDragStart 
   const onNodeDragStart: TreeProps['onDragStart'] = (event) => {
     const treeNode = event.node as TreeNode;
     if (onDragStart) {
-      onDragStart(treeNode.path, treeNode.fileType);
+      onDragStart(treeNode.path);
     }
     // 设置拖拽数据
     event.nativeEvent.dataTransfer.setData('text/plain', treeNode.path);

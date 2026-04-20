@@ -1,15 +1,7 @@
 using System.Text.Json;
-using System.Text.Json.Serialization;
-using System.Net.Http;
-using System.Net.Http.Json;
-using System.IO;
-using System.Linq;
-using System.Threading.Tasks;
 using AgentTeam.Api.Data;
 using AgentTeam.Api.Models;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
 
 namespace AgentTeam.Api.Services;
 

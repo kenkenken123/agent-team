@@ -50,7 +50,6 @@ const ConsolePage: React.FC = () => {
   const [dragOverInput, setDragOverInput] = useState(false);
   const inputWrapperRef = useRef<HTMLDivElement>(null);
   const draggedFilePathRef = useRef<string | null>(null);
-  const draggedFileTypeRef = useRef<'file' | 'directory' | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const prevSessionTaskCountRef = useRef(0);
@@ -415,18 +414,22 @@ const ConsolePage: React.FC = () => {
   };
 
   // 记录从目录树拖拽的文件/目录路径
-  const handleFileTreeDragStart = useCallback((filePath: string, fileType: 'file' | 'directory') => {
+  const handleFileTreeDragStart = useCallback((filePath: string) => {
     draggedFilePathRef.current = filePath;
-    draggedFileTypeRef.current = fileType;
   }, []);
 
   // 双击文件/目录时，将路径插入输入框
   const handleFileTreeFileClick = useCallback((filePath: string) => {
-    const name = filePath.split(/[\\/]/).pop() || filePath;
-    const pathRef = `[${name}](${filePath})`;
-    setPrompt(prev => (prev ? `${prev}\n${pathRef}` : pathRef));
-    message.success(`已添加引用: ${name}`);
-  }, []);
+    const workDir = selectedWorkingDirectory || selectedAgent?.workingDirectory || '';
+    // 计算相对路径
+    let relativePath = filePath;
+    if (workDir && filePath.startsWith(workDir)) {
+      relativePath = filePath.slice(workDir.length).replace(/^[\\/]/, '');
+    }
+    const pathRef = `@${relativePath}`;
+    setPrompt(prev => (prev ? `${prev} ${pathRef}` : pathRef));
+    message.success(`已添加引用：${relativePath}`);
+  }, [selectedWorkingDirectory, selectedAgent?.workingDirectory]);
 
   // 使用原生事件监听器处理拖拽（比 React synthetic event 更可靠）
   useEffect(() => {
@@ -453,27 +456,24 @@ const ConsolePage: React.FC = () => {
       // 优先使用 ref 中记录的路径（来自目录树的 onDragStart），其次尝试 dataTransfer
       const filePath = draggedFilePathRef.current || e.dataTransfer?.getData('text/plain');
       if (filePath) {
-        const fileName = filePath.split(/[\\/]/).pop() || filePath;
-        const fileType = draggedFileTypeRef.current;
-        // 有 fileType 时使用它（来自拖拽源头），无则标注为"路径引用"
-        let label = '路径';
-        if (fileType) {
-          label = fileType === 'directory' ? '目录' : '文件';
+        const workDir = selectedWorkingDirectory || selectedAgent?.workingDirectory || '';
+        // 计算相对路径
+        let relativePath = filePath;
+        if (workDir && filePath.startsWith(workDir)) {
+          relativePath = filePath.slice(workDir.length).replace(/^[\\/]/, '');
         }
-        const pathRef = `[${label}](${filePath})`;
-        setPrompt(prev => (prev ? `${prev}\n${pathRef}` : pathRef));
-        message.success(`已添加${label}引用: ${fileName}`);
+        const pathRef = `@${relativePath}`;
+        setPrompt(prev => (prev ? `${prev} ${pathRef}` : pathRef));
+        message.success(`已添加引用: ${relativePath}`);
       }
       // 清除 ref
       draggedFilePathRef.current = null;
-      draggedFileTypeRef.current = null;
     };
 
     // 离开页面可视区域时清除高亮
     const handleDragEnd = () => {
       setDragOverInput(false);
       draggedFilePathRef.current = null;
-      draggedFileTypeRef.current = null;
     };
 
     // 使用捕获阶段，在 document 层级拦截，确保不被子组件阻止
