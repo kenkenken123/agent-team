@@ -79,7 +79,7 @@ public class TasksController(
         // 2. 优化 Prompt
         if (req.OptimizePrompt)
         {
-            prompt = await router.OptimizePromptAsync(prompt);
+            prompt = await router.OptimizePromptAsync(prompt, agentId);
         }
 
         // 3. Plan 模式下追加禁止执行提示
@@ -111,7 +111,8 @@ public class TasksController(
         {
             AgentId = agentId.Value,
             Agent = agent,
-            Prompt = prompt,
+            Prompt = req.Prompt,
+            OptimizedPrompt = prompt != req.Prompt ? prompt : null,
             ClaudeSessionId = sessionId,
             TerminalType = req.TerminalType,
             WorkingDirectory = workingDirectory,
@@ -223,6 +224,8 @@ public class TasksController(
         t.Model,
         t.IsPlanMode,
         t.FinalResult,
+        t.ButlerSummary,
+        t.OptimizedPrompt,
         t.StartedAt,
         t.CompletedAt,
         t.ExitCode,

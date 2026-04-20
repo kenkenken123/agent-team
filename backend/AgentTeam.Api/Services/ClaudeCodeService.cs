@@ -13,12 +13,12 @@ namespace AgentTeam.Api.Services;
 public class ClaudeCodeService(
     IServiceScopeFactory scopeFactory,
     OutputFileService outputFileService,
-    ButlerMemoryService butlerMemoryService,
     ILogger<ClaudeCodeService> logger)
 {
     private readonly Dictionary<Guid, System.Diagnostics.Process> _runningProcesses = [];
     private readonly Dictionary<Guid, System.Text.StringBuilder> _lastAssistantMessages = [];
     private readonly Lock _lock = new();
+    private readonly CancellationTokenSource _appShutdown = new();
 
     // WebSocket 推送委托：外部订阅后可实时接收输出
     public event Func<Guid, string, Task>? OnOutput;
@@ -179,13 +179,13 @@ public class ClaudeCodeService(
         // 关键：将进程加入运行中集合，否则 Cancel 找不到
         lock (_lock) { _runningProcesses[task.Id] = process; }
 
-        // 等待进程结束
+        // 等待进程结束（使用 CancellationToken 防止应用关闭后仍运行）
         _ = Task.Run(async () =>
         {
             try
             {
                 await Task.WhenAll(stdoutTask, stderrTask);
-                await process.WaitForExitAsync();
+                await process.WaitForExitAsync(_appShutdown.Token);
 
                 var exitCode = process.ExitCode;
 
@@ -215,18 +215,24 @@ public class ClaudeCodeService(
                         freshTask.FinalResult = finalMessage;
                         await db.SaveChangesAsync();
 
-                        // 触发即时记忆评估
+                        // 触发即时记忆评估与管家总结
+                        // 使用 CancellationTokenSource 设置超时，防止应用关闭后仍运行
+                        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
                         _ = Task.Run(async () =>
                         {
                             try
                             {
-                                await butlerMemoryService.ImmediateEvaluationAsync(task.Prompt, finalMessage);
+                                await ProcessTaskCompletionAsync(task, finalMessage, cts.Token);
+                            }
+                            catch (OperationCanceledException)
+                            {
+                                logger.LogWarning("[Task {TaskId}] 任务完成后处理超时", task.Id);
                             }
                             catch (Exception ex)
                             {
-                                logger.LogError(ex, "[Task {TaskId}] 触发自动即时记忆评估失败", task.Id);
+                                logger.LogError(ex, "[Task {TaskId}] 任务完成后处理异步逻辑失败", task.Id);
                             }
-                        });
+                        }, cts.Token);
                     }
                     else
                     {
@@ -242,11 +248,15 @@ public class ClaudeCodeService(
                     logger.LogInformation("任务 {TaskId} 结束，退出码: {ExitCode}", task.Id, exitCode);
                 }
             }
+            catch (OperationCanceledException)
+            {
+                logger.LogInformation("[Task {TaskId}] 应用正在关闭，取消后台处理", task.Id);
+            }
             catch (Exception ex)
             {
                 logger.LogError(ex, "[Task {TaskId}] Background processing error", task.Id);
             }
-        });
+        }, _appShutdown.Token);
     }
 
     /// <summary>取消运行中的任务</summary>
@@ -321,6 +331,43 @@ public class ClaudeCodeService(
 
     // ─── 内部方法 ─────────────────────────────────────────────
 
+    /// <summary>
+    /// 处理任务完成后的后续逻辑（生成总结、写入记忆、触发评估）
+    /// 从 ExecuteProcessAsync 中解耦，避免嵌套 Service Scope 导致的依赖生命周期问题
+    /// </summary>
+    private async Task ProcessTaskCompletionAsync(AgentTask task, string finalMessage, CancellationToken ct)
+    {
+        using var scope = scopeFactory.CreateScope();
+        var router = scope.ServiceProvider.GetRequiredService<MessageRouterService>();
+        var memory = scope.ServiceProvider.GetRequiredService<ButlerMemoryService>();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var wsManager = scope.ServiceProvider.GetRequiredService<WebSockets.TaskWebSocketManager>();
+
+        // 1. 生成管家总结
+        var summaryJson = await router.GenerateButlerSummaryAsync(task.Prompt, finalMessage);
+        if (!string.IsNullOrEmpty(summaryJson))
+        {
+            var sTask = await db.Tasks.FindAsync(task.Id);
+            if (sTask != null)
+            {
+                sTask.ButlerSummary = summaryJson;
+                await db.SaveChangesAsync();
+                logger.LogInformation("[Task {TaskId}] 管家总结生成并保存成功", task.Id);
+
+                // 广播总结就绪消息，通知前端更新 UI
+                var summaryMsg = JsonSerializer.Serialize(new { type = "summary_ready", taskId = task.Id, summary = summaryJson }, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+                await wsManager.BroadcastAsync(task.Id, summaryMsg);
+            }
+        }
+
+        // 2. 写入 Agent 专属记忆
+        await memory.AddAgentShortTermMemoryAsync(task.AgentId, "user", task.Prompt);
+        await memory.AddAgentShortTermMemoryAsync(task.AgentId, "assistant", finalMessage);
+
+        // 3. 触发即时记忆评估 (全局)
+        await memory.ImmediateEvaluationAsync(task.Prompt, finalMessage);
+    }
+
     private List<string> BuildCommandList(AgentTask task, Agent agent)
     {
         var args = new List<string>();
@@ -366,7 +413,8 @@ public class ClaudeCodeService(
         args.Add("stream-json");
         args.Add("--verbose");
 
-        var finalPrompt = task.Prompt;
+        // 优先使用优化后的 Prompt
+        var finalPrompt = !string.IsNullOrEmpty(task.OptimizedPrompt) ? task.OptimizedPrompt : task.Prompt;
         if (!string.IsNullOrEmpty(task.ImageUrls))
         {
             var images = task.ImageUrls.Split(';');
@@ -522,9 +570,16 @@ public class ClaudeCodeService(
 
                                     _ = Task.Run(async () =>
                                     {
-                                        if (OnAskUserQuestion != null)
-                                            await OnAskUserQuestion.Invoke(taskId, question ?? "", requestId!);
-                                    });
+                                        try
+                                        {
+                                            if (OnAskUserQuestion != null)
+                                                await OnAskUserQuestion.Invoke(taskId, question ?? "", requestId!);
+                                        }
+                                        catch (Exception ex)
+                                        {
+                                            logger.LogError(ex, "[Task {TaskId}] Error notifying AskUserQuestion", taskId);
+                                        }
+                                    }, _appShutdown.Token);
 
                                     sb.Append($"\r\n\x1b[33m[Claude 提问: {question}]\x1b[0m\r\n");
                                 }
@@ -587,19 +642,26 @@ public class ClaudeCodeService(
     {
         _ = Task.Run(async () =>
         {
-            using var scope = scopeFactory.CreateScope();
-            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-            var t = await db.Tasks.FindAsync(taskId);
-            if (t != null)
+            try
             {
-                t.InputTokens = (t.InputTokens ?? 0) + input;
-                t.OutputTokens = (t.OutputTokens ?? 0) + output;
-                t.CacheReadTokens = (t.CacheReadTokens ?? 0) + cacheRead;
-                t.CacheCreationTokens = (t.CacheCreationTokens ?? 0) + cacheCreation;
-                t.TokensUsed = t.InputTokens + t.OutputTokens + t.CacheReadTokens + t.CacheCreationTokens;
-                await db.SaveChangesAsync();
+                using var scope = scopeFactory.CreateScope();
+                var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+                var t = await db.Tasks.FindAsync(taskId);
+                if (t != null)
+                {
+                    t.InputTokens = (t.InputTokens ?? 0) + input;
+                    t.OutputTokens = (t.OutputTokens ?? 0) + output;
+                    t.CacheReadTokens = (t.CacheReadTokens ?? 0) + cacheRead;
+                    t.CacheCreationTokens = (t.CacheCreationTokens ?? 0) + cacheCreation;
+                    t.TokensUsed = t.InputTokens + t.OutputTokens + t.CacheReadTokens + t.CacheCreationTokens;
+                    await db.SaveChangesAsync();
+                }
             }
-        });
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "[Task {TaskId}] Error updating token usage", taskId);
+            }
+        }, _appShutdown.Token);
     }
 
     private void UpdateTaskSession(Guid taskId, string? sessionId)
@@ -607,15 +669,22 @@ public class ClaudeCodeService(
         if (string.IsNullOrEmpty(sessionId)) return;
         _ = Task.Run(async () =>
         {
-            using var scope = scopeFactory.CreateScope();
-            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-            var t = await db.Tasks.FindAsync(taskId);
-            if (t != null && t.ClaudeSessionId != sessionId)
+            try
             {
-                t.ClaudeSessionId = sessionId;
-                await db.SaveChangesAsync();
+                using var scope = scopeFactory.CreateScope();
+                var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+                var t = await db.Tasks.FindAsync(taskId);
+                if (t != null && t.ClaudeSessionId != sessionId)
+                {
+                    t.ClaudeSessionId = sessionId;
+                    await db.SaveChangesAsync();
+                }
             }
-        });
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "[Task {TaskId}] Error updating session ID", taskId);
+            }
+        }, _appShutdown.Token);
     }
 
 

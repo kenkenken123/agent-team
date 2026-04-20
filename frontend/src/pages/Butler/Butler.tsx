@@ -15,10 +15,60 @@ import { agentApi } from '../../api/agentApi';
 import type { IncomingMessage } from '../../api/messageApi';
 import type { Agent } from '../../types';
 import { useAppStore } from '../../stores/appStore';
+import { useTaskWebSocket } from '../../hooks/useTaskWebSocket';
+import { taskApi } from '../../api/taskApi';
 import './Butler.css';
 
 const { Title, Text, Paragraph } = Typography;
 const { Option } = Select;
+
+/**
+ * 安全解析 JSON，避免组件因格式错误而崩溃
+ */
+function safeParseJson(text: string | undefined | null): any | null {
+    if (!text) return null;
+    try {
+        return JSON.parse(text);
+    } catch (e) {
+        console.warn('JSON.parse 失败，返回 null:', e);
+        return null;
+    }
+}
+
+const SummarySnapshot: React.FC<{ taskId: string }> = ({ taskId }) => {
+    const [summary, setSummary] = useState<any>(null);
+    const [loading, setLoading] = useState(false);
+
+    useEffect(() => {
+        const load = async () => {
+            setLoading(true);
+            try {
+                const task = await taskApi.getById(taskId);
+                if (task.butlerSummary) {
+                    const parsed = safeParseJson(task.butlerSummary);
+                    if (parsed) {
+                        setSummary(parsed);
+                    }
+                }
+            } catch (e) {
+                console.error('加载历史总结失败', e);
+            } finally {
+                setLoading(false);
+            }
+        };
+        load();
+    }, [taskId]);
+
+    if (loading) return <div style={{ fontSize: 12, color: '#8b949e', marginTop: 8 }}>📊 正在加载任务总结...</div>;
+    if (!summary) return null;
+
+    return (
+        <div className="summary-snapshot">
+            <div className="snapshot-tag">总结</div>
+            <div className="snapshot-text">{summary.summary}</div>
+        </div>
+    );
+};
 
 const ButlerPage: React.FC = () => {
     const [msgForm] = Form.useForm();
@@ -30,6 +80,12 @@ const ButlerPage: React.FC = () => {
     
     // Add state to track selected agent for purple placeholder text
     const [selectedAgentId, setLocalSelectedAgentId] = useState<string | undefined>(undefined);
+    
+    // Phase Management
+    const [phase, setPhaseState] = useState<'idle' | 'analyzing' | 'waiting' | 'summarizing' | 'done'>('idle');
+    const [currentTaskId, setCurrentTaskId] = useState<string | null>(null);
+    const [summaryData, setSummaryData] = useState<any>(null);
+    const pollingTaskIdRef = React.useRef<string | null>(null);
     
     const { setPage, setSelectedAgentId } = useAppStore();
 
@@ -58,23 +114,105 @@ const ButlerPage: React.FC = () => {
 
     const onSendToButler = async (values: { text: string; agentId?: string; optimizePrompt?: boolean }) => {
         setLoading(true);
+        setPhaseState('analyzing');
+        setRoutingResult(null);
+        setSummaryData(null);
+        setCurrentTaskId(null);
+
         try {
-            // 获取已上传成功的图片 URL
             const imageUrls = fileList
                 .filter(file => file.status === 'done' && file.response?.url)
                 .map(file => file.response.url);
 
             const { data } = await ingestMessage(values.text, values.agentId, imageUrls, values.optimizePrompt);
             setRoutingResult(data);
-            message.success('您的指令已送达，管家正在处理...');
-            msgForm.resetFields(['text']); // 仅重置文本，保留 Agent 选择和优化选项
+            
+            if (data.status === 'Routed' && data.triggeredTaskId) {
+                setCurrentTaskId(data.triggeredTaskId);
+                setPhaseState('waiting');
+            } else if (data.status === 'NoAgent') {
+                setPhaseState('idle');
+                message.warning('管家未找到合适 Agent，已记录为待澄清状态。');
+            } else {
+                setPhaseState('idle');
+            }
+
+            msgForm.resetFields(['text']);
             setFileList([]);
             loadMessages();
         } catch (error) {
             message.error('发送指令失败，请检查后端连接');
+            setPhaseState('idle');
         } finally {
             setLoading(false);
         }
+    };
+
+    // WebSocket Listener
+    useTaskWebSocket(currentTaskId, {
+        onMessage: (msg) => {
+            if (msg.type === 'status') {
+                if (msg.status === 'Completed') {
+                    setPhaseState('summarizing');
+                    pollSummary(currentTaskId!);
+                } else if (msg.status === 'Failed' || msg.status === 'Cancelled') {
+                    setPhaseState('idle');
+                }
+            } else if (msg.type === 'summary_ready') {
+                try {
+                    const parsed = typeof msg.summary === 'string' ? safeParseJson(msg.summary) : msg.summary;
+                    if (parsed) {
+                        setSummaryData(parsed);
+                        setPhaseState('done');
+                        loadMessages();
+                    } else {
+                        console.warn('WebSocket 总结数据为空或解析失败');
+                    }
+                } catch (e) {
+                    console.error('解析 WebSocket 总结失败', e);
+                }
+            }
+        }
+    });
+
+    const pollSummary = async (taskId: string) => {
+        if (pollingTaskIdRef.current === taskId) return; // 幂等性：如果已经在轮询该任务，则跳过
+        pollingTaskIdRef.current = taskId;
+
+        let attempts = 0;
+        const maxAttempts = 30; // 30 seconds max
+        
+        const check = async () => {
+            try {
+                const task = await taskApi.getById(taskId);
+                if (task.butlerSummary) {
+                    const parsed = safeParseJson(task.butlerSummary);
+                    if (parsed) {
+                        setSummaryData(parsed);
+                        setPhaseState('done');
+                        loadMessages(); // Refresh history to show summary if needed
+                        return true;
+                    } else {
+                        // JSON 解析失败时使用原始文本作为降级方案
+                        setSummaryData({ summary: task.butlerSummary });
+                        return true;
+                    }
+                }
+            } catch (error) {
+                console.error('轮询总结失败', error);
+            }
+            return false;
+        };
+
+        const interval = setInterval(async () => {
+            attempts++;
+            const success = await check();
+            if (success || attempts >= maxAttempts) {
+                clearInterval(interval);
+                pollingTaskIdRef.current = null; // 轮询结束，重置状态
+                if (!success) setPhaseState('done'); // Even if failed, show done (fallback)
+            }
+        }, 1000);
     };
 
     const goToConsole = (agentId?: string, taskId?: string) => {
@@ -82,6 +220,15 @@ const ButlerPage: React.FC = () => {
         // 如果需要跳转到特定任务，目前的 Console 可能需要扩展支持 taskId 参数
         // 这里暂时先跳转到控制台页面
         setPage('console');
+    };
+
+    const handleSuggestionClick = (text: string) => {
+        msgForm.setFieldsValue({ text });
+        const inputEl = document.getElementById('butler-input-area');
+        if (inputEl) {
+            inputEl.focus();
+            inputEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
     };
 
     const getStatusTag = (status: string) => {
@@ -157,6 +304,7 @@ const ButlerPage: React.FC = () => {
                             style={{ marginBottom: 32 }}
                         >
                             <Input.TextArea 
+                                id="butler-input-area"
                                 className="butler-textarea"
                                 placeholder="指派说明或任何需求，例如：'帮我分析一下 backend 目录下的代码结构' 或 '帮我写一个 React 登录页面'"
                                 onPaste={async (e) => {
@@ -236,7 +384,24 @@ const ButlerPage: React.FC = () => {
                     </Form>
                     </div>
 
-                    {routingResult && (
+                    {phase !== 'idle' && (
+                        <div className="phase-indicator-container">
+                            <div className={`phase-step ${phase === 'analyzing' ? 'active' : 'completed'}`}>
+                                <div className="step-dot" />
+                                <Text>深度分析中...</Text>
+                            </div>
+                            <div className={`phase-step ${phase === 'waiting' ? 'active' : phase === 'summarizing' || phase === 'done' ? 'completed' : ''}`}>
+                                <div className="step-dot" />
+                                <Text>任务执行中...</Text>
+                            </div>
+                            <div className={`phase-step ${phase === 'summarizing' ? 'active' : phase === 'done' ? 'completed' : ''}`}>
+                                <div className="step-dot" />
+                                <Text>结果归纳中...</Text>
+                            </div>
+                        </div>
+                    )}
+
+                    {routingResult && phase !== 'done' && (
                         <div className="routing-result-box" style={{ marginTop: 24 }}>
                             <Badge.Ribbon text="分析结果" color={routingResult.status === 'Routed' ? '#238636' : '#d29922'}>
                                 <div style={{ padding: '20px', background: '#1C2128', borderRadius: 12, border: '1px solid #30363D' }}>
@@ -251,7 +416,7 @@ const ButlerPage: React.FC = () => {
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                                 <RobotOutlined style={{ color: '#58a6ff' }} />
                                                 <Text strong>已指派 Agent：</Text> 
-                                                <Tag color="processing" style={{ margin: 0 }}>{routingResult.triggeredAgentId}</Tag>
+                                                <Tag color="processing" style={{ margin: 0 }}>{routingResult.triggeredAgentName || routingResult.triggeredAgentId}</Tag>
                                             </div>
                                         )}
                                         {routingResult.triggeredTaskId && (
@@ -271,6 +436,75 @@ const ButlerPage: React.FC = () => {
                                     </Space>
                                 </div>
                             </Badge.Ribbon>
+                        </div>
+                    )}
+
+                    {phase === 'done' && summaryData && (
+                        <div className="summary-card-container">
+                            <Card variant="borderless" className="butler-summary-card">
+                                <div className="summary-header">
+                                    <CheckCircleOutlined style={{ color: '#238636', fontSize: 20 }} />
+                                    <Title level={4} style={{ margin: 0, color: '#e6edf3' }}>任务执行总结</Title>
+                                </div>
+                                
+                                <Paragraph className="summary-main-text">
+                                    {summaryData.summary}
+                                </Paragraph>
+
+                                <div className="summary-details">
+                                    <div className="detail-section">
+                                        <Text strong className="section-title">📊 影响范围</Text>
+                                        <div className="tag-cloud">
+                                            {summaryData.impactScope?.map((item: string, idx: number) => (
+                                                <Tag key={idx} color="blue">{item}</Tag>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    <div className="detail-section">
+                                        <Text strong className="section-title">💡 关键点</Text>
+                                        <ul className="point-list">
+                                            {summaryData.keyPoints?.map((item: string, idx: number) => (
+                                                <li key={idx}><Text type="secondary">{item}</Text></li>
+                                            ))}
+                                        </ul>
+                                    </div>
+
+                                    <div className="detail-section">
+                                        <Text strong className="section-title">🚀 后续建议</Text>
+                                        <div className="suggestion-box">
+                                            {summaryData.suggestedNextActions?.map((item: string, idx: number) => (
+                                                <div 
+                                                    key={idx} 
+                                                    className="suggestion-item clickable-suggestion"
+                                                    onClick={() => handleSuggestionClick(item)}
+                                                >
+                                                    <div className="suggestion-content">
+                                                        <ArrowRightOutlined className="suggestion-icon" />
+                                                        <Text className="suggestion-text">{item}</Text>
+                                                    </div>
+                                                    <Button type="link" size="small" className="suggestion-action-btn">
+                                                        发起任务
+                                                    </Button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <Divider style={{ margin: '16px 0', borderColor: 'rgba(255,255,255,0.05)' }} />
+                                
+                                <div style={{ textAlign: 'right' }}>
+                                    <Button type="link" onClick={() => setPhaseState('idle')}>开启新对话</Button>
+                                    <Button 
+                                        type="primary" 
+                                        ghost 
+                                        onClick={() => goToConsole(routingResult?.triggeredAgentId, routingResult?.triggeredTaskId)}
+                                    >
+                                        查看完整日志
+                                    </Button>
+                                </div>
+                            </Card>
                         </div>
                     )}
                 </Card>
@@ -316,6 +550,10 @@ const ButlerPage: React.FC = () => {
                                                 <div className="stream-feedback">
                                                     {item.routerReason}
                                                 </div>
+                                            )}
+                                            {/* 展示历史总结 (如果存在) */}
+                                            {item.triggeredTaskId && messages.find(m => m.id === item.id)?.status === 'Completed' && (
+                                                <SummarySnapshot taskId={item.triggeredTaskId} />
                                             )}
                                         </div>
                                         

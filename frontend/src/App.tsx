@@ -2,6 +2,7 @@ import React from 'react';
 import { ConfigProvider, theme } from 'antd';
 import zhCN from 'antd/locale/zh_CN';
 import AppLayout from './components/Layout/AppLayout';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import './index.css';
 
 const App: React.FC = () => {
@@ -36,7 +37,9 @@ const App: React.FC = () => {
         },
       }}
     >
-      <AppLayout />
+      <ErrorBoundary>
+        <AppLayout />
+      </ErrorBoundary>
     </ConfigProvider>
   );
 };

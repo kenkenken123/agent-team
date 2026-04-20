@@ -52,6 +52,8 @@ public class AgentTask
 
     /// <summary>任务完成后的最终回答内容（用于快速展示，无需读取完整日志）</summary>
     public string? FinalResult { get; set; }
+    public string? ButlerSummary { get; set; }
+    public string? OptimizedPrompt { get; set; }
 
     public DateTime? StartedAt { get; set; }
     public DateTime? CompletedAt { get; set; }

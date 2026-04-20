@@ -23,11 +23,11 @@ if "%choice%"=="5" goto LIST_MIGRATIONS
 if "%choice%"=="6" exit /b
 
 :ADD_AND_UPDATE
-set /p mname="Enter migration name (e.g. AddUserTable): "
+set "mname="
+set /p mname="Enter migration name (leave blank for Auto): "
 if "%mname%"=="" (
-    echo [Error] Migration name is required.
-    pause
-    goto ADD_AND_UPDATE
+    for /f "tokens=*" %%a in ('powershell -Command "Get-Date -Format 'yyyyMMddHHmmss'"') do set "mname=Auto_%%a"
+    echo [Info] No name provided. Using auto-generated name: !mname!
 )
 echo.
 echo [Step 1/2] Adding migration: %mname%...
@@ -49,8 +49,12 @@ pause
 goto :EOF
 
 :ADD_ONLY
-set /p mname="Enter migration name: "
-if "%mname%"=="" goto ADD_ONLY
+set "mname="
+set /p mname="Enter migration name (leave blank for Auto): "
+if "%mname%"=="" (
+    for /f "tokens=*" %%a in ('powershell -Command "Get-Date -Format 'yyyyMMddHHmmss'"') do set "mname=Auto_%%a"
+    echo [Info] No name provided. Using auto-generated name: !mname!
+)
 dotnet ef migrations add %mname% --project backend\AgentTeam.Api
 pause
 goto :EOF

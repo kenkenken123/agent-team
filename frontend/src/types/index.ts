@@ -114,6 +114,8 @@ export interface AgentTask {
   startedAt?: string;
   completedAt?: string;
   exitCode?: number;
+  butlerSummary?: string;
+  optimizedPrompt?: string;
   imageUrls?: string;
   createdAt: string;
 }
@@ -193,10 +195,17 @@ export interface WsAskUserQuestionMessage {
   question: string;
 }
 
+export interface WsSummaryReadyMessage {
+  type: 'summary_ready';
+  taskId: string;
+  summary: string;
+}
+
 export type WsMessage =
   | WsOutputMessage
   | WsStatusMessage
   | WsPermissionRequestMessage
   | WsPermissionResolvedMessage
-  | WsAskUserQuestionMessage;
+  | WsAskUserQuestionMessage
+  | WsSummaryReadyMessage;
 

@@ -1,4 +1,5 @@
 using AgentTeam.Api.Data;
+using AgentTeam.Api.DTOs;
 using AgentTeam.Api.MessageSources;
 using AgentTeam.Api.Models;
 using AgentTeam.Api.Services;
@@ -34,7 +35,7 @@ public class MessageIngestController(
         var parsed = new ParsedMessage
         {
             SourceName = sourceName,
-            SenderId   = req.SenderId,
+            SenderId = req.SenderId,
             Text = req.Text,
             AgentId = req.AgentId,
             ImageUrls = req.ImageUrls != null ? string.Join(";", req.ImageUrls) : null,
@@ -42,7 +43,7 @@ public class MessageIngestController(
         };
 
         var result = await ingestionService.IngestAsync(parsed);
-        return Ok(result);
+        return Ok(ToDto(result));
     }
 
     [HttpGet]
@@ -53,8 +54,9 @@ public class MessageIngestController(
             .OrderByDescending(m => m.CreatedAt)
             .Skip(skip)
             .Take(take)
+            .Select(m => ToDto(m))
             .ToListAsync();
-            
+
         return Ok(new { items, total });
     }
 
@@ -63,6 +65,21 @@ public class MessageIngestController(
     {
         var msg = await db.IncomingMessages.FindAsync(id);
         if (msg == null) return NotFound();
-        return Ok(msg);
+        return Ok(ToDto(msg));
     }
+
+    private static IncomingMessageDto ToDto(IncomingMessage m) => new(
+        m.Id,
+        m.Source,
+        m.SourceMessageId,
+        m.ParsedText,
+        m.Status.ToString(),
+        m.RouterReason,
+        m.TriggeredAgentId,
+        m.TriggeredAgentName,
+        m.TriggeredTaskId,
+        m.ImageUrls,
+        m.CreatedAt,
+        m.UpdatedAt
+    );
 }

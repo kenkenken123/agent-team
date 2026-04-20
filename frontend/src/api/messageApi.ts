@@ -7,6 +7,7 @@ export interface IncomingMessage {
   status: string;
   routerReason?: string;
   triggeredAgentId?: string;
+  triggeredAgentName?: string;
   triggeredTaskId?: string;
   createdAt: string;
 }

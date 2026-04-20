@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Text.Json;
 using AgentTeam.Api.Data;
 using AgentTeam.Api.Models;
@@ -15,6 +16,21 @@ public class ButlerMemoryService
     private readonly string _userProfilePath;
 
     /// <summary>
+    /// 每个 Agent 的写入锁，防止并发写入导致数据丢失或损坏
+    /// </summary>
+    private readonly ConcurrentDictionary<Guid, SemaphoreSlim> _agentLocks = new();
+
+    /// <summary>
+    /// 全局短期记忆写入锁
+    /// </summary>
+    private readonly SemaphoreSlim _shortTermLock = new(1, 1);
+
+    /// <summary>
+    /// HttpClient 重试次数（网络波动时自动重试）
+    /// </summary>
+    private const int MaxRetries = 2;
+
+    /// <summary>
     /// 长期记忆最大字符数
     /// </summary>
     private const int LongTermMemoryMaxChars = 2200;
@@ -26,11 +42,19 @@ public class ButlerMemoryService
 
     /// <summary>
     /// 短期记忆最大条目数
+    /// 默认保留最近 5 条交互记录，平衡上下文质量与 Token 消耗
     /// </summary>
-    private const int ShortTermMemoryMaxItems = 10;
+    private const int ShortTermMemoryMaxItems = 5;
+
+    /// <summary>
+    /// Agent 专属短期记忆最大条目数
+    /// 默认保留最近 5 条执行历史，用于 Agent 上下文感
+    /// </summary>
+    private const int AgentShortTermMemoryMaxItems = 5;
 
     /// <summary>
     /// 周期评估触发阈值（消息数）
+    /// 每 10 条消息触发一次长期记忆评估
     /// </summary>
     private const int PeriodicEvaluationThreshold = 10;
 
@@ -50,7 +74,13 @@ public class ButlerMemoryService
 
         _shortTermPath = Path.Combine(_memoriesDir, "butler_short_term.json");
         _userProfilePath = Path.Combine(_memoriesDir, "user_profile.json");
+        _pendingClarificationPath = Path.Combine(_memoriesDir, "pending_clarification.txt");
     }
+
+    private readonly string _pendingClarificationPath;
+
+    private string GetAgentShortTermPath(Guid agentId) 
+        => Path.Combine(_memoriesDir, $"agent_{agentId}_short_term.json");
 
     public class ShortTermMemoryItem
     {
@@ -64,6 +94,7 @@ public class ButlerMemoryService
     /// </summary>
     public async Task AddShortTermMemoryAsync(string role, string content)
     {
+        await _shortTermLock.WaitAsync();
         try
         {
             // 截断过长内容
@@ -110,6 +141,10 @@ public class ButlerMemoryService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error adding short term memory");
+        }
+        finally
+        {
+            _shortTermLock.Release();
         }
     }
 
@@ -245,6 +280,7 @@ public class ButlerMemoryService
 
         var contextBuilder = new System.Text.StringBuilder();
 
+        // 优化顺序：用户画像 -> 长期记忆 -> 短期记忆 (利于 Token Cache)
         contextBuilder.AppendLine("【用户画像】");
         if (string.IsNullOrWhiteSpace(userProfile) || userProfile == "{}")
         {
@@ -275,6 +311,94 @@ public class ButlerMemoryService
         }
 
         return contextBuilder.ToString();
+    }
+
+    /// <summary>
+    /// 获取 Agent 专属的上下文记忆 (最近5条)
+    /// </summary>
+    public async Task<string> GetAgentContextAsync(Guid agentId)
+    {
+        var memories = await GetAgentShortTermMemoriesAsync(agentId);
+        if (memories.Count == 0) return "暂无该 Agent 的近期执行历史。";
+
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine($"【Agent 专属执行历史 (最近{AgentShortTermMemoryMaxItems}条)】");
+        foreach (var m in memories)
+        {
+            sb.AppendLine($"{m.Role}: {m.Content}");
+        }
+        return sb.ToString();
+    }
+
+    public async Task AddAgentShortTermMemoryAsync(Guid agentId, string role, string content)
+    {
+        // 获取或创建该 Agent 的专属锁
+        var agentLock = _agentLocks.GetOrAdd(agentId, _ => new SemaphoreSlim(1, 1));
+        await agentLock.WaitAsync();
+        try
+        {
+            if (content.Length > ShortTermMemoryItemMaxChars)
+                content = TruncateContent(content, ShortTermMemoryItemMaxChars);
+
+            var path = GetAgentShortTermPath(agentId);
+            List<ShortTermMemoryItem> memories;
+            if (File.Exists(path))
+            {
+                var json = await File.ReadAllTextAsync(path);
+                memories = JsonSerializer.Deserialize<List<ShortTermMemoryItem>>(json) ?? new List<ShortTermMemoryItem>();
+            }
+            else memories = new List<ShortTermMemoryItem>();
+
+            memories.Add(new ShortTermMemoryItem { Role = role, Content = content, Timestamp = DateTime.UtcNow });
+
+            if (memories.Count > AgentShortTermMemoryMaxItems)
+            {
+                memories = memories.Skip(memories.Count - AgentShortTermMemoryMaxItems).ToList();
+            }
+
+            await File.WriteAllTextAsync(path, JsonSerializer.Serialize(memories, new JsonSerializerOptions { WriteIndented = true }));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error adding agent short term memory for {AgentId}", agentId);
+        }
+        finally
+        {
+            agentLock.Release();
+            // 如果该 Agent 的锁不再被等待且没有其他 Agent 在排队，可以清理
+            _agentLocks.TryRemove(agentId, out _);
+        }
+    }
+
+    public async Task<List<ShortTermMemoryItem>> GetAgentShortTermMemoriesAsync(Guid agentId)
+    {
+        var path = GetAgentShortTermPath(agentId);
+        if (!File.Exists(path)) return new List<ShortTermMemoryItem>();
+        try
+        {
+            var content = await File.ReadAllTextAsync(path);
+            return JsonSerializer.Deserialize<List<ShortTermMemoryItem>>(content) ?? new List<ShortTermMemoryItem>();
+        }
+        catch
+        {
+            return new List<ShortTermMemoryItem>();
+        }
+    }
+
+    public async Task SavePendingClarificationAsync(string originalQuestion)
+    {
+        await File.WriteAllTextAsync(_pendingClarificationPath, originalQuestion);
+    }
+
+    public async Task<string?> GetPendingClarificationAsync()
+    {
+        if (!File.Exists(_pendingClarificationPath)) return null;
+        return await File.ReadAllTextAsync(_pendingClarificationPath);
+    }
+
+    public async Task ClearPendingClarificationAsync()
+    {
+        if (File.Exists(_pendingClarificationPath)) File.Delete(_pendingClarificationPath);
     }
 
     public async Task ImmediateEvaluationAsync(string userPrompt, string agentFinalAnswer)
@@ -448,7 +572,7 @@ Agent返回结果/回答: {agentFinalAnswer}";
         {
             var client = _httpClientFactory.CreateClient();
             client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", apiKey);
-            client.Timeout = TimeSpan.FromSeconds(30);
+            client.Timeout = TimeSpan.FromSeconds(120);
 
             var toolChoice = forceToolCall ? "required" : "auto";
 
@@ -464,13 +588,37 @@ Agent返回结果/回答: {agentFinalAnswer}";
                 tool_choice = toolChoice
             };
 
-            var response = await client.PostAsJsonAsync($"{baseUrl.TrimEnd('/')}/chat/completions", requestBody);
-            if (!response.IsSuccessStatusCode)
+            // 带重试机制的 HTTP 调用（应对网络波动）
+            HttpResponseMessage? response = null;
+            for (int attempt = 0; attempt <= MaxRetries; attempt++)
             {
-                var errorBody = await response.Content.ReadAsStringAsync();
-                _logger.LogWarning("LLM evaluation API call failed: {Status}, Body: {Body}", response.StatusCode, errorBody);
-                return;
+                try
+                {
+                    response = await client.PostAsJsonAsync($"{baseUrl.TrimEnd('/')}/chat/completions", requestBody);
+                    if (response.IsSuccessStatusCode) break;
+
+                    var errorBody = await response.Content.ReadAsStringAsync();
+                    _logger.LogWarning("LLM evaluation API call failed (attempt {Attempt}/{MaxRetries}): {Status}, Body: {Body}",
+                        attempt + 1, MaxRetries + 1, response.StatusCode, errorBody);
+
+                    if (attempt < MaxRetries)
+                    {
+                        await Task.Delay(TimeSpan.FromSeconds(Math.Pow(2, attempt)));
+                    }
+                    else
+                    {
+                        return;
+                    }
+                }
+                catch (HttpRequestException ex) when (attempt < MaxRetries)
+                {
+                    _logger.LogWarning(ex, "LLM evaluation HTTP request failed (attempt {Attempt}/{MaxRetries}), retrying...",
+                        attempt + 1, MaxRetries + 1);
+                    await Task.Delay(TimeSpan.FromSeconds(Math.Pow(2, attempt)));
+                }
             }
+
+            if (response == null || !response.IsSuccessStatusCode) return;
 
             var result = await response.Content.ReadFromJsonAsync<JsonElement>();
             if (result.TryGetProperty("choices", out var choices) && choices.GetArrayLength() > 0)

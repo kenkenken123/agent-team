@@ -16,39 +16,30 @@ public class MessageIngestionService(
 {
     public async Task<IncomingMessage> IngestAsync(ParsedMessage message)
     {
+        // 1. 处理待澄清合并
+        var pendingQ = await memoryService.GetPendingClarificationAsync();
+        if (!string.IsNullOrEmpty(pendingQ) && !message.AgentId.HasValue)
+        {
+            logger.LogInformation("发现待澄清问题，正在合并：{Pending}", pendingQ);
+            message.Text = $"【背景回忆】我之前问过：\"{pendingQ}\"\n【补充/继续】现在我补充/继续说：\"{message.Text}\"";
+            await memoryService.ClearPendingClarificationAsync();
+        }
+
         var incoming = new IncomingMessage
         {
             Source = message.SourceName,
-            SourceMessageId = message.SenderId, // 新增：保存微信 UserId 或其他平台的发送者 ID
+            SourceMessageId = message.SenderId,
             ParsedText = message.Text,
             RawContent = System.Text.Json.JsonSerializer.Serialize(message),
             Status = MessageStatus.Pending,
             ImageUrls = message.ImageUrls
         };
 
-        if (message.OptimizePrompt)
-        {
-            try
-            {
-                var optimized = await router.OptimizePromptAsync(message.Text);
-                if (!string.IsNullOrEmpty(optimized))
-                {
-                    message.Text = optimized;
-                    incoming.ParsedText = optimized;
-                    incoming.RouterReason = "Prompt 已由 AI 优化";
-                }
-            }
-            catch (Exception ex)
-            {
-                logger.LogWarning(ex, "Failed to optimize prompt in Butler");
-            }
-        }
-
         db.IncomingMessages.Add(incoming);
         await db.SaveChangesAsync();
 
-        // 记录用户消息到管家的短期记忆队列
-        await memoryService.AddShortTermMemoryAsync("user", incoming.ParsedText);
+        // 记录到全局短期记忆
+        await memoryService.AddShortTermMemoryAsync("user", message.Text);
 
         try
         {
@@ -56,6 +47,7 @@ public class MessageIngestionService(
             string reason;
             string? extractedPath = null;
 
+            // 2. 路由分析
             if (message.AgentId.HasValue)
             {
                 agentId = message.AgentId;
@@ -78,21 +70,42 @@ public class MessageIngestionService(
                 {
                     incoming.Status = MessageStatus.Routed;
                     incoming.TriggeredAgentId = agentId;
+                    incoming.TriggeredAgentName = agent.Name;
 
-                    // 自动创建一个任务
+                    // 3. 延迟优化 (此时已有 agentId，可以带上 Agent 专属记忆)
+                    var originalPromptText = message.Text; 
+                    if (message.OptimizePrompt)
+                    {
+                        try
+                        {
+                            var optimized = await router.OptimizePromptAsync(message.Text, agentId);
+                            if (!string.IsNullOrEmpty(optimized))
+                            {
+                                message.Text = optimized;
+                                incoming.ParsedText = optimized;
+                                incoming.RouterReason += " | Prompt 已由管家结合 Agent 上下文优化";
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            logger.LogWarning(ex, "Failed to optimize prompt with agent context");
+                        }
+                    }
+
+                    // 4. 创建任务
                     var task = new AgentTask
                     {
                         AgentId = agent.Id,
                         Agent = agent,
-                        Prompt = message.Text,
+                        Prompt = originalPromptText, // 原始输入作为 Prompt
+                        OptimizedPrompt = incoming.ParsedText != originalPromptText ? incoming.ParsedText : null, // 如果优化了，存入 OptimizedPrompt
                         WorkingDirectory = agent.WorkingDirectory ?? extractedPath,
-                        Model = agent.AllowedModels.Split(',')[0], // 仅用于展示，不注入平台配置
-                        UsePlatformConfig = false, // 消息触发不使用平台配置，由系统环境变量提供
-                        TerminalType = "powershell", // 默认
+                        Model = agent.AllowedModels.Split(',')[0],
+                        UsePlatformConfig = false,
+                        TerminalType = "powershell",
                         ImageUrls = message.ImageUrls
                     };
 
-                    // 寻找最近的 SessionId 供上下文继承 (可选逻辑)
                     var lastTask = await db.Tasks
                         .Where(t => t.AgentId == agent.Id && t.ClaudeSessionId != null)
                         .OrderByDescending(t => t.CreatedAt)
@@ -110,8 +123,6 @@ public class MessageIngestionService(
                         await db.SaveChangesAsync();
                         
                         incoming.TriggeredTaskId = task.Id;
-                        
-                        // 启动任务
                         _ = claudeService.StartTaskAsync(task, agent);
                     }
                 }
@@ -123,7 +134,13 @@ public class MessageIngestionService(
             }
             else
             {
+                // 无匹配 Agent，进入待澄清流程
                 incoming.Status = MessageStatus.NoAgent;
+                if (!message.AgentId.HasValue)
+                {
+                    await memoryService.SavePendingClarificationAsync(message.Text);
+                    incoming.RouterReason = "管家未找到合适 Agent，已记录为待澄清状态。";
+                }
             }
         }
         catch (Exception ex)

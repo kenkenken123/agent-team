@@ -19,6 +19,7 @@ public class IncomingMessage
     
     public Guid? TriggeredTaskId { get; set; }
     public Guid? TriggeredAgentId { get; set; }
+    public string? TriggeredAgentName { get; set; }
     public string? RouterReason { get; set; }
     public string? ImageUrls { get; set; }
     

@@ -129,10 +129,29 @@ public record TaskDto(
     string? Model,
     bool IsPlanMode,
     string? FinalResult,
+    string? ButlerSummary,
+    string? OptimizedPrompt,
     DateTime? StartedAt,
     DateTime? CompletedAt,
     int? ExitCode,
     DateTime CreatedAt
+);
+
+// ───── Message DTOs ─────
+
+public record IncomingMessageDto(
+    Guid Id,
+    string Source,
+    string? SourceMessageId,
+    string ParsedText,
+    string Status,
+    string? RouterReason,
+    Guid? TriggeredAgentId,
+    string? TriggeredAgentName,
+    Guid? TriggeredTaskId,
+    string? ImageUrls,
+    DateTime CreatedAt,
+    DateTime UpdatedAt
 );
 
 public record CreateTaskRequest(

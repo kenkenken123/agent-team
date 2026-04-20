@@ -488,6 +488,16 @@
   border-color: rgba(63, 185, 80, 0.3); 
 }
 
+.mark-all-viewed-btn {
+  transition: all 0.2s ease;
+  border-radius: 4px;
+}
+
+.mark-all-viewed-btn:hover {
+  color: #3fb950 !important;
+  background: rgba(63, 185, 80, 0.1) !important;
+}
+
 .modal-title-wrapper {
   display: flex;
   align-items: center;

@@ -124,6 +124,16 @@ const KanbanPage: React.FC = () => {
     });
   };
 
+  // 一键标记所有为已查看
+  const markAllAsViewed = () => {
+    columns.completed.forEach(s => {
+      if (s.sessionId) {
+        markAsViewed(s.sessionId);
+      }
+    });
+    message.success('已标记所有会话为已查看');
+  };
+
   // 加载基础数据
   const loadData = useCallback(async (quiet = false) => {
     if (!quiet) setLoading(true);
@@ -621,6 +631,17 @@ const KanbanPage: React.FC = () => {
               <div className="column-title title-completed">
                 <Bell size={16} />
                 <span>待查看</span>
+                {columns.completed.length > 0 && (
+                  <Button 
+                    type="link" 
+                    size="small" 
+                    icon={<Eye size={12} />}
+                    onClick={(e) => { e.stopPropagation(); markAllAsViewed(); }}
+                    style={{ marginLeft: 8, padding: '0 4px', fontSize: '12px', height: 'auto', color: '#8b949e' }}
+                  >
+                    一键查看
+                  </Button>
+                )}
               </div>
               <span className="column-count count-completed">
                 {columns.completed.length}

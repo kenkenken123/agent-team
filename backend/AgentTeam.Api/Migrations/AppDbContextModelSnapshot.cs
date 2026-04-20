@@ -110,6 +110,9 @@ namespace AgentTeam.Api.Migrations
                     b.Property<Guid>("AgentId")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("ButlerSummary")
+                        .HasColumnType("TEXT");
+
                     b.Property<int?>("CacheCreationTokens")
                         .HasColumnType("INTEGER");
 
@@ -141,6 +144,9 @@ namespace AgentTeam.Api.Migrations
                         .HasColumnType("INTEGER");
 
                     b.Property<string>("Model")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("OptimizedPrompt")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("OutputFilePath")
@@ -297,6 +303,9 @@ namespace AgentTeam.Api.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<Guid?>("TriggeredAgentId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TriggeredAgentName")
                         .HasColumnType("TEXT");
 
                     b.Property<Guid?>("TriggeredTaskId")
