@@ -1,440 +1,307 @@
-.butler-page {
-  max-width: 900px;
-  margin: 0 auto;
-  padding: 48px 32px;
-  min-height: 100vh;
-  background: radial-gradient(circle at 100% 0%, #1a2736 0%, #0d1117 70%);
+.butler-chat-container {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 64px);
+  background: #0d1117;
   position: relative;
+  overflow: hidden;
 }
 
-.butler-page::before {
-  content: "";
-  position: absolute;
-  top: 20%;
-  left: -100px;
-  width: 400px;
-  height: 400px;
-  background: rgba(139, 92, 246, 0.03);
-  filter: blur(100px);
-  border-radius: 50%;
-  pointer-events: none;
-}
-
-/* 使用更高的选择器优先级替代 !important */
-.butler-page .butler-input-card.ant-card {
-  background: rgba(22, 27, 34, 0.4);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 20px;
-  padding: 24px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-  margin-bottom: 32px;
-}
-
-/* 状态切换与发送过渡 */
-.input-section-transition {
-  transition: opacity 0.3s ease;
-  opacity: 1;
-}
-
-.input-faded {
-  opacity: 0.5;
-  pointer-events: none;
-}
-
-/* 选择器自动识别样式 - 需 !important 因为 AntD 内联注入 */
-.select-auto-identify .ant-select-selection-placeholder {
-  color: #a78bfa !important;
-  font-weight: 500;
-}
-
-/* 优化指令区域样式 */
-.optimize-toggle-wrapper {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  background: rgba(137, 87, 229, 0.1);
-  padding: 4px 12px;
-  border-radius: 20px;
-  border: 1px solid rgba(137, 87, 229, 0.2);
-  transition: background 0.3s, border-color 0.3s;
-}
-
-.optimize-toggle-wrapper:hover {
-  background: rgba(137, 87, 229, 0.15);
-  border-color: rgba(137, 87, 229, 0.3);
-}
-
-.optimize-text {
-  color: #bc8cff;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: help;
-}
-
-/* 覆盖 textarea - 需 !important 因为 AntD 组件内部样式优先级极高 */
-.butler-textarea {
-  background-color: rgba(13, 17, 23, 0.6) !important;
-  border: 1px solid rgba(255, 255, 255, 0.08) !important;
-  color: #e6edf3 !important;
-  border-radius: 12px !important;
-  font-size: 15px !important;
-  padding: 16px !important;
-  min-height: 160px !important;
-  margin-bottom: 24px !important;
-  transition: all 0.3s;
-}
-
-.butler-textarea:focus {
-  background-color: rgba(13, 17, 23, 0.8) !important;
-  border-color: rgba(88, 166, 255, 0.4) !important;
-  box-shadow: 0 0 15px rgba(88, 166, 255, 0.1) !important;
-}
-
-.butler-textarea::placeholder {
-  color: #5b646e !important;
-}
-
-/* 附件上传组件 */
-.butler-uploader .ant-upload.ant-upload-select-picture-card {
-  background-color: #0d1117;
-  border: 1px dashed #30363d;
-  border-radius: 8px;
-  width: 64px;
-  height: 64px;
-  transition: border-color 0.3s;
-}
-
-.butler-uploader .ant-upload.ant-upload-select-picture-card:hover {
-  border-color: #58a6ff;
-}
-
-.upload-btn-content {
+/* 消息滚动区 */
+.chat-messages-stream {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px 16px;
   display: flex;
   flex-direction: column;
-  justify-content: center;
-  align-items: center;
+  gap: 24px;
+  background: radial-gradient(circle at 50% 0%, #1a2736 0%, #0d1117 100%);
 }
 
-/* 发送主按钮 - 使用更高优先级替代大部分 !important */
-.butler-page .butler-send-btn.ant-btn-primary {
-  background: linear-gradient(90deg, #3b82f6 0%, #8b5cf6 100%);
-  border: none;
-  width: 160px;
-  height: 44px;
-  border-radius: 8px;
-  font-weight: 600;
-  font-size: 15px;
-  transition: transform 0.2s, box-shadow 0.2s;
+/* 自定义滚动条 */
+.chat-messages-stream::-webkit-scrollbar {
+  width: 6px;
+}
+.chat-messages-stream::-webkit-scrollbar-thumb {
+  background: #30363d;
+  border-radius: 3px;
+}
+
+/* 系统提示 */
+.chat-system-notice {
   display: flex;
   justify-content: center;
-  align-items: center;
-  gap: 8px;
+  margin-bottom: 8px;
+}
+.notice-inner {
+  background: rgba(139, 92, 246, 0.05);
+  border: 1px solid rgba(139, 92, 246, 0.15);
+  padding: 12px 20px;
+  border-radius: 12px;
+  max-width: 80%;
+  text-align: center;
 }
 
-.butler-send-btn:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.4);
-}
-
-.routing-result-box {
-  animation: slideIn 0.3s ease-out;
-}
-
-@keyframes slideIn {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-/* 历史记录流水区域 - 使用更高优先级 */
-.butler-page .history-stream-card.ant-card {
-  background: rgba(22, 27, 34, 0.4);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 20px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
-}
-
-.history-stream-card .ant-card-head {
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-  background: rgba(22, 27, 34, 0.2);
-  border-radius: 20px 20px 0 0;
-  min-height: 56px;
-  padding: 0 24px;
-}
-
-.history-stream-card .ant-card-body {
-  padding: 0;
-}
-
-.history-stream-item {
-  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
-  padding: 24px;
-  display: block;
-  transition: background 0.2s;
-}
-
-.history-stream-item:hover {
-  background: rgba(255, 255, 255, 0.02);
-}
-
-.history-stream-item:last-child {
-  border-bottom: none;
-}
-
-.stream-item-content {
+/* 消息行 */
+.chat-row {
   display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.stream-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.stream-time {
-  font-size: 12px;
-  color: #6e7681;
-}
-
-.stream-right-meta {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.stream-body {
-  display: flex;
-  flex-direction: column;
+  width: 100%;
   gap: 12px;
 }
-
-.stream-text {
-  font-weight: 600;
-  color: #e6edf3;
-  font-size: 15px;
-  line-height: 1.5;
+.user-row {
+  justify-content: flex-end;
+}
+.butler-row {
+  justify-content: flex-start;
 }
 
-.stream-feedback {
-  background-color: #1f2937;
-  border-left: 3px solid #3b82f6;
-  padding: 12px 16px;
-  border-radius: 0 6px 6px 0;
-  color: #c9d1d9;
-  font-size: 13.5px;
-  line-height: 1.6;
-}
-
-.stream-footer {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-/* 操作按钮 - 需 !important 因为 AntD 按钮内部样式 */
-.ghost-action-btn.ant-btn {
-  background: transparent;
-  border: 1px solid #30363d;
-  color: #8b949e;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  border-radius: 6px;
-  font-size: 13px;
-  height: 32px;
-  padding: 0 12px;
-  transition: all 0.2s;
-}
-
-.ghost-action-btn:hover {
-  background: #21262d !important;
-  color: #58a6ff !important;
-  border-color: #58a6ff !important;
-}
-
-/* 4阶段状态机指示器 */
-.phase-indicator-container {
-  display: flex;
-  justify-content: space-around;
-  align-items: center;
-  margin-top: 24px;
-  padding: 16px;
-  background: rgba(13, 17, 23, 0.4);
-  border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  position: relative;
-}
-
-.phase-step {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  opacity: 0.4;
-  transition: all 0.3s;
-}
-
-.phase-step.active {
-  opacity: 1;
-  transform: scale(1.05);
-}
-
-.phase-step.active .step-dot {
-  background: #8b5cf6;
-  box-shadow: 0 0 10px #8b5cf6;
-  animation: pulse 1.5s infinite;
-}
-
-.phase-step.completed {
-  opacity: 0.8;
-}
-
-.phase-step.completed .step-dot {
+/* 头像 */
+.chat-avatar {
+  width: 36px;
+  height: 36px;
   background: #238636;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 20px;
+  flex-shrink: 0;
+}
+.chat-avatar.pulse {
+  background: #8b5cf6;
+  animation: avatarPulse 2s infinite;
 }
 
-.step-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: #30363d;
-}
-
-@keyframes pulse {
+@keyframes avatarPulse {
   0% { box-shadow: 0 0 0 0 rgba(139, 92, 246, 0.4); }
   70% { box-shadow: 0 0 0 10px rgba(139, 92, 246, 0); }
   100% { box-shadow: 0 0 0 0 rgba(139, 92, 246, 0); }
 }
 
-/* 总结卡片样式 */
-.summary-card-container {
-  margin-top: 24px;
-  animation: fadeIn 0.5s ease-out;
+/* 气泡通用 */
+.bubble {
+  max-width: 75%;
+  padding: 12px 16px;
+  border-radius: 12px;
+  position: relative;
+  font-size: 15px;
+  line-height: 1.5;
+  word-wrap: break-word;
 }
 
-/* 使用更高优先级 */
-.butler-page .butler-summary-card.ant-card {
-  background: linear-gradient(135deg, rgba(35, 134, 54, 0.05) 0%, rgba(13, 17, 23, 0.8) 100%);
-  border: 1px solid rgba(35, 134, 54, 0.2);
-  border-radius: 16px;
+/* 用户气泡 */
+.user-bubble {
+  background: #3b82f6;
+  color: #fff;
+  border-bottom-right-radius: 2px;
 }
-
-.summary-header {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 16px;
-}
-
-.summary-main-text {
-  font-size: 16px;
-  color: #e6edf3;
-  line-height: 1.6;
-  margin-bottom: 24px;
-}
-
-.summary-details {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-
-.detail-section {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.section-title {
-  color: #8b949e;
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-}
-
-.tag-cloud {
+.bubble-images {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+  margin-top: 8px;
+}
+.msg-img {
+  width: 120px;
+  height: 120px;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid rgba(255,255,255,0.1);
+}
+.bubble-meta {
+  font-size: 10px;
+  opacity: 0.7;
+  text-align: right;
+  margin-top: 4px;
 }
 
-.point-list {
-  padding-left: 18px;
-  margin: 0;
+/* 管家气泡 */
+.butler-bubble {
+  background: #1c2128;
+  border: 1px solid #30363d;
+  color: #e6edf3;
+  border-bottom-left-radius: 2px;
 }
-
-.point-list li {
-  margin-bottom: 4px;
+.butler-bubble.clickable {
+  cursor: pointer;
+  transition: all 0.2s;
 }
-
-.suggestion-box {
-  background: rgba(139, 92, 246, 0.05);
-  border-radius: 8px;
-  padding: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+.butler-bubble.clickable:hover {
+  background-color: #21262d;
+  border-color: rgba(139, 92, 246, 0.5);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 }
-
-.suggestion-item {
+.butler-header {
   display: flex;
   align-items: center;
   gap: 8px;
+  margin-bottom: 8px;
+}
+.butler-reason {
+  color: #c9d1d9;
+  font-size: 14px;
+  margin-bottom: 8px;
+}
+.butler-result-snapshot {
+  margin-top: 12px;
+  border-top: 1px solid #30363d;
+  padding-top: 12px;
 }
 
-.clickable-suggestion {
-  cursor: pointer;
+/* 实时任务样式 */
+.live-status-steps {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  font-size: 12px;
+}
+.live-status-steps .step {
+  color: #8b949e;
+}
+.live-status-steps .step.active {
+  color: #8b5cf6;
+  font-weight: bold;
+}
+.live-status-steps .step.done {
+  color: #238636;
+}
+.live-status-steps .dot {
+  color: #30363d;
+}
+
+.live-routing-reason {
+  background: rgba(0,0,0,0.2);
   padding: 8px 12px;
   border-radius: 6px;
-  transition: all 0.2s ease;
-  justify-content: space-between;
+  font-size: 13px;
+  color: #8b949e;
+  font-style: italic;
 }
 
-.clickable-suggestion:hover {
-  background: rgba(139, 92, 246, 0.15);
-  transform: translateX(4px);
+.live-summary-box {
+  margin-top: 16px;
+  border-top: 1px dashed #30363d;
+  padding-top: 16px;
+}
+.summary-text {
+  font-size: 15px;
+  line-height: 1.6;
+  color: #e6edf3;
 }
 
-.suggestion-content {
+/* 建议选项卡 */
+.chat-suggestions-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+.chat-suggestion-chip {
+  background: rgba(139, 92, 246, 0.1);
+  border: 1px solid rgba(139, 92, 246, 0.2);
+  color: #a78bfa;
+  padding: 4px 12px;
+  border-radius: 16px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.chat-suggestion-chip:hover {
+  background: rgba(139, 92, 246, 0.2);
+  border-color: #8b5cf6;
+  transform: translateY(-1px);
+}
+
+/* 底部工具栏 */
+.chat-bottom-bar {
+  background: #161b22;
+  border-top: 1px solid #30363d;
+  padding: 12px 16px 24px;
+}
+.chat-input-form {
+  max-width: 900px;
+  margin: 0 auto;
+}
+.input-toolbar-top {
   display: flex;
   align-items: center;
-  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.chat-agent-select .ant-select-selector {
+  background: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+  font-size: 13px !important;
+}
+.chat-optimize-switch {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(137, 87, 229, 0.1);
+  padding: 2px 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(137, 87, 229, 0.2);
+}
+.switch-text {
+  font-size: 12px;
+  color: #bc8cff;
+}
+
+.input-main-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  background: #0d1117;
+  border: 1px solid #30363d;
+  border-radius: 12px;
+  padding: 8px 12px;
+}
+.chat-textarea-input {
   flex: 1;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  color: #e6edf3 !important;
+  font-size: 15px !important;
+  padding: 4px 0 !important;
+}
+.chat-textarea-input::placeholder {
+  color: #484f58;
 }
 
-.suggestion-icon {
-  font-size: 12px;
-  color: #8b5cf6;
+.input-action-buttons {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.icon-btn {
+  background: transparent !important;
+  border: none !important;
+  color: #8b949e !important;
+  font-size: 20px !important;
+  padding: 0 4px !important;
+}
+.send-btn {
+  width: 32px;
+  height: 32px;
+  padding: 0 !important;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px !important;
 }
 
-.suggestion-text {
-  color: #e6edf3;
-  font-size: 14px;
+.input-attachment-list {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
 }
 
-.suggestion-action-btn {
-  padding: 0;
-  height: auto;
-  opacity: 0;
-  transition: opacity 0.2s;
-  font-size: 12px;
-}
-
-.clickable-suggestion:hover .suggestion-action-btn {
-  opacity: 1;
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(20px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-/* 历史流水中的总结快照 */
+/* 总结快照补全 */
 .summary-snapshot {
   display: flex;
   align-items: center;
@@ -443,19 +310,16 @@
   border: 1px solid rgba(35, 134, 54, 0.15);
   padding: 8px 12px;
   border-radius: 6px;
-  margin-top: 8px;
+  margin-bottom: 8px;
 }
-
 .snapshot-tag {
   font-size: 10px;
   background: #238636;
   color: #fff;
   padding: 1px 4px;
   border-radius: 3px;
-  text-transform: uppercase;
   font-weight: bold;
 }
-
 .snapshot-text {
   font-size: 13px;
   color: #c9d1d9;

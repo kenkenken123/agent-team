@@ -177,8 +177,8 @@ const ConsolePage: React.FC = () => {
 
       // Bug2: 始终从最新数据中同步 selectedTask 的状态
       if (selectedSessionId) {
-        // 从看板跳转定位
-        const found = data.items.find(t => t.claudeSessionId === selectedSessionId);
+        // 从看板或管家跳转定位：支持匹配 SessionId 或 TaskId
+        const found = data.items.find(t => t.claudeSessionId === selectedSessionId || t.id === selectedSessionId);
         if (found) {
           setSelectedTask(found);
           setSelectedSessionId(null);

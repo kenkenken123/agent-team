@@ -9,6 +9,7 @@ export interface IncomingMessage {
   triggeredAgentId?: string;
   triggeredAgentName?: string;
   triggeredTaskId?: string;
+  imageUrls?: string;
   createdAt: string;
 }
 
