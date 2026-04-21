@@ -19,6 +19,7 @@ public class AppDbContext : DbContext
     public DbSet<CredentialTemplate> CredentialTemplates { get; set; } = null!;
     public DbSet<ModelConfig> ModelConfigs { get; set; } = null!;
     public DbSet<LongTermMemory> Memories { get; set; } = null!;
+    public DbSet<Models.TaskStats> TaskStats { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -84,6 +85,13 @@ public class AppDbContext : DbContext
             e.HasKey(c => c.Id);
             e.Property(c => c.ModelId).IsRequired().HasMaxLength(100);
             e.HasOne(c => c.Template).WithMany().HasForeignKey(c => c.TemplateId);
+        });
+
+        modelBuilder.Entity<Models.TaskStats>(e =>
+        {
+            e.HasKey(s => s.Id);
+            e.HasIndex(s => s.CreatedAt);
+            e.HasIndex(s => s.AgentId);
         });
     }
 }

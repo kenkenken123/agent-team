@@ -213,6 +213,7 @@ public class ClaudeCodeService(
                     if (exitCode == 0 && !string.IsNullOrWhiteSpace(finalMessage))
                     {
                         freshTask.FinalResult = finalMessage;
+                        await RecordTaskStatsAsync(freshTask, db);
                         await db.SaveChangesAsync();
 
                         // 触发即时记忆评估与管家总结
@@ -236,6 +237,7 @@ public class ClaudeCodeService(
                     }
                     else
                     {
+                        await RecordTaskStatsAsync(freshTask, db);
                         await db.SaveChangesAsync();
                         // 即使没有最终消息也要清理缓存
                         lock (_lock) { _lastAssistantMessages.Remove(task.Id); }
@@ -330,6 +332,29 @@ public class ClaudeCodeService(
     }
 
     // ─── 内部方法 ─────────────────────────────────────────────
+
+    private async Task RecordTaskStatsAsync(AgentTask task, AppDbContext db)
+    {
+        var totalTokens = (task.InputTokens ?? 0) + (task.OutputTokens ?? 0)
+            + (task.CacheReadTokens ?? 0) + (task.CacheCreationTokens ?? 0);
+
+        // 如果没有任何 token 消耗，不记录
+        if (totalTokens == 0) return;
+
+        var agent = await db.Agents.FindAsync(task.AgentId);
+        var stats = new Models.TaskStats
+        {
+            TaskId = task.Id,
+            AgentId = task.AgentId,
+            AgentName = agent?.Name ?? "Unknown",
+            InputTokens = task.InputTokens ?? 0,
+            OutputTokens = task.OutputTokens ?? 0,
+            CacheReadTokens = task.CacheReadTokens ?? 0,
+            CacheCreationTokens = task.CacheCreationTokens ?? 0,
+            CreatedAt = task.CreatedAt
+        };
+        db.TaskStats.Add(stats);
+    }
 
     /// <summary>
     /// 处理任务完成后的后续逻辑（生成总结、写入记忆、触发评估）
