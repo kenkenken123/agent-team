@@ -134,7 +134,8 @@ public record TaskDto(
     DateTime? StartedAt,
     DateTime? CompletedAt,
     int? ExitCode,
-    DateTime CreatedAt
+    DateTime CreatedAt,
+    DateTime? MarkedForDeletionAt
 );
 
 // ───── Message DTOs ─────

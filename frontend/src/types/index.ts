@@ -118,6 +118,7 @@ export interface AgentTask {
   optimizedPrompt?: string;
   imageUrls?: string;
   createdAt: string;
+  markedForDeletionAt?: string;
 }
 
 export interface CreateTaskRequest {

@@ -17,7 +17,9 @@ public class ClaudeCodeService(
 {
     private readonly Dictionary<Guid, System.Diagnostics.Process> _runningProcesses = [];
     private readonly Dictionary<Guid, System.Text.StringBuilder> _lastAssistantMessages = [];
+    private readonly Dictionary<Guid, string> _tempConfigDirs = []; // taskId → temp config dir path
     private readonly Lock _lock = new();
+    private readonly bool _isWindows = System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Windows);
     private readonly CancellationTokenSource _appShutdown = new();
 
     // WebSocket 推送委托：外部订阅后可实时接收输出
@@ -97,6 +99,9 @@ public class ClaudeCodeService(
             }
             await db.SaveChangesAsync();
         }
+
+        // 清理残留的临时配置目录（进程被强杀时遗留）
+        CleanupStaleTempConfigDirs();
     }
 
     private async Task ExecuteProcessAsync(AgentTask task, Agent agent, string outputPath, CredentialTemplate? template)
@@ -129,22 +134,29 @@ public class ClaudeCodeService(
             process.StartInfo.ArgumentList.Add(arg);
         }
 
-        // 注入配置的环境变量
+        // 注入配置：创建临时配置目录，凭据写入 settings.json 的 env 字段
+        string? tempConfigDir = null;
         if (template != null)
         {
-            var trimmedKey = template.ApiKey.Trim();
-            var maskedKey = trimmedKey.Length > 8
-                ? trimmedKey.Substring(0, 4) + "..." + trimmedKey.Substring(trimmedKey.Length - 4)
-                : "****";
-            var baseUrl = template.BaseUrl?.Trim();
-
-            logger.LogInformation("[Task {TaskId}] 注入环境变量: ANTHROPIC_API_KEY={MaskedKey}, ANTHROPIC_BASE_URL={BaseUrl}",
-                task.Id, maskedKey, baseUrl ?? "(未设置)");
-
-            process.StartInfo.Environment["ANTHROPIC_API_KEY"] = trimmedKey;
-            if (!string.IsNullOrEmpty(baseUrl))
+            try
             {
-                process.StartInfo.Environment["ANTHROPIC_BASE_URL"] = baseUrl;
+                tempConfigDir = CreateTempConfigDir(task.Id, template);
+                lock (_lock) { _tempConfigDirs[task.Id] = tempConfigDir; }
+                process.StartInfo.Environment["CLAUDE_CONFIG_DIR"] = tempConfigDir;
+
+                var baseUrl = template.BaseUrl?.Trim();
+                logger.LogInformation("[Task {TaskId}] 使用临时配置目录: CLAUDE_CONFIG_DIR={ConfigDir}, 凭据已写入 settings.json env, ANTHROPIC_BASE_URL={BaseUrl}",
+                    task.Id, tempConfigDir, baseUrl ?? "(未设置)");
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "[Task {TaskId}] 创建临时配置目录失败，清理已创建的目录", task.Id);
+                if (tempConfigDir != null)
+                {
+                    try { Directory.Delete(tempConfigDir, true); } catch { }
+                    tempConfigDir = null;
+                }
+                throw new InvalidOperationException("无法创建临时配置目录，请检查权限和磁盘空间", ex);
             }
         }
 
@@ -218,7 +230,7 @@ public class ClaudeCodeService(
 
                         // 触发即时记忆评估与管家总结
                         // 使用 CancellationTokenSource 设置超时，防止应用关闭后仍运行
-                        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+                        var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
                         _ = Task.Run(async () =>
                         {
                             try
@@ -233,7 +245,11 @@ public class ClaudeCodeService(
                             {
                                 logger.LogError(ex, "[Task {TaskId}] 任务完成后处理异步逻辑失败", task.Id);
                             }
-                        }, cts.Token);
+                            finally
+                            {
+                                cts.Dispose();
+                            }
+                        });
                     }
                     else
                     {
@@ -244,6 +260,13 @@ public class ClaudeCodeService(
                     }
 
                     lock (_lock) { _runningProcesses.Remove(task.Id); }
+
+                    // 清理临时配置目录
+                    if (tempConfigDir != null)
+                    {
+                        CleanupTempConfigDir(tempConfigDir);
+                        lock (_lock) { _tempConfigDirs.Remove(task.Id); }
+                    }
 
                     var statusStr = exitCode == 0 ? "Completed" : "Failed";
                     await NotifyStatusAsync(task.Id, statusStr);
@@ -293,6 +316,15 @@ public class ClaudeCodeService(
                 _lastAssistantMessages.Remove(taskId);
             }
 
+            // 清理临时配置目录
+            string? tempDir;
+            lock (_lock)
+            {
+                _tempConfigDirs.TryGetValue(taskId, out tempDir);
+                _tempConfigDirs.Remove(taskId);
+            }
+            if (tempDir != null) CleanupTempConfigDir(tempDir);
+
             return true;
         }
         catch (Exception ex)
@@ -332,6 +364,256 @@ public class ClaudeCodeService(
     }
 
     // ─── 内部方法 ─────────────────────────────────────────────
+
+    /// <summary>
+    /// 创建临时 Claude 配置目录，使用符号链接策略：
+    /// - settings.json 为真实文件（去除 auth 相关字段，将凭据写入 env 字段）
+    /// - 其他文件/目录通过软链接指向原始目录
+    /// 这样会话数据等通过链接实际写入原始 .claude 目录，--resume 无需回写同步。
+    /// </summary>
+    private string CreateTempConfigDir(Guid taskId, CredentialTemplate template)
+    {
+        var originalDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".claude");
+        var tempDir = Path.Combine(Path.GetTempPath(), $"claude-config-{taskId}");
+
+        logger.LogInformation("[Task {TaskId}] 创建临时配置目录: {TempDir}, 原始目录: {OriginalDir}", taskId, tempDir, originalDir);
+
+        Directory.CreateDirectory(tempDir);
+
+        if (!Directory.Exists(originalDir))
+        {
+            // 原始目录不存在，只写 settings.json 含凭据 env
+            WriteCleanSettingsJson(tempDir, originalDir, template);
+            return tempDir;
+        }
+
+        // 遍历原始目录，创建符号链接
+        foreach (var entry in Directory.GetFileSystemEntries(originalDir))
+        {
+            var entryName = Path.GetFileName(entry);
+            var linkPath = Path.Combine(tempDir, entryName);
+
+            // settings.json 特殊处理：后续单独写入干净版本
+            if (entryName == "settings.json") continue;
+
+            try
+            {
+                if (Directory.Exists(entry))
+                {
+                    // 子目录 → 创建软链接
+                    CreateSymbolicLink(linkPath, entry, isDirectory: true);
+                }
+                else
+                {
+                    // 普通文件 → 创建软链接
+                    CreateSymbolicLink(linkPath, entry, isDirectory: false);
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "创建符号链接失败，跳过: {Entry}", entry);
+            }
+        }
+
+        // 写入干净的 settings.json（移除认证字段 + 写入凭据到 env）
+        WriteCleanSettingsJson(tempDir, originalDir, template);
+
+        return tempDir;
+    }
+
+    /// <summary>创建文件或目录的符号链接</summary>
+    private void CreateSymbolicLink(string linkPath, string targetPath, bool isDirectory)
+    {
+        if (_isWindows)
+        {
+            // Windows: 使用 mklink
+            var flag = isDirectory ? "/D" : "";
+            var psi = new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = "cmd",
+                Arguments = $"/c mklink {flag} \"{linkPath}\" \"{targetPath}\"",
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+            using var proc = System.Diagnostics.Process.Start(psi);
+            proc?.WaitForExit(5000);
+
+            var exists = isDirectory ? Directory.Exists(linkPath) : File.Exists(linkPath);
+            if (!exists)
+                throw new InvalidOperationException($"创建符号链接失败: {linkPath} → {targetPath}");
+        }
+        else
+        {
+            // macOS/Linux: 使用 ln -s
+            var psi = new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = "ln",
+                Arguments = $"-s \"{targetPath}\" \"{linkPath}\"",
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+            };
+            using var proc = System.Diagnostics.Process.Start(psi);
+            proc?.WaitForExit(5000);
+
+            var exists = isDirectory ? Directory.Exists(linkPath) : File.Exists(linkPath);
+            if (!exists)
+                throw new InvalidOperationException($"创建符号链接失败: {linkPath} → {targetPath}");
+        }
+    }
+
+    /// <summary>清理临时配置目录</summary>
+    private void CleanupTempConfigDir(string tempDir)
+    {
+        try
+        {
+            if (!Directory.Exists(tempDir)) return;
+
+            foreach (var entry in Directory.GetFileSystemEntries(tempDir))
+            {
+                try
+                {
+                    if (Directory.Exists(entry))
+                    {
+                        // 子目录：符号链接，删除链接本身
+                        Directory.Delete(entry, recursive: false);
+                    }
+                    else
+                    {
+                        // 文件：settings.json 或链接失败时复制的文件
+                        File.Delete(entry);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    logger.LogWarning(ex, "删除临时目录条目失败: {Entry}", entry);
+                }
+            }
+
+            Directory.Delete(tempDir, true);
+            logger.LogInformation("已清理临时配置目录: {TempDir}", tempDir);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "清理临时配置目录失败: {TempDir}", tempDir);
+        }
+    }
+
+    /// <summary>清理残留的临时配置目录（服务启动时执行，清理进程被强杀遗留的目录）</summary>
+    private void CleanupStaleTempConfigDirs()
+    {
+        try
+        {
+            var tempRoot = Path.GetTempPath();
+            var staleDirs = Directory.GetDirectories(tempRoot, "claude-config-*");
+            if (staleDirs.Length == 0) return;
+
+            logger.LogInformation("发现 {Count} 个残留临时配置目录，正在清理...", staleDirs.Length);
+            foreach (var dir in staleDirs)
+            {
+                try { CleanupTempConfigDir(dir); }
+                catch (Exception ex) { logger.LogWarning(ex, "清理残留目录失败: {Dir}", dir); }
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "扫描残留临时配置目录失败");
+        }
+    }
+
+    /// <summary>写入干净的 settings.json，移除认证字段，将凭据写入 env 字段</summary>
+    private void WriteCleanSettingsJson(string tempDir, string originalDir, CredentialTemplate template)
+    {
+        var originalSettingsPath = Path.Combine(originalDir, "settings.json");
+        var tempSettingsPath = Path.Combine(tempDir, "settings.json");
+
+        // 需要移除的认证字段
+        var authFields = new HashSet<string> { "auth_token", "auth", "apiKey" };
+
+        // 构建凭据 env 字段
+        var envDict = new Dictionary<string, string>
+        {
+            ["ANTHROPIC_AUTH_TOKEN"] = template.ApiKey.Trim(),
+        };
+        var baseUrl = template.BaseUrl?.Trim();
+        if (!string.IsNullOrEmpty(baseUrl))
+        {
+            envDict["ANTHROPIC_BASE_URL"] = baseUrl;
+        }
+
+        if (!File.Exists(originalSettingsPath))
+        {
+            // 原始文件不存在，只写 env 字段
+            var cleanObj = new Dictionary<string, object> { ["env"] = envDict };
+            var json = JsonSerializer.Serialize(cleanObj, new JsonSerializerOptions { WriteIndented = true });
+            File.WriteAllText(tempSettingsPath, json);
+            return;
+        }
+
+        try
+        {
+            var originalContent = File.ReadAllText(originalSettingsPath);
+            using var doc = JsonDocument.Parse(originalContent);
+            var root = doc.RootElement;
+
+            // 构建干净的 JSON：保留非认证字段，注入/合并 env
+            var cleanObj = new Dictionary<string, JsonElement>();
+            foreach (var prop in root.EnumerateObject())
+            {
+                if (authFields.Contains(prop.Name)) continue;
+                // env 字段需要合并：原始 env + 凭据 env（凭据优先）
+                if (prop.Name == "env" && prop.Value.ValueKind == JsonValueKind.Object)
+                {
+                    foreach (var envProp in prop.Value.EnumerateObject())
+                    {
+                        if (!envDict.ContainsKey(envProp.Name))
+                        {
+                            envDict[envProp.Name] = envProp.Value.GetString() ?? "";
+                        }
+                    }
+                    continue;
+                }
+                cleanObj[prop.Name] = prop.Value;
+            }
+
+            // 写入合并后的 env
+            var finalObj = new Dictionary<string, object>();
+            foreach (var kv in cleanObj)
+            {
+                finalObj[kv.Key] = kv.Value;
+            }
+            finalObj["env"] = envDict;
+
+            var json = JsonSerializer.Serialize(finalObj, new JsonSerializerOptions { WriteIndented = true });
+            File.WriteAllText(tempSettingsPath, json);
+
+            logger.LogInformation("已写入干净的 settings.json（移除认证字段 + 凭据写入 env），路径: {Path}", tempSettingsPath);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "解析原始 settings.json 失败，尝试直接移除认证字段");
+            try
+            {
+                var fallbackContent = File.ReadAllText(originalSettingsPath);
+                var fallbackObj = JsonSerializer.Deserialize<Dictionary<string, object>>(fallbackContent);
+                var authFieldsToRemove = new[] { "auth_token", "auth", "apiKey" };
+                foreach (var f in authFieldsToRemove) fallbackObj?.Remove(f);
+                fallbackObj ??= new Dictionary<string, object>();
+                fallbackObj["env"] = envDict;
+                var json = JsonSerializer.Serialize(fallbackObj, new JsonSerializerOptions { WriteIndented = true });
+                File.WriteAllText(tempSettingsPath, json);
+            }
+            catch
+            {
+                // 双重 fallback: 仅保留 env
+                var fallbackObj = new Dictionary<string, object> { ["env"] = envDict };
+                var json = JsonSerializer.Serialize(fallbackObj, new JsonSerializerOptions { WriteIndented = true });
+                File.WriteAllText(tempSettingsPath, json);
+            }
+        }
+    }
 
     private async Task RecordTaskStatsAsync(AgentTask task, AppDbContext db)
     {

@@ -60,4 +60,7 @@ public class AgentTask
     public int? ExitCode { get; set; }
     public string? ImageUrls { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+    /// <summary>被标记为待删除的时间。定时任务扫描超过48小时无新任务的会话后设置此字段。</summary>
+    public DateTime? MarkedForDeletionAt { get; set; }
 }

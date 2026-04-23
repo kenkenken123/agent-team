@@ -229,6 +229,7 @@ public class TasksController(
         t.StartedAt,
         t.CompletedAt,
         t.ExitCode,
-        t.CreatedAt
+        t.CreatedAt,
+        t.MarkedForDeletionAt
     );
 }

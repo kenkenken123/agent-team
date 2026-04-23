@@ -16,7 +16,10 @@ import {
   AlertCircle,
   XCircle,
   PlayCircle,
-  Bell
+  Bell,
+  Trash2,
+  ChevronDown,
+  ChevronRight
 } from 'lucide-react';
 import { DeleteOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
@@ -53,6 +56,7 @@ interface KanbanSession {
   updatedAt: string;
   lastOutput?: string;
   isPlaceholder?: boolean;
+  markedForDeletionAt?: string;
 }
 
 const KanbanPage: React.FC = () => {
@@ -105,6 +109,9 @@ const KanbanPage: React.FC = () => {
 
   // 继续聊天弹框中选中的模型
   const [launchModel, setLaunchModel] = useState<string | undefined>(undefined);
+
+  // 待删除区域折叠状态
+  const [staleCollapsed, setStaleCollapsed] = useState<boolean>(true);
 
   // 判断某个 session 是否已查看（查看时间是否晚于任务完成时间）
   const isSessionViewed = useCallback((session: KanbanSession): boolean => {
@@ -188,7 +195,8 @@ const KanbanPage: React.FC = () => {
           status: task.status,
           updatedAt: triggerTime,
           lastOutput: '',
-          isPlaceholder: false
+          isPlaceholder: false,
+          markedForDeletionAt: task.markedForDeletionAt
         });
       }
     });
@@ -242,18 +250,25 @@ const KanbanPage: React.FC = () => {
     return () => { cancelled = true; };
   }, [filteredSessions]);
 
+  // 判断会话是否被标记为待删除
+  const isSessionStale = (s: KanbanSession): boolean => !!s.markedForDeletionAt || !!s.latestTask?.markedForDeletionAt;
+
   const columns = {
     idle: filteredSessions.filter(s =>
-      s.isPlaceholder || (
-        (s.status === 'Completed' || s.status === 'Failed' || s.status === 'Cancelled') &&
-        isSessionViewed(s)
+      !isSessionStale(s) && (
+        s.isPlaceholder || (
+          (s.status === 'Completed' || s.status === 'Failed' || s.status === 'Cancelled') &&
+          isSessionViewed(s)
+        )
       )
     ),
-    running: filteredSessions.filter(s => s.status === 'Running'),
+    running: filteredSessions.filter(s => !isSessionStale(s) && s.status === 'Running'),
     completed: filteredSessions.filter(s =>
+      !isSessionStale(s) &&
       (s.status === 'Completed' || s.status === 'Failed' || s.status === 'Cancelled') &&
       !s.isPlaceholder && !isSessionViewed(s)
-    )
+    ),
+    stale: filteredSessions.filter(s => isSessionStale(s))
   };
 
   const handleLaunch = async () => {
@@ -657,6 +672,31 @@ const KanbanPage: React.FC = () => {
               )}
             </div>
           </div>
+        </div>
+      )}
+
+      {/* 待删除会话区域（默认折叠） */}
+      {columns.stale.length > 0 && (
+        <div className="kanban-stale-section">
+          <div
+            className="stale-section-header"
+            onClick={() => setStaleCollapsed(!staleCollapsed)}
+          >
+            {staleCollapsed ? (
+              <ChevronRight size={16} />
+            ) : (
+              <ChevronDown size={16} />
+            )}
+            <Trash2 size={16} className="stale-icon" />
+            <span className="stale-title">待删除会话</span>
+            <span className="stale-count">{columns.stale.length}</span>
+            <span className="stale-hint">超过48小时无新消息</span>
+          </div>
+          {!staleCollapsed && (
+            <div className="stale-card-list">
+              {columns.stale.map(renderCard)}
+            </div>
+          )}
         </div>
       )}
 

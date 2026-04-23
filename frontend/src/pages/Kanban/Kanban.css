@@ -657,3 +657,73 @@
   display: block;
 }
 
+/* ── 待删除会话区域 ── */
+.kanban-stale-section {
+  margin-top: 8px;
+  border: 1px solid rgba(248, 81, 73, 0.2);
+  border-radius: 12px;
+  background: rgba(22, 27, 34, 0.4);
+  overflow: hidden;
+}
+
+.stale-section-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 20px;
+  cursor: pointer;
+  color: #f85149;
+  font-size: 14px;
+  font-weight: 600;
+  transition: background 0.2s;
+  user-select: none;
+}
+
+.stale-section-header:hover {
+  background: rgba(248, 81, 73, 0.08);
+}
+
+.stale-icon {
+  opacity: 0.8;
+}
+
+.stale-title {
+  color: #f85149;
+}
+
+.stale-count {
+  background: rgba(248, 81, 73, 0.15);
+  color: #f85149;
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  border: 1px solid rgba(248, 81, 73, 0.3);
+}
+
+.stale-hint {
+  margin-left: auto;
+  font-size: 12px;
+  color: #8b949e;
+  font-weight: 400;
+}
+
+.stale-card-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 0 20px 16px 20px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.stale-card-list .kanban-card {
+  width: 320px;
+  opacity: 0.7;
+  border-color: rgba(248, 81, 73, 0.15);
+}
+
+.stale-card-list .kanban-card:hover {
+  opacity: 1;
+  border-color: rgba(248, 81, 73, 0.4);
+}
+

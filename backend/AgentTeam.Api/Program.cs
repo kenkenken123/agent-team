@@ -52,6 +52,9 @@ builder.Services.AddScoped<MessageRouterService>();
 builder.Services.AddScoped<MessageIngestionService>();
 builder.Services.AddSingleton<ButlerMemoryService>();
 
+// 会话清理后台服务：定时扫描超过48小时无新任务的会话，标记为待删除
+builder.Services.AddHostedService<SessionCleanupBackgroundService>();
+
 // CORS
 builder.Services.AddCors(opts =>
     opts.AddDefaultPolicy(p =>

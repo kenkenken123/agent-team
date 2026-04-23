@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   Table, Button, Tag, Drawer, Form, Input, InputNumber,
   Switch, Space, Popconfirm, message, Typography, Tooltip,
@@ -24,7 +24,88 @@ const { Title, Text } = Typography;
 const { TextArea } = Input;
 const { TabPane } = Tabs;
 
-// 移除了硬编码的 MODELS 数组
+// 可排序的模型选择组件（用于 Agent 编辑表单中的 allowedModels 字段）
+const SortableModelSelect: React.FC<{
+  value?: string[];
+  onChange?: (value: string[]) => void;
+  availableModels: string[];
+}> = ({ value = [], onChange, availableModels }) => {
+  const dragIndex = useRef<number | null>(null);
+
+  const addModel = (modelId: string) => {
+    if (!modelId || value.includes(modelId)) return;
+    onChange?.([...value, modelId]);
+  };
+
+  const removeModel = (modelId: string) => {
+    onChange?.(value.filter(m => m !== modelId));
+  };
+
+  const handleDragStart = (index: number) => {
+    dragIndex.current = index;
+  };
+
+  const handleDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    if (dragIndex.current === null || dragIndex.current === index) return;
+    const next = [...value];
+    const [moved] = next.splice(dragIndex.current, 1);
+    next.splice(index, 0, moved);
+    dragIndex.current = index;
+    onChange?.(next);
+  };
+
+  const handleDragEnd = () => {
+    dragIndex.current = null;
+  };
+
+  // 已选模型占用了的选项需要从添加下拉框中隐藏
+  const availableToAdd = availableModels.filter(m => !value.includes(m));
+
+  return (
+    <div className="sortable-model-select">
+      {/* 添加模型下拉框 */}
+      <Select
+        placeholder="选择模型添加到列表"
+        style={{ width: '100%', marginBottom: 8 }}
+        value={undefined}
+        onChange={addModel}
+        options={availableToAdd.map(m => ({ label: m, value: m }))}
+        disabled={availableToAdd.length === 0}
+      />
+      {/* 已选模型排序列表 */}
+      <div className="selected-model-list">
+        {value.length === 0 && (
+          <div style={{ color: '#8B949E', fontSize: 12, textAlign: 'center', padding: '8px 0' }}>
+            请从上方下拉框添加模型
+          </div>
+        )}
+        {value.map((modelId, index) => (
+          <div
+            key={modelId}
+            className="selected-model-item"
+            draggable
+            onDragStart={() => handleDragStart(index)}
+            onDragOver={(e) => handleDragOver(e, index)}
+            onDragEnd={handleDragEnd}
+          >
+            <span className="drag-handle-icon">⠿</span>
+            <span className="model-sort-index">{index + 1}</span>
+            <span className="model-name">{modelId}</span>
+            <Button
+              type="text"
+              size="small"
+              icon={<DeleteOutlined />}
+              onClick={() => removeModel(modelId)}
+              danger
+              style={{ padding: '0 4px' }}
+            />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
 
 const AgentsPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState('agents');
@@ -590,7 +671,7 @@ const AgentsPage: React.FC = () => {
             <Input.Search placeholder="例如 D:\projects\my-app" enterButton={<><FolderOpenOutlined /> 验证</>} onSearch={validateDir} />
           </Form.Item>
           <Form.Item name="allowedModels" label="允许选用的模型范围" rules={[{ required: true, message: '请至少选择一个模型' }]}>
-            <Select mode="multiple" placeholder="选择使用的模型" options={availableModels.map(m => ({ label: m, value: m }))} />
+            <SortableModelSelect availableModels={availableModels} />
           </Form.Item>
           <Form.Item name="maxTurns" label="最大对话轮数">
             <InputNumber min={1} max={100} placeholder="不限制" style={{ width: '100%' }} />
