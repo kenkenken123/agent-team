@@ -37,6 +37,7 @@ function safeParseJson(text: string | undefined | null): any | null {
 
 const SummarySnapshot: React.FC<{ taskId: string }> = ({ taskId }) => {
     const [summary, setSummary] = useState<any>(null);
+    const [fallbackText, setFallbackText] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
 
     useEffect(() => {
@@ -50,6 +51,10 @@ const SummarySnapshot: React.FC<{ taskId: string }> = ({ taskId }) => {
                         setSummary(parsed);
                     }
                 }
+                // 兜底：如果 butlerSummary 为空（LLM 调用失败），使用 finalResult
+                if (!summary && task.finalResult) {
+                    setFallbackText(task.finalResult);
+                }
             } catch (e) {
                 console.error('加载历史总结失败', e);
             } finally {
@@ -60,14 +65,27 @@ const SummarySnapshot: React.FC<{ taskId: string }> = ({ taskId }) => {
     }, [taskId]);
 
     if (loading) return <div style={{ fontSize: 12, color: '#8b949e', marginTop: 8 }}>📊 正在加载任务总结...</div>;
-    if (!summary) return null;
 
-    return (
-        <div className="summary-snapshot">
-            <div className="snapshot-tag">总结</div>
-            <div className="snapshot-text">{summary.summary}</div>
-        </div>
-    );
+    if (summary) {
+        return (
+            <div className="summary-snapshot">
+                <div className="snapshot-tag">总结</div>
+                <div className="snapshot-text">{summary.summary}</div>
+            </div>
+        );
+    }
+
+    if (fallbackText) {
+        const truncated = fallbackText.length > 200 ? fallbackText.substring(0, 200) + '...' : fallbackText;
+        return (
+            <div className="summary-snapshot">
+                <div className="snapshot-tag">结果</div>
+                <div className="snapshot-text">{truncated}</div>
+            </div>
+        );
+    }
+
+    return null;
 };
 
 const ButlerPage: React.FC = () => {
@@ -83,6 +101,7 @@ const ButlerPage: React.FC = () => {
     const [currentTaskId, setCurrentTaskId] = useState<string | null>(null);
     const [summaryData, setSummaryData] = useState<any>(null);
     const pollingTaskIdRef = React.useRef<string | null>(null);
+    const pollingIntervalRef = React.useRef<ReturnType<typeof setInterval> | null>(null);
     const messagesEndRef = React.useRef<HTMLDivElement>(null);
     
     const { setPage, setSelectedAgentId, setSelectedSessionId } = useAppStore();
@@ -118,10 +137,78 @@ const ButlerPage: React.FC = () => {
         loadAgents();
     }, []);
 
+    /** 清除正在进行的轮询 */
+    const clearPolling = () => {
+        if (pollingIntervalRef.current) {
+            clearInterval(pollingIntervalRef.current);
+            pollingIntervalRef.current = null;
+        }
+        pollingTaskIdRef.current = null;
+    };
+
+    // 组件卸载时清理轮询
+    useEffect(() => {
+        return () => {
+            clearPolling();
+        };
+    }, []);
+
+    const pollSummary = async (taskId: string) => {
+        if (pollingTaskIdRef.current === taskId) return;
+        pollingTaskIdRef.current = taskId;
+
+        let attempts = 0;
+        const maxAttempts = 30;
+
+        const check = async (): Promise<boolean> => {
+            try {
+                const task = await taskApi.getById(taskId);
+                if (task.butlerSummary) {
+                    const parsed = safeParseJson(task.butlerSummary);
+                    setSummaryData(parsed || { summary: task.butlerSummary });
+                    setPhaseState('done');
+                    loadMessages();
+                    return true;
+                }
+                // 即使没有 butlerSummary，如果任务已完成也展示兜底内容
+                if (task.status === 'Completed') {
+                    setPhaseState('done');
+                    loadMessages();
+                    return true;
+                }
+            } catch (error) {
+                console.error('轮询总结失败', error);
+            }
+            return false;
+        };
+
+        // 清除旧的轮询（防止重复启动）
+        if (pollingIntervalRef.current) {
+            clearInterval(pollingIntervalRef.current);
+        }
+
+        pollingIntervalRef.current = setInterval(async () => {
+            attempts++;
+            const success = await check();
+            if (success || attempts >= maxAttempts) {
+                if (pollingIntervalRef.current) {
+                    clearInterval(pollingIntervalRef.current);
+                    pollingIntervalRef.current = null;
+                }
+                pollingTaskIdRef.current = null;
+                // 超时后仍然没有总结，也要标记 done 让 UI 展示兜底
+                if (!success) {
+                    setPhaseState('done');
+                }
+            }
+        }, 1000);
+    };
+
     const onSendToButler = async (values: { text: string; agentId?: string; optimizePrompt?: boolean }) => {
         if (!values.text?.trim() && fileList.length === 0) return;
-        
+
         setLoading(true);
+        clearPolling();
         setPhaseState('analyzing');
         setRoutingResult(null);
         setSummaryData(null);
@@ -164,56 +251,35 @@ const ButlerPage: React.FC = () => {
                     setPhaseState('summarizing');
                     pollSummary(currentTaskId!);
                 } else if (msg.status === 'Failed' || msg.status === 'Cancelled') {
+                    clearPolling();
                     setPhaseState('idle');
                 }
             } else if (msg.type === 'summary_ready') {
+                // WebSocket 收到总结：清除轮询，更新 UI
+                clearPolling();
                 try {
                     const parsed = typeof msg.summary === 'string' ? safeParseJson(msg.summary) : msg.summary;
                     if (parsed) {
                         setSummaryData(parsed);
                         setPhaseState('done');
                         loadMessages();
+                    } else {
+                        // LLM 返回了空/无效 JSON，仍然标记为 done，由 UI 层兜底展示
+                        setPhaseState('done');
                     }
                 } catch (e) {
                     console.error('解析 WebSocket 总结失败', e);
+                    setPhaseState('done');
                 }
+            } else if (msg.type === 'task_completed') {
+                // 兜底事件：LLM 总结失败时广播，告知前端任务已完成但无结构化总结
+                clearPolling();
+                setSummaryData(null);
+                setPhaseState('done');
+                loadMessages();
             }
         }
     });
-
-    const pollSummary = async (taskId: string) => {
-        if (pollingTaskIdRef.current === taskId) return;
-        pollingTaskIdRef.current = taskId;
-
-        let attempts = 0;
-        const maxAttempts = 30;
-        
-        const check = async () => {
-            try {
-                const task = await taskApi.getById(taskId);
-                if (task.butlerSummary) {
-                    const parsed = safeParseJson(task.butlerSummary);
-                    setSummaryData(parsed || { summary: task.butlerSummary });
-                    setPhaseState('done');
-                    loadMessages();
-                    return true;
-                }
-            } catch (error) {
-                console.error('轮询总结失败', error);
-            }
-            return false;
-        };
-
-        const interval = setInterval(async () => {
-            attempts++;
-            const success = await check();
-            if (success || attempts >= maxAttempts) {
-                clearInterval(interval);
-                pollingTaskIdRef.current = null;
-                if (!success) setPhaseState('done');
-            }
-        }, 1000);
-    };
 
     const goToConsole = (agentId?: string, taskId?: string) => {
         if (agentId) setSelectedAgentId(agentId);
@@ -365,11 +431,35 @@ const ButlerPage: React.FC = () => {
                                                 ))}
                                             </div>
                                         )}
-                                        <Button 
-                                            type="primary" 
-                                            size="small" 
+                                        <Button
+                                            type="primary"
+                                            size="small"
                                             onClick={() => setPhaseState('idle')}
                                             style={{ marginTop: 12, borderRadius: 4 }}
+                                        >
+                                            开启新任务
+                                        </Button>
+                                    </div>
+                                )}
+
+                                {phase === 'done' && !summaryData && routingResult?.triggeredTaskId && (
+                                    <div className="live-summary-box">
+                                        <div className="summary-text" style={{ color: '#8b949e' }}>
+                                            任务已完成。结构化总结生成中或暂不可用，请查看任务详情。
+                                        </div>
+                                        <Button
+                                            type="link"
+                                            size="small"
+                                            onClick={() => goToConsole(routingResult?.triggeredAgentId, routingResult?.triggeredTaskId)}
+                                            style={{ marginTop: 8, padding: 0, height: 'auto' }}
+                                        >
+                                            查看任务详情 <ArrowRightOutlined style={{ fontSize: 10 }} />
+                                        </Button>
+                                        <Button
+                                            type="primary"
+                                            size="small"
+                                            onClick={() => setPhaseState('idle')}
+                                            style={{ marginTop: 8, borderRadius: 4 }}
                                         >
                                             开启新任务
                                         </Button>

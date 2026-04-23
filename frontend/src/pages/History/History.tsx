@@ -17,26 +17,33 @@ const HistoryPage: React.FC = () => {
   const [filterStatus, setFilterStatus] = useState<string | undefined>();
   const [filterSessionId, setFilterSessionId] = useState<string | undefined>();
   const [loading, setLoading] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const pageSize = 10;
 
   useEffect(() => {
     agentApi.getAll().then(setAgents);
   }, []);
 
-  const load = async () => {
-    setLoading(true);
-    try {
-      const data = await taskApi.getAll({
-        agentId: filterAgentId,
-        status: filterStatus,
-        sessionId: filterSessionId,
-      });
-      setTasks(data.items);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => { load(); }, [filterAgentId, filterStatus, filterSessionId]);
+  useEffect(() => {
+    const fetchData = async () => {
+      setLoading(true);
+      try {
+        const data = await taskApi.getAll({
+          agentId: filterAgentId,
+          status: filterStatus,
+          sessionId: filterSessionId,
+          skip: (currentPage - 1) * pageSize,
+          take: pageSize,
+        });
+        setTasks(data.items);
+        setTotal(data.total);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
+  }, [currentPage, filterAgentId, filterStatus, filterSessionId]);
 
   const columns: ColumnsType<AgentTask> = [
     {
@@ -143,7 +150,7 @@ const HistoryPage: React.FC = () => {
             style={{ width: 240 }}
             placeholder="搜索会话 ID"
             allowClear
-            onSearch={val => setFilterSessionId(val || undefined)}
+            onSearch={val => { setFilterSessionId(val || undefined); setCurrentPage(1); }}
           />
           <Select
             className="glass-select"
@@ -151,7 +158,7 @@ const HistoryPage: React.FC = () => {
             placeholder="筛选 Agent"
             allowClear
             value={filterAgentId}
-            onChange={setFilterAgentId}
+            onChange={(val) => { setFilterAgentId(val); setCurrentPage(1); }}
             options={agents.map(a => ({ label: a.name, value: a.id }))}
           />
           <Select
@@ -160,7 +167,7 @@ const HistoryPage: React.FC = () => {
             placeholder="筛选状态"
             allowClear
             value={filterStatus}
-            onChange={setFilterStatus}
+            onChange={(val) => { setFilterStatus(val); setCurrentPage(1); }}
             options={[
               { label: '运行中', value: 'Running' },
               { label: '已完成', value: 'Completed' },
@@ -178,10 +185,13 @@ const HistoryPage: React.FC = () => {
           dataSource={tasks}
           rowKey="id"
           loading={loading}
-          pagination={{ 
-            pageSize: 10,
+          pagination={{
+            current: currentPage,
+            total,
+            pageSize,
             showSizeChanger: false,
-            className: "glass-pagination"
+            className: "glass-pagination",
+            onChange: (page) => setCurrentPage(page),
           }}
         />
       </div>

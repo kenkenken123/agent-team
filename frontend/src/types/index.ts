@@ -201,11 +201,19 @@ export interface WsSummaryReadyMessage {
   summary: string;
 }
 
+export interface WsTaskCompletedMessage {
+  type: 'task_completed';
+  taskId: string;
+  hasSummary: boolean;
+  finalResult?: string;
+}
+
 export type WsMessage =
   | WsOutputMessage
   | WsStatusMessage
   | WsPermissionRequestMessage
   | WsPermissionResolvedMessage
   | WsAskUserQuestionMessage
-  | WsSummaryReadyMessage;
+  | WsSummaryReadyMessage
+  | WsTaskCompletedMessage;
 

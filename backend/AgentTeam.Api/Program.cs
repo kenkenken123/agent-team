@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using AgentTeam.Api.Data;
+using AgentTeam.Api.Models;
 using AgentTeam.Api.Services;
 using AgentTeam.Api.WebSockets;
 using Microsoft.EntityFrameworkCore;
@@ -108,6 +109,7 @@ claudeService.OnStatusChanged += async (taskId, status) =>
         {
             using var scope = app.Services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var wechatBridge = scope.ServiceProvider.GetRequiredService<WeChatBridgeService>();
             var incoming = await db.IncomingMessages.FirstOrDefaultAsync(m => m.TriggeredTaskId == taskId);
 
             if (incoming == null || !string.Equals(incoming.Source, "WeChat", StringComparison.OrdinalIgnoreCase) || string.IsNullOrEmpty(incoming.SourceMessageId))
@@ -116,6 +118,83 @@ claudeService.OnStatusChanged += async (taskId, status) =>
             if (status == "Running")
             {
                 await wechatBridge.SendMessageAsync(incoming.SourceMessageId, "⏳ Agent 已接收任务，开始深度处理中...");
+
+                // 任务执行期间定期轮询输出文件，发送进度反馈到微信
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        long lastPosition = 0;
+                        int consecutiveErrors = 0;
+
+                        while (consecutiveErrors < 3)
+                        {
+                            await Task.Delay(TimeSpan.FromSeconds(25));
+
+                            using var pollScope = app.Services.CreateScope();
+                            var pollDb = pollScope.ServiceProvider.GetRequiredService<AppDbContext>();
+                            var pollWechat = pollScope.ServiceProvider.GetRequiredService<WeChatBridgeService>();
+                            var task = await pollDb.Tasks.FindAsync(taskId);
+                            if (task == null || task.Status != AgentTeam.Api.Models.TaskStatus.Running) break;
+
+                            // 检查输出文件是否有新内容
+                            if (!string.IsNullOrEmpty(task.OutputFilePath) && File.Exists(task.OutputFilePath))
+                            {
+                                var fileInfo = new FileInfo(task.OutputFilePath);
+                                if (fileInfo.Length <= lastPosition) continue; // 无新内容
+
+                                // 读取新增内容
+                                using var fs = new FileStream(task.OutputFilePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+                                fs.Seek(lastPosition, SeekOrigin.Begin);
+                                using var reader = new StreamReader(fs);
+                                var newContent = await reader.ReadToEndAsync();
+
+                                if (string.IsNullOrWhiteSpace(newContent))
+                                {
+                                    lastPosition = fileInfo.Length;
+                                    continue;
+                                }
+
+                                // 过滤 ANSI 转义序列
+                                var cleanText = Regex.Replace(newContent, @"\x1B\[[^@-~]*[@-~]", "");
+
+                                // 提取关键信息：工具调用、文件操作、错误提示
+                                var toolCalls = Regex.Matches(cleanText, @"\[Claude 正在调用工具:\s*([^\]]+)\]");
+                                var errorLines = Regex.Matches(cleanText, @"(Error|Failed|Exception|错误|失败)");
+
+                                string progressText;
+                                if (toolCalls.Count > 0)
+                                {
+                                    // 提取最近几个工具调用
+                                    var recentTools = toolCalls.TakeLast(2).Select(m => m.Groups[1].Value.Trim()).Distinct().ToList();
+                                    progressText = $"🔄 正在执行：{string.Join(" → ", recentTools)}";
+                                }
+                                else if (errorLines.Count > 0)
+                                {
+                                    var snippet = cleanText.Trim();
+                                    if (snippet.Length > 150) snippet = snippet[..147] + "...";
+                                    progressText = $"⚠️ 执行中发现异常：\n{snippet}";
+                                }
+                                else
+                                {
+                                    // 通用进度：仅在有显著新内容时发送
+                                    var lineCount = cleanText.Split('\n', StringSplitOptions.RemoveEmptyEntries).Length;
+                                    if (lineCount < 3) { lastPosition = fileInfo.Length; continue; }
+                                    progressText = $"🔄 Agent 正在处理中...（已运行 {Math.Round((DateTime.UtcNow - (task.StartedAt ?? DateTime.UtcNow)).TotalMinutes, 1)} 分钟）";
+                                }
+
+                                await pollWechat.SendMessageAsync(incoming.SourceMessageId, progressText);
+                                lastPosition = fileInfo.Length;
+                            }
+
+                            consecutiveErrors = 0;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"[WeChat Progress Poll Error] {ex.Message}");
+                    }
+                });
             }
             else if (status == "Completed")
             {
@@ -124,13 +203,24 @@ claudeService.OnStatusChanged += async (taskId, status) =>
                 {
                     var content = await File.ReadAllTextAsync(task.OutputFilePath);
                     var cleanText = Regex.Replace(content, @"\x1B\[[^@-~]*[@-~]", "");
-                    var replyText = cleanText.Length > 2000 ? "..." + cleanText.Substring(cleanText.Length - 1900) : cleanText;
+                    // 微信单条消息限制约 2000 字，智能截断并提示
+                    var replyText = cleanText.Length > 1900
+                        ? $"{cleanText[..1800]}\n\n...（内容过长已截断，完整结果请在前端查看）"
+                        : cleanText;
                     await wechatBridge.SendMessageAsync(incoming.SourceMessageId, $"✅ 任务处理完成：\n\n{replyText}");
+                }
+                else
+                {
+                    await wechatBridge.SendMessageAsync(incoming.SourceMessageId, "✅ 任务处理完成！（无文本输出）");
                 }
             }
             else if (status == "Failed")
             {
                 await wechatBridge.SendMessageAsync(incoming.SourceMessageId, "❌ 抱歉，Agent 在执行任务时遇到了错误，处理已终止。");
+            }
+            else if (status == "Cancelled")
+            {
+                await wechatBridge.SendMessageAsync(incoming.SourceMessageId, "⛔ 任务已被取消。");
             }
         }
         catch (Exception ex)

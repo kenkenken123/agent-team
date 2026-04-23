@@ -370,10 +370,11 @@ public class ClaudeCodeService(
 
         // 1. 生成管家总结
         var summaryJson = await router.GenerateButlerSummaryAsync(task.Prompt, finalMessage);
-        if (!string.IsNullOrEmpty(summaryJson))
+
+        var sTask = await db.Tasks.FindAsync(task.Id);
+        if (sTask != null)
         {
-            var sTask = await db.Tasks.FindAsync(task.Id);
-            if (sTask != null)
+            if (!string.IsNullOrEmpty(summaryJson))
             {
                 sTask.ButlerSummary = summaryJson;
                 await db.SaveChangesAsync();
@@ -382,6 +383,23 @@ public class ClaudeCodeService(
                 // 广播总结就绪消息，通知前端更新 UI
                 var summaryMsg = JsonSerializer.Serialize(new { type = "summary_ready", taskId = task.Id, summary = summaryJson }, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
                 await wsManager.BroadcastAsync(task.Id, summaryMsg);
+            }
+            else
+            {
+                // LLM 总结生成失败（API Key 未配置/调用超时等），广播一个兜底完成事件
+                // 前端可以基于 task.finalResult 展示兜底内容
+                logger.LogWarning("[Task {TaskId}] 管家总结生成返回空，广播 task_completed 兜底事件", task.Id);
+                var completedMsg = JsonSerializer.Serialize(new
+                {
+                    type = "task_completed",
+                    taskId = task.Id,
+                    hasSummary = false,
+                    finalResult = finalMessage.Length > 500 ? finalMessage.Substring(0, 500) + "..." : finalMessage
+                }, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+                await wsManager.BroadcastAsync(task.Id, completedMsg);
+
+                // 仍然需要保存任务状态
+                await db.SaveChangesAsync();
             }
         }
 

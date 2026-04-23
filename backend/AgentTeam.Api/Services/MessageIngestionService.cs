@@ -12,6 +12,7 @@ public class MessageIngestionService(
     MessageRouterService router,
     ClaudeCodeService claudeService,
     ButlerMemoryService memoryService,
+    WeChatBridgeService wechatBridge,
     ILogger<MessageIngestionService> logger)
 {
     public async Task<IncomingMessage> IngestAsync(ParsedMessage message)
@@ -152,6 +153,28 @@ public class MessageIngestionService(
 
         incoming.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync();
+
+        // 微信集成：NoAgent / Failed 状态主动反馈
+        if ((incoming.Status == MessageStatus.NoAgent || incoming.Status == MessageStatus.Failed)
+            && string.Equals(incoming.Source, "WeChat", StringComparison.OrdinalIgnoreCase)
+            && !string.IsNullOrEmpty(incoming.SourceMessageId))
+        {
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    var replyMsg = incoming.Status == MessageStatus.NoAgent
+                        ? $"🤔 {incoming.RouterReason}\n\n请补充更多细节，或指定要使用的 Agent，我会重新为您处理。"
+                        : $"❌ 任务处理异常：{incoming.RouterReason}\n\n请稍后重试或联系管理员。";
+                    await wechatBridge.SendMessageAsync(incoming.SourceMessageId, replyMsg);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogWarning(ex, "Failed to send notification to WeChat");
+                }
+            });
+        }
+
         return incoming;
     }
 }

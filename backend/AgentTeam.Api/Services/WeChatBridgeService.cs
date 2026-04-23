@@ -28,12 +28,24 @@ public class WeChatBridgeService(IHttpClientFactory httpClientFactory, ILogger<W
     {
         try
         {
+            var maskedText = text.Length > 80 ? text.Substring(0, 80) + "..." : text;
+            logger.LogInformation("[WeChat] 发送消息给 {UserId}: {Text}", userId, maskedText);
             var resp = await _http.PostAsJsonAsync($"{BaseUrl}/send", new { userId, text });
-            return resp.IsSuccessStatusCode;
+            if (resp.IsSuccessStatusCode)
+            {
+                logger.LogInformation("[WeChat] 发送成功 → {UserId}", userId);
+                return true;
+            }
+            else
+            {
+                var errorBody = await resp.Content.ReadAsStringAsync();
+                logger.LogWarning("[WeChat] 发送失败 → HTTP {StatusCode}: {Error}", resp.StatusCode, errorBody);
+                return false;
+            }
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "发送微信消息失败");
+            logger.LogError(ex, "[WeChat] 发送消息异常 → 目标: {BaseUrl}/send, 用户: {UserId}", BaseUrl, userId);
             return false;
         }
     }
