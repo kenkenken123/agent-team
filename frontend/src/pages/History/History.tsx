@@ -139,16 +139,15 @@ const HistoryPage: React.FC = () => {
       },
     },
     {
-      title: '每秒 Token',
+      title: '每秒输出 Token',
       key: 'tokensPerSecond',
-      width: 130,
+      width: 150,
       render: (_, r) => {
         if (!r.startedAt || !r.completedAt) return <span style={{ color: '#484F58' }}>—</span>;
-        if (!r.inputTokens && !r.outputTokens) return <span style={{ color: '#484F58' }}>0</span>;
-        const totalTokens = (r.inputTokens || 0) + (r.outputTokens || 0);
+        if (!r.outputTokens) return <span style={{ color: '#484F58' }}>0</span>;
         const durationMs = new Date(r.completedAt).getTime() - new Date(r.startedAt).getTime();
         if (durationMs <= 0) return <span style={{ color: '#484F58' }}>—</span>;
-        const tps = (totalTokens * 1000) / durationMs;
+        const tps = ((r.outputTokens || 0) * 1000) / durationMs;
         return <span style={{ color: '#58A6FF', fontFamily: 'JetBrains Mono, monospace', fontWeight: 600 }}>{tps.toFixed(1)}</span>;
       },
     },

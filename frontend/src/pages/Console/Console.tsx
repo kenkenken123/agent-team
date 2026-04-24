@@ -413,6 +413,16 @@ const ConsolePage: React.FC = () => {
     }
   };
 
+  // 打开文件夹
+  const handleOpenFolder = async () => {
+    if (!selectedWorkingDirectory) return;
+    try {
+      await terminalApi.openFolder(selectedWorkingDirectory);
+    } catch (e: any) {
+      message.error(e?.message || '打开文件夹失败');
+    }
+  };
+
   // 记录从目录树拖拽的文件/目录路径
   const handleFileTreeDragStart = useCallback((filePath: string) => {
     draggedFilePathRef.current = filePath;
@@ -804,6 +814,16 @@ const ConsolePage: React.FC = () => {
                           disabled={!selectedWorkingDirectory}
                           loading={openingTerminal}
                           className="terminal-btn"
+                        />
+                      </Tooltip>
+                      <Tooltip title="打开工作目录">
+                        <Button
+                          size="small"
+                          type="text"
+                          icon={<FolderOutlined />}
+                          onClick={handleOpenFolder}
+                          disabled={!selectedWorkingDirectory}
+                          className="open-folder-btn"
                         />
                       </Tooltip>
                       <Tooltip title="查看 Git 变更">

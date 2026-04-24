@@ -44,6 +44,41 @@ public class TerminalController : ControllerBase
             return StatusCode(500, new { error = $"打开终端失败: {ex.Message}" });
         }
     }
+
+    /// <summary>
+    /// 打开指定路径的文件夹（系统文件管理器）
+    /// </summary>
+    [HttpPost("open-folder")]
+    public IActionResult OpenFolder([FromBody] OpenFolderRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.Path))
+        {
+            return BadRequest(new { error = "路径不能为空" });
+        }
+
+        try
+        {
+            if (!Directory.Exists(request.Path))
+            {
+                return BadRequest(new { error = "目录不存在" });
+            }
+
+            var psi = new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = request.Path,
+                UseShellExecute = true,
+                Verb = "open"
+            };
+            System.Diagnostics.Process.Start(psi);
+            return Ok(new { message = "文件夹已打开" });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to open folder");
+            return StatusCode(500, new { error = $"打开文件夹失败: {ex.Message}" });
+        }
+    }
 }
 
 public record OpenTerminalRequest(string Path, string? TerminalType);
+public record OpenFolderRequest(string Path);
