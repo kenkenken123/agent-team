@@ -228,6 +228,33 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ task, onStatusChange }) =
       .replace(/└─.*?\r?\n?/g, '');
   }, []);
 
+  // ─── 查看详情：加载完整过程日志并切换到终端模式 ──────────────
+  const handleViewDetail = useCallback(async () => {
+    if (!task) return;
+    setIsExpanded(true);
+    setShowMarkdown(false);
+
+    try {
+      const content = await taskApi.getOutput(task.id);
+      if (content) {
+        clear();
+        setThinkingLogs([]);
+        thinkingCountRef.current = 0;
+        write(`\x1b[34m┌─ Agent: ${task.agentName}\x1b[0m\r\n`, true);
+        write(`\x1b[34m│  Task ID: ${task.id}\x1b[0m\r\n`, true);
+        write(`\x1b[34m│  Prompt: ${task.prompt}\x1b[0m\r\n`, true);
+        write(`\x1b[34m└─ Status: ${task.status}\x1b[0m\r\n\r\n`, true);
+        processOutput(content, true);
+        setTimeout(() => fit(), 150);
+      } else {
+        write('\x1b[90m[暂无过程记录]\x1b[0m\r\n', true);
+      }
+    } catch (err) {
+      console.error('加载详细过程失败', err);
+      write('\x1b[31m[加载详细过程失败]\x1b[0m\r\n', true);
+    }
+  }, [task, clear, write, processOutput, fit]);
+
   useEffect(() => {
     // 初始化或状态变更时的处理
     if (!task) return;
@@ -448,15 +475,25 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ task, onStatusChange }) =
                   </span>
                 </div>
                 <div className="terminal-actions">
-                  <Tooltip title={isExpanded ? '折叠预览' : '展开详情'}>
+                  <Tooltip title={isExpanded ? '折叠预览' : (task.status === 'Completed' && task.finalResult ? '查看详情' : '展开详情')}>
                     <Button
                       type="text"
                       size="small"
                       icon={isExpanded ? <ShrinkOutlined /> : <ExpandAltOutlined />}
                       onClick={() => {
-                        const newExpanded = !isExpanded;
-                        setIsExpanded(newExpanded);
-                        if (newExpanded && !showMarkdown) setTimeout(() => fit(), 100);
+                        if (isExpanded) {
+                          // 折叠：已完成任务回到最终结果视图
+                          setIsExpanded(false);
+                          setShowMarkdown(true);
+                        } else if (task.status === 'Completed' && task.finalResult) {
+                          // 已完成任务：加载完整过程
+                          handleViewDetail();
+                        } else {
+                          // 运行中任务：正常展开
+                          const newExpanded = !isExpanded;
+                          setIsExpanded(newExpanded);
+                          if (newExpanded && !showMarkdown) setTimeout(() => fit(), 100);
+                        }
                       }}
                       className="term-icon-btn"
                     />
@@ -528,21 +565,52 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ task, onStatusChange }) =
             {activeTab === 'output' && (
               <>
                 {!isExpanded && (
-                  <div className="terminal-preview-overlay" onClick={() => setIsExpanded(true)}>
-                    <div className="preview-header">
-                      <Space>
-                        <ConsoleSqlOutlined />
-                        <span>Markdown 预览 (点击展开)</span>
-                      </Space>
-                      {task.status === 'Completed' && <CheckCircleFilled style={{ color: '#3FB950' }} />}
-                      {task.status === 'Running' && <InfoCircleFilled style={{ color: '#58A6FF' }} />}
-                    </div>
-                    <div className="markdown-body preview-mode">
-                      <ReactMarkdown remarkPlugins={[remarkGfm]} components={MarkdownComponents}>
-                        {renderedPreview}
-                      </ReactMarkdown>
-                    </div>
-                  </div>
+                  <>
+                    {/* 已完成任务且有最终结果：只展示干净的最终结果 */}
+                    {task.status === 'Completed' && task.finalResult ? (
+                      <div className="terminal-preview-overlay final-result-overlay">
+                        <div className="preview-header">
+                          <Space>
+                            <CheckCircleFilled style={{ color: '#3FB950' }} />
+                            <span>任务完成 · 最终结果</span>
+                          </Space>
+                          <Button
+                            type="default"
+                            size="small"
+                            icon={<ExpandAltOutlined />}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleViewDetail();
+                            }}
+                          >
+                            查看详情
+                          </Button>
+                        </div>
+                        <div className="markdown-body preview-mode" style={{ padding: '16px 20px' }}>
+                          <ReactMarkdown remarkPlugins={[remarkGfm]} components={MarkdownComponents}>
+                            {cleanAnsi(task.finalResult).trim() || '（无输出内容）'}
+                          </ReactMarkdown>
+                        </div>
+                      </div>
+                    ) : (
+                      /* 非完成态或无 finalResult：保持原有预览行为 */
+                      <div className="terminal-preview-overlay" onClick={() => setIsExpanded(true)}>
+                        <div className="preview-header">
+                          <Space>
+                            <ConsoleSqlOutlined />
+                            <span>Markdown 预览 (点击展开)</span>
+                          </Space>
+                          {task.status === 'Completed' && <CheckCircleFilled style={{ color: '#3FB950' }} />}
+                          {task.status === 'Running' && <InfoCircleFilled style={{ color: '#58A6FF' }} />}
+                        </div>
+                        <div className="markdown-body preview-mode">
+                          <ReactMarkdown remarkPlugins={[remarkGfm]} components={MarkdownComponents}>
+                            {renderedPreview}
+                          </ReactMarkdown>
+                        </div>
+                      </div>
+                    )}
+                  </>
                 )}
 
                 {isExpanded && showMarkdown && (

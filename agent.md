@@ -149,3 +149,53 @@ npm run start
 - 前端状态管理（store）说明
 - 任务生命周期时序图
 - 发布与部署流程
+
+## 8. Claude Code 启动与多供应商凭据注入
+
+### 8.1 核心机制
+
+后端通过 `ClaudeCodeService.cs` 启动 Claude Code CLI 子进程，**使用临时配置目录（`CLAUDE_CONFIG_DIR`）注入多供应商凭据**，而非直接设置环境变量。
+
+**为什么不用 `ANTHROPIC_API_KEY` 环境变量？**
+- 系统全局可能已设置该变量，子进程环境变量会被覆盖
+- 某些第三方供应商（如 OpenRouter）需通过 `settings.json` 的 `env` 字段才生效
+- 直接设置环境变量存在密钥泄露风险
+
+### 8.2 临时配置目录工作流程
+
+```
+1. 启动任务时，读取 ~/.claude/ 原始配置目录
+2. 在 %TEMP%/ 下创建临时目录： claude-config-{taskId}/
+3. 将 ~/.claude/ 下的所有文件/子目录通过符号链接（软连接）指向临时目录
+   - Windows: mklink /D（目录）, mklink（文件）
+   - macOS/Linux: ln -s
+4. settings.json 为真实文件（非链接），内容：
+   - 移除原始认证字段（auth_token, auth, apiKey）
+   - 注入 env 字段：{ "ANTHROPIC_AUTH_TOKEN": "<key>", "ANTHROPIC_BASE_URL": "<url>" }
+5. 设置环境变量 CLAUDE_CONFIG_DIR → 指向临时目录
+6. Claude Code 进程启动后，使用临时目录中的配置
+7. 进程结束或取消时，清理临时目录（仅删除链接和临时文件，不影响原始数据）
+```
+
+### 8.3 ClaudeCodeService.cs 关键组件清单
+
+| 组件 | 作用 |
+|------|------|
+| `_tempConfigDirs` | `Dictionary<Guid, string>`，taskId → 临时目录路径 |
+| `_isWindows` | 跨平台判断标志，复用避免重复调用 |
+| `CreateTempConfigDir()` | 创建临时目录 + 符号链接 + 干净 settings.json |
+| `CreateSymbolicLink()` | 跨平台符号链接创建（Windows mklink, Unix ln -s） |
+| `WriteCleanSettingsJson()` | 去认证字段 + 写凭据到 env |
+| `CleanupTempConfigDir()` | 单个任务结束后清理 |
+| `CleanupStaleTempConfigDirs()` | 服务启动时清理残留目录 |
+
+### 8.4 ⚠️ 重构警告
+
+**修改 `ClaudeCodeService.cs` 时必须检查以下事项：**
+
+1. 成员变量 `_tempConfigDirs` 和 `_isWindows` 是否存在
+2. 执行流程是否完整：创建 → 设置 `CLAUDE_CONFIG_DIR` → 启动 → 清理
+3. 清理逻辑覆盖所有退出路径：正常结束、取消（`CancelTaskAsync`）、启动残留清理
+4. 凭证仍通过 `settings.json` 的 `env` 字段注入（`ANTHROPIC_AUTH_TOKEN`），**不可改回直接设置 `ANTHROPIC_API_KEY` 环境变量**
+
+**如果重构 `BuildCommandList` 或 `ExecuteProcessAsync`，务必检查临时配置目录相关代码是否被意外删除。**

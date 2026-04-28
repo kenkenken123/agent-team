@@ -113,6 +113,83 @@ const KanbanPage: React.FC = () => {
   // 待删除区域折叠状态
   const [staleCollapsed, setStaleCollapsed] = useState<boolean>(true);
 
+  // 待删除区域多选状态
+  const [selectedStaleIds, setSelectedStaleIds] = useState<Set<string>>(new Set());
+
+  // 折叠时清空选中
+  useEffect(() => {
+    if (staleCollapsed) setSelectedStaleIds(new Set());
+  }, [staleCollapsed]);
+
+  // 获取会话的唯一 key
+  const getSessionKey = (s: KanbanSession): string =>
+    s.sessionId || `single-${s.latestTask?.id ?? ''}`;
+
+  // ─── 待删除区域 多选 / 批量操作 ────────────────────────────────
+  const toggleSelectAllStale = () => {
+    setSelectedStaleIds(prev => {
+      if (prev.size === columns.stale.length && columns.stale.length > 0) {
+        return new Set();
+      }
+      return new Set(columns.stale.map(getSessionKey));
+    });
+  };
+
+  const toggleStaleSelect = (key: string) => {
+    setSelectedStaleIds(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const handleBatchDeleteStale = () => {
+    if (selectedStaleIds.size === 0) {
+      message.warning('请先勾选要删除的会话');
+      return;
+    }
+    Modal.confirm({
+      title: `确认批量删除`,
+      content: `将彻底删除 ${selectedStaleIds.size} 个会话及其所有历史记录，此操作不可恢复。`,
+      okText: '彻底删除',
+      okType: 'danger',
+      cancelText: '取消',
+      onOk: async () => {
+        let successCount = 0;
+        let failCount = 0;
+        for (const key of selectedStaleIds) {
+          const session = columns.stale.find(s => getSessionKey(s) === key);
+          if (!session?.latestTask) { failCount++; continue; }
+          try {
+            const isRealSession = session.sessionId && !session.sessionId.startsWith('single-');
+            await taskApi.deleteSession(
+              isRealSession ? session.sessionId : undefined,
+              !isRealSession ? session.latestTask.id : undefined
+            );
+            successCount++;
+          } catch {
+            failCount++;
+          }
+        }
+        if (successCount > 0) message.success(`成功删除 ${successCount} 个会话`);
+        if (failCount > 0) message.error(`${failCount} 个会话删除失败`);
+        setSelectedStaleIds(new Set());
+        // 清理已查看记录
+        setViewedSessions(prev => {
+          const next = { ...prev };
+          for (const key of selectedStaleIds) {
+            if (!key.startsWith('single-')) delete next[key];
+          }
+          localStorage.setItem('kanban_viewed_sessions_v2', JSON.stringify(next));
+          return next;
+        });
+        loadData(true);
+        bumpDataSync();
+      }
+    });
+  };
+
   // 判断某个 session 是否已查看（查看时间是否晚于任务完成时间）
   const isSessionViewed = useCallback((session: KanbanSession): boolean => {
     if (session.isPlaceholder) return true;
@@ -691,10 +768,62 @@ const KanbanPage: React.FC = () => {
             <span className="stale-title">待删除会话</span>
             <span className="stale-count">{columns.stale.length}</span>
             <span className="stale-hint">超过48小时无新消息</span>
+
+            {/* ── 展开时：全选 + 批量删除 ── */}
+            {!staleCollapsed && (
+              <div className="stale-batch-actions" onClick={e => e.stopPropagation()}>
+                <Button
+                  type="link"
+                  size="small"
+                  onClick={toggleSelectAllStale}
+                  style={{ color: '#8b949e', fontSize: 12, padding: '0 6px' }}
+                >
+                  {selectedStaleIds.size === columns.stale.length && columns.stale.length > 0
+                    ? '取消全选'
+                    : '全选'}
+                </Button>
+                {selectedStaleIds.size > 0 && (
+                  <Button
+                    type="link"
+                    danger
+                    size="small"
+                    onClick={handleBatchDeleteStale}
+                    style={{ fontSize: 12, padding: '0 6px' }}
+                  >
+                    批量删除({selectedStaleIds.size})
+                  </Button>
+                )}
+              </div>
+            )}
           </div>
           {!staleCollapsed && (
             <div className="stale-card-list">
-              {columns.stale.map(renderCard)}
+              {columns.stale.map(session => {
+                const key = getSessionKey(session);
+                const isSelected = selectedStaleIds.has(key);
+                return (
+                  <div className="stale-card-wrapper" key={key}>
+                    {/* 勾选圆圈 */}
+                    <div
+                      className={`stale-check-circle ${isSelected ? 'checked' : ''}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleStaleSelect(key);
+                      }}
+                      title={isSelected ? '取消选中' : '选中此会话'}
+                    >
+                      {isSelected && '✓'}
+                    </div>
+                    {/* 卡片主体 */}
+                    <div
+                      className="stale-card-body"
+                      onClick={() => toggleStaleSelect(key)}
+                    >
+                      {renderCard(session)}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
