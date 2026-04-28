@@ -569,22 +569,12 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ task, onStatusChange }) =
                     {/* 已完成任务且有最终结果：只展示干净的最终结果 */}
                     {task.status === 'Completed' && task.finalResult ? (
                       <div className="terminal-preview-overlay final-result-overlay">
-                        <div className="preview-header">
+                        <div className="preview-header" onClick={handleViewDetail} style={{ cursor: 'pointer' }}>
                           <Space>
                             <CheckCircleFilled style={{ color: '#3FB950' }} />
                             <span>任务完成 · 最终结果</span>
                           </Space>
-                          <Button
-                            type="default"
-                            size="small"
-                            icon={<ExpandAltOutlined />}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleViewDetail();
-                            }}
-                          >
-                            查看详情
-                          </Button>
+                          <span style={{ color: '#8b949e', fontSize: 12 }}>点击展开详情 ›</span>
                         </div>
                         <div className="markdown-body preview-mode" style={{ padding: '16px 20px' }}>
                           <ReactMarkdown remarkPlugins={[remarkGfm]} components={MarkdownComponents}>

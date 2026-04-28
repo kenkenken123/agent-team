@@ -83,21 +83,28 @@
 }
 
 .terminal-preview-overlay {
-  padding: 12px 16px;
-  cursor: pointer;
+  padding: 0;
   transition: background 0.2s;
   min-height: 80px;
+  max-height: 550px;
+  overflow-y: auto;
 }
 
 .terminal-preview-overlay:hover {
   background: rgba(255, 255, 255, 0.03);
 }
 
+/* 已完成任务的最终结果预览 */
+.terminal-preview-overlay.final-result-overlay {
+  cursor: default;
+}
+
 .preview-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 8px;
+  padding: 12px 16px;
+  margin-bottom: 0;
   color: #58A6FF;
   font-size: 12px;
   font-weight: 500;
@@ -133,8 +140,8 @@
 }
 
 .markdown-body.preview-mode {
-  padding: 0;
-  max-height: 550px;
+  padding: 12px 16px;
+  max-height: none;
   font-size: 11px;
   line-height: 1.2;
   font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;

@@ -31,12 +31,13 @@ const { Text } = Typography;
 
 
 const ConsolePage: React.FC = () => {
-  const { selectedAgentId, setSelectedAgentId, selectedSessionId, setSelectedSessionId, dataSyncVersion, bumpDataSync, queuedMessage, setQueuedMessage, optimizePrompt, setOptimizePrompt, selectedGroupId, setSelectedGroupId } = useAppStore();
+  const { selectedAgentId, setSelectedAgentId, selectedSessionId, setSelectedSessionId, dataSyncVersion, bumpDataSync, queuedMessages, setQueuedMessages, addQueuedMessage, clearQueuedMessages, optimizePrompt, setOptimizePrompt, selectedGroupId, setSelectedGroupId } = useAppStore();
   const [agents, setAgents] = useState<Agent[]>([]);
   const [groups, setGroups] = useState<AgentGroup[]>([]);
   const [tasks, setTasks] = useState<AgentTask[]>([]);
   const [selectedTask, setSelectedTask] = useState<AgentTask | null>(null);
   const [prompt, setPrompt] = useState('');
+  const [pastedImages, setPastedImages] = useState<{id: string, url: string}[]>([]);
   const [launching, setLaunching] = useState(false);
   const [loadingTasks, setLoadingTasks] = useState(false);
   const [continueSession, setContinueSession] = useState<string | null>(null);
@@ -322,11 +323,15 @@ const ConsolePage: React.FC = () => {
     // 如果没有手动选 continueSession，但当前选中的任务有 SessionId，则优先使用关联 Session
     const activeSessionId = continueSession || (selectedTask?.claudeSessionId ?? null);
 
+    // 合并 prompt 与图片 URL（后端通过 prompt 中的 "图片: url" 识别图片）
+    const imagesSuffix = pastedImages.map(img => `\n图片: ${img.url}`).join('');
+    const fullPrompt = prompt.trim() + imagesSuffix;
+
     setLaunching(true);
     try {
       const task = await taskApi.create({
         agentId: selectedAgentId || undefined,
-        prompt: prompt.trim(),
+        prompt: fullPrompt,
         resumeSessionId: activeSessionId || undefined,
         forceNewSession: !activeSessionId, // 关键：如果没有指定 Session，强制新开
         model: selectedModel,
@@ -339,6 +344,7 @@ const ConsolePage: React.FC = () => {
 
       message.success('任务已启动' + (activeSessionId ? ' (续写上下文)' : ''));
       setPrompt('');
+      setPastedImages([]);
       // 启动后立即清除用于显示”续写中”的标记，因为任务已经接管了 Session
       setContinueSession(null);
 
@@ -374,8 +380,8 @@ const ConsolePage: React.FC = () => {
 
   const handleCancel = async (taskId: string) => {
     await taskApi.cancel(taskId);
-    if (queuedMessage) {
-      setQueuedMessage(null);
+    if (queuedMessages.length > 0) {
+      clearQueuedMessages();
       message.info('排队消息已取消');
     } else {
       message.success('已发送取消指令');
@@ -510,66 +516,64 @@ const ConsolePage: React.FC = () => {
     );
   }, []);
 
-  // Bug3 + Bug4: 当当前任务完成/失败时，自动发送排队的输入（使用全局 queuedMessage，跨页面持久）
+  // Bug3 + Bug4: 当当前任务完成/失败时，自动发送所有排队消息（合并为一条）
   const prevAutoTaskId = useRef<string | null>(null);
   useEffect(() => {
-    if (!queuedMessage) return;
+    if (queuedMessages.length === 0) return;
     const st = selectedTask?.status;
     if (st !== 'Completed' && st !== 'Failed') return;
     // 防止重复触发
     if (selectedTask?.id === prevAutoTaskId.current) return;
     prevAutoTaskId.current = selectedTask?.id || null;
 
-    const msg = queuedMessage;
-    setQueuedMessage(null);
+    const msgs = [...queuedMessages];
+    clearQueuedMessages();
 
     // 确保当前会话有 sessionId 可以续写
     const sessionId = selectedTask?.claudeSessionId;
     if (!sessionId) {
-      message.warning('排队消息已发送，但无法续写（无有效 SessionId）');
-      setPrompt(msg.prompt);
+      message.warning('排队消息已清空，无法续写（无有效 SessionId）');
+      // 恢复所有消息到输入框
+      setPrompt(msgs.map(m => m.prompt).join('\n---\n'));
       return;
     }
 
-    message.info('排队消息已自动发送');
-    setLaunching(true);
+    // 合并所有排队消息为一个 prompt
+    const combinedPrompt = msgs.map(m => m.prompt).join('\n---\n');
+    message.info(`已自动发送 ${msgs.length} 条排队消息`);
 
+    setLaunching(true);
     taskApi.create({
-      agentId: msg.agentId || selectedTask.agentId,
-      prompt: msg.prompt.trim(),
+      agentId: msgs[0].agentId || selectedTask.agentId,
+      prompt: combinedPrompt,
       resumeSessionId: sessionId,
       forceNewSession: false,
-      model: msg.model || selectedModel,
-      workingDirectory: msg.workingDirectory || selectedWorkingDirectory,
+      model: msgs[0].model || selectedModel,
+      workingDirectory: msgs[0].workingDirectory || selectedWorkingDirectory,
       autoIdentifyAgent,
       optimizePrompt,
       planMode
     }).then(task => {
       setPrompt('');
       setSelectedTask(task);
-      setAgents(pa => pa.map(a => a.id === (msg.agentId || selectedTask.agentId) ? { ...a, lastUsedAt: new Date().toISOString() } : a));
+      setAgents(pa => pa.map(a => a.id === (msgs[0].agentId || selectedTask.agentId) ? { ...a, lastUsedAt: new Date().toISOString() } : a));
       loadTasks();
     }).catch((e: any) => {
       message.error(e?.response?.data?.error ?? '排队任务启动失败');
-      setPrompt(msg.prompt);
+      setPrompt(combinedPrompt);
     }).finally(() => {
       setLaunching(false);
     });
-  }, [selectedTask, selectedTask?.status, queuedMessage]);
+  }, [selectedTask, selectedTask?.status, queuedMessages]);
 
   // Bug4: 组件挂载时检查全局排队消息，如果匹配当前任务，恢复排队状态监听
   useEffect(() => {
-    if (!queuedMessage) return;
+    if (queuedMessages.length === 0) return;
     // 排队消息的 sessionId 与当前选中任务的 sessionId 匹配时，说明这是当前会话的排队消息
-    if (selectedTask?.claudeSessionId && queuedMessage.sessionId === selectedTask.claudeSessionId) {
-      // 如果当前任务已完成/失败，立即触发自动发送
-      const st = selectedTask.status;
-      if (st === 'Completed' || st === 'Failed') {
-        // 什么都不做，上面的 useEffect 会自动触发
-      }
-      // 否则（Running），用户回到页面时能看到排队状态，等待任务完成自动发送
+    if (selectedTask?.claudeSessionId && queuedMessages.some(m => m.sessionId === selectedTask.claudeSessionId)) {
+      // 如果当前任务已完成/失败，上面那个 useEffect 会自动触发发送
     }
-  }, [queuedMessage, selectedTask]);
+  }, [queuedMessages, selectedTask]);
 
   const taskStatusIcon = (status: AgentTask['status']) => {
     switch (status) {
@@ -893,10 +897,22 @@ const ConsolePage: React.FC = () => {
                   <Button type="link" size="small" onClick={() => setContinueSession(null)}>取消</Button>
                 </div>
               )}
-              {queuedMessage && (
-                <div className="continue-hint-badge" style={{ background: '#1a2733', borderColor: '#58A6FF' }}>
-                  <span style={{ color: '#58A6FF' }}>排队中: {queuedMessage.prompt.substring(0, 30)}{queuedMessage.prompt.length > 30 ? '...' : ''}</span>
-                  <Button type="link" size="small" onClick={() => setQueuedMessage(null)}>取消</Button>
+              {queuedMessages.length > 0 && (
+                <div className="continue-hint-badge" style={{ background: '#1a2733', borderColor: '#58A6FF', flexDirection: 'column', alignItems: 'stretch', gap: 4 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ color: '#58A6FF' }}>排队中 ({queuedMessages.length} 条)</span>
+                    <Button type="link" size="small" onClick={() => clearQueuedMessages()}>全部取消</Button>
+                  </div>
+                  {queuedMessages.map((m, i) => (
+                    <div key={i} className="queued-item-row">
+                      <span className="queued-item-text">{i + 1}. {m.prompt.substring(0, 50)}{m.prompt.length > 50 ? '...' : ''}</span>
+                      <button
+                        className="queued-item-remove"
+                        onClick={() => setQueuedMessages(queuedMessages.filter((_, j) => j !== i))}
+                        title="移除此条"
+                      >×</button>
+                    </div>
+                  ))}
                 </div>
               )}
               <Mentions
@@ -913,19 +929,21 @@ const ConsolePage: React.FC = () => {
                 onKeyDown={e => {
                   if (e.key === 'Enter' && e.ctrlKey) {
                     e.preventDefault();
-                    // Bug3+Bug4: 任务运行中，Ctrl+Enter 进入排队（全局持久）
+                    // Bug3+Bug4: 任务运行中，Ctrl+Enter 进入排队（支持多条积累）
                     if (selectedTask?.status === 'Running') {
                       if (!prompt.trim()) return;
-                      setQueuedMessage({
-                        prompt: prompt.trim(),
+                      const imagesSuffix = pastedImages.map(img => `\n图片: ${img.url}`).join('');
+                      addQueuedMessage({
+                        prompt: prompt.trim() + imagesSuffix,
                         agentId: selectedAgentId || '',
                         sessionId: selectedTask.claudeSessionId || '',
                         model: selectedModel,
                         workingDirectory: selectedWorkingDirectory,
                         planMode: optimizePrompt
                       });
-                      message.success('消息已加入排队，将在当前任务完成后自动发送');
+                      message.success(`消息已加入排队（共 ${queuedMessages.length + 1} 条），将在当前任务完成后自动发送`);
                       setPrompt('');
+                      setPastedImages([]);
                       return;
                     }
                     handleLaunch();
@@ -937,7 +955,7 @@ const ConsolePage: React.FC = () => {
                     if (items[i].type.indexOf('image') !== -1) {
                       const file = items[i].getAsFile();
                       if (file) {
-                        message.loading({ content: '正在上传粘粘的图片...', key: 'paste-upload' });
+                        message.loading({ content: '正在上传粘贴的图片...', key: 'paste-upload' });
                         const formData = new FormData();
                         formData.append('file', file);
                         if (selectedAgentId) formData.append('agentId', selectedAgentId);
@@ -949,7 +967,8 @@ const ConsolePage: React.FC = () => {
                           const data = await res.json();
                           if (data.url) {
                             message.success({ content: '粘贴的图片已上传！', key: 'paste-upload' });
-                            setPrompt(prev => prev ? `${prev}\n图片: ${data.url}` : `图片: ${data.url}`);
+                            const imgId = `img_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+                            setPastedImages(prev => [...prev, { id: imgId, url: data.url }]);
                           }
                         } catch (error) {
                           message.error({ content: '粘贴上传失败', key: 'paste-upload' });
@@ -960,6 +979,22 @@ const ConsolePage: React.FC = () => {
                 }}
                 disabled={!selectedAgentId}
               />
+              {pastedImages.length > 0 && (
+                <div className="pasted-images-row">
+                  {pastedImages.map(img => (
+                    <div key={img.id} className="pasted-image-thumb">
+                      <img src={img.url} alt="粘贴的图片" />
+                      <button
+                        className="pasted-image-remove"
+                        onClick={() => setPastedImages(prev => prev.filter(p => p.id !== img.id))}
+                        title="移除图片"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
               <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '8px' }}>
                 <Upload
                   name="file"
@@ -972,8 +1007,9 @@ const ConsolePage: React.FC = () => {
                     }
                     if (info.file.status === 'done') {
                       message.success({ content: '图片已添加！', key: 'uploading' });
-                      const path = info.file.response.url;
-                      setPrompt(prev => prev ? `${prev}\n图片: ${path}` : `图片: ${path}`);
+                      const url = info.file.response.url;
+                      const imgId = `img_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+                      setPastedImages(prev => [...prev, { id: imgId, url }]);
                     } else if (info.file.status === 'error') {
                       message.error({ content: '图片上传失败', key: 'uploading' });
                     }
@@ -989,19 +1025,19 @@ const ConsolePage: React.FC = () => {
 
                 {launching || selectedTask?.status === 'Running' ? (
                   <>
-                    {queuedMessage ? (
+                    {queuedMessages.length > 0 ? (
                       <Button
                         className="send-button"
                         type="primary"
                         ghost
                         icon={<SendOutlined />}
                         onClick={() => {
-                          // 用户主动点击，立即取消排队
-                          setQueuedMessage(null);
+                          // 用户主动点击，立即清空排队
+                          clearQueuedMessages();
                           message.info('排队已取消');
                         }}
                       >
-                        排队中 ({queuedMessage.prompt.length}字) · 点击取消
+                        排队中 ({queuedMessages.length}条) · 点击取消
                       </Button>
                     ) : (
                       <Button

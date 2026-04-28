@@ -40,6 +40,9 @@ const Dashboard: React.FC = () => {
 
     const formatNum = (n: number) => new Intl.NumberFormat().format(n);
 
+    // 以百万 token 为单位展示
+    const formatMToken = (n: number) => (n / 1_000_000).toFixed(2);
+
     return (
         <div className="dashboard-container">
             <div className="dashboard-header">
@@ -103,8 +106,8 @@ const Dashboard: React.FC = () => {
                                 <DeploymentUnitOutlined className="stat-icon" style={{ color: '#A371F7' }} />
                             </div>
                             <div className="stat-value">
-                                {formatNum((stats?.periodInputTokens ?? 0) + (stats?.periodOutputTokens ?? 0) + (stats?.periodCacheReadTokens ?? 0) + (stats?.periodCacheCreationTokens ?? 0))}
-                                <span className="stat-unit">tokens</span>
+                                {formatMToken((stats?.periodInputTokens ?? 0) + (stats?.periodOutputTokens ?? 0) + (stats?.periodCacheReadTokens ?? 0) + (stats?.periodCacheCreationTokens ?? 0))}
+                                <span className="stat-unit">M tokens</span>
                             </div>
                         </div>
                     </div>
@@ -116,19 +119,19 @@ const Dashboard: React.FC = () => {
                             <div className="usage-row">
                                 <div className="usage-item">
                                     <div className="usage-label">输入 (Input)</div>
-                                    <div className="usage-value input">{formatNum(stats?.periodInputTokens ?? 0)}</div>
+                                    <div className="usage-value input">{formatMToken(stats?.periodInputTokens ?? 0)}</div>
                                 </div>
                                 <div className="usage-item">
                                     <div className="usage-label">输出 (Output)</div>
-                                    <div className="usage-value output">{formatNum(stats?.periodOutputTokens ?? 0)}</div>
+                                    <div className="usage-value output">{formatMToken(stats?.periodOutputTokens ?? 0)}</div>
                                 </div>
                                 <div className="usage-item">
                                     <div className="usage-label">缓存读取 (Cache Read)</div>
-                                    <div className="usage-value" style={{ color: '#A371F7' }}>{formatNum(stats?.periodCacheReadTokens ?? 0)}</div>
+                                    <div className="usage-value" style={{ color: '#A371F7' }}>{formatMToken(stats?.periodCacheReadTokens ?? 0)}</div>
                                 </div>
                                 <div className="usage-item">
                                     <div className="usage-label">缓存创建 (Cache Create)</div>
-                                    <div className="usage-value" style={{ color: '#D29922' }}>{formatNum(stats?.periodCacheCreationTokens ?? 0)}</div>
+                                    <div className="usage-value" style={{ color: '#D29922' }}>{formatMToken(stats?.periodCacheCreationTokens ?? 0)}</div>
                                 </div>
                             </div>
                         </div>
@@ -147,9 +150,9 @@ const Dashboard: React.FC = () => {
                                                 <div className="agent-tasks">{agent.taskCount} 个任务</div>
                                             </div>
                                             <div className="agent-tokens">
-                                                <div className="token-total">{formatNum(agent.totalTokens)}</div>
+                                                <div className="token-total">{formatMToken(agent.totalTokens)} M</div>
                                                 <div className="token-breakdown">
-                                                    In: {formatNum(agent.inputTokens)} | Out: {formatNum(agent.outputTokens)} | CacheR: {formatNum(agent.cacheReadTokens)} | CacheW: {formatNum(agent.cacheCreationTokens)}
+                                                    In: {formatMToken(agent.inputTokens)} | Out: {formatMToken(agent.outputTokens)} | CacheR: {formatMToken(agent.cacheReadTokens)} | CacheW: {formatMToken(agent.cacheCreationTokens)}
                                                 </div>
                                             </div>
                                             <div className="usage-progress-bar">

@@ -21,8 +21,8 @@ interface AppState {
   // 跨页面同步：当某页面修改了任务数据（删除/新建），其他页面可监听此值触发刷新
   dataSyncVersion: number;
 
-  // 全局排队消息（跨页面持久，切页不丢失）
-  queuedMessage: QueuedMessage | null;
+  // 全局排队消息（跨页面持久，切页不丢失，支持多条积累）
+  queuedMessages: QueuedMessage[];
 
   // Actions
   setPage: (page: PageKey) => void;
@@ -31,7 +31,9 @@ interface AppState {
   setInitialConsoleTab: (tab: 'output' | 'terminal' | null) => void;
   setSelectedGroupId: (id: string | null) => void;
   bumpDataSync: () => void;
-  setQueuedMessage: (msg: QueuedMessage | null) => void;
+  setQueuedMessages: (msgs: QueuedMessage[]) => void;
+  addQueuedMessage: (msg: QueuedMessage) => void;
+  clearQueuedMessages: () => void;
 }
 
 // 获取初始 Hash 对应的页面，如果无效则默认 'butler'
@@ -54,7 +56,7 @@ export const useAppStore = create<AppState>((set) => ({
   initialConsoleTab: null,
   selectedGroupId: getInitialGroupId(),
   dataSyncVersion: 0,
-  queuedMessage: null,
+  queuedMessages: [],
 
   setPage: (page) => set({ currentPage: page }),
   setSelectedAgentId: (id) => set({ selectedAgentId: id }),
@@ -71,5 +73,7 @@ export const useAppStore = create<AppState>((set) => ({
     set({ selectedGroupId: id });
   },
   bumpDataSync: () => set((state) => ({ dataSyncVersion: state.dataSyncVersion + 1 })),
-  setQueuedMessage: (msg) => set({ queuedMessage: msg }),
+  setQueuedMessages: (msgs) => set({ queuedMessages: msgs }),
+  addQueuedMessage: (msg) => set((state) => ({ queuedMessages: [...state.queuedMessages, msg] })),
+  clearQueuedMessages: () => set({ queuedMessages: [] }),
 }));
