@@ -320,6 +320,34 @@ public class GitController : ControllerBase
             return StatusCode(500, new { error = ex.Message });
         }
     }
+    /// <summary>
+    /// 拉取远程代码
+    /// </summary>
+    [HttpPost("pull")]
+    public async Task<IActionResult> Pull([FromBody] CodeReviewRequest req)
+    {
+        if (string.IsNullOrWhiteSpace(req.Path))
+        {
+            return BadRequest("Path is required");
+        }
+
+        try
+        {
+            var (success, message) = await _gitService.PullAsync(req.Path);
+            if (success)
+            {
+                return Ok(new { message });
+            }
+            else
+            {
+                return BadRequest(new { error = message });
+            }
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { error = ex.Message });
+        }
+    }
 }
 
 // Request DTOs

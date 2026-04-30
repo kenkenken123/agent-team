@@ -334,4 +334,23 @@ public class GitService
 
         return (true, $"已撤销: {filePath}");
     }
+
+    /// <summary>
+    /// 拉取远程代码（git pull）
+    /// </summary>
+    public async Task<(bool Success, string Message)> PullAsync(string workingDirectory)
+    {
+        var (code, output, err) = await RunGitCommandAsync(workingDirectory,
+            ["pull", "--ff-only"]);
+
+        if (code == 0)
+        {
+            var summary = output.Split('\n')
+                .FirstOrDefault(l => !string.IsNullOrWhiteSpace(l)) ?? "拉取成功";
+            return (true, summary);
+        }
+
+        _logger.LogError($"Git pull failed: {err}");
+        return (false, $"git pull 失败: {err}");
+    }
 }

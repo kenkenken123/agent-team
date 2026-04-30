@@ -128,5 +128,19 @@ export const gitApi = {
             throw new Error(err.error || '切换分支失败');
         }
         return res.json();
+    },
+
+    async pull(path: string): Promise<{ message: string }> {
+        const url = 'http://localhost:5501/api/git/pull';
+        const res = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ path })
+        });
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            throw new Error(err.error || '拉取代码失败');
+        }
+        return res.json();
     }
 };

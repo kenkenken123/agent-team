@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Drawer, List, Typography, Space, Button, Modal, Spin, Tag, Input, message, Alert, Popconfirm, Dropdown } from 'antd';
-import { ReloadOutlined, FileTextOutlined, BranchesOutlined, ScanOutlined, CloudUploadOutlined, ThunderboltOutlined, UndoOutlined, CheckOutlined, DownOutlined } from '@ant-design/icons';
+import { ReloadOutlined, FileTextOutlined, BranchesOutlined, ScanOutlined, CloudDownloadOutlined, CloudUploadOutlined, ThunderboltOutlined, UndoOutlined, CheckOutlined, DownOutlined } from '@ant-design/icons';
 import { gitApi } from '../../api/gitApi';
 import type { GitStatusInfo, GitFileStatus, GitBranchInfo } from '../../api/gitApi';
 import './index.css';
@@ -246,6 +246,7 @@ export const GitDrawer: React.FC<GitDrawerProps> = ({ visible, onClose, workingD
   // Commit state
   const [commitMessage, setCommitMessage] = useState('');
   const [committing, setCommitting] = useState(false);
+  const [pulling, setPulling] = useState(false);
   const [generating, setGenerating] = useState(false);
 
   const fetchStatus = async () => {
@@ -394,6 +395,20 @@ export const GitDrawer: React.FC<GitDrawerProps> = ({ visible, onClose, workingD
     }
   };
 
+  const handlePull = async () => {
+    if (!workingDirectory) return;
+    setPulling(true);
+    try {
+      const result = await gitApi.pull(workingDirectory);
+      message.success(result.message);
+      await fetchStatus();
+    } catch (error: any) {
+      message.error(error.message || '拉取代码失败');
+    } finally {
+      setPulling(false);
+    }
+  };
+
   const renderStatusTag = (status: string) => {
     const s = status.trim();
     if (s === 'M') return <Tag color="blue">M</Tag>;
@@ -488,6 +503,15 @@ export const GitDrawer: React.FC<GitDrawerProps> = ({ visible, onClose, workingD
                 size="middle"
               >
                 代码审查
+              </Button>
+              <Button
+                icon={<CloudDownloadOutlined />}
+                onClick={handlePull}
+                loading={pulling}
+                style={{ flex: 1, borderRadius: 8, background: 'rgba(255,255,255,0.05)', color: '#E6EDF3', border: '1px solid rgba(255,255,255,0.1)' }}
+                size="middle"
+              >
+                拉取代码
               </Button>
               <Button
                 icon={<CloudUploadOutlined />}
