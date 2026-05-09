@@ -20,10 +20,17 @@ public class AppDbContext : DbContext
     public DbSet<ModelConfig> ModelConfigs { get; set; } = null!;
     public DbSet<LongTermMemory> Memories { get; set; } = null!;
     public DbSet<Models.TaskStats> TaskStats { get; set; } = null!;
+    public DbSet<FileUpload> FileUploads { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
+
+        modelBuilder.Entity<FileUpload>(e =>
+        {
+            e.HasKey(f => f.Id);
+            e.Property(f => f.FilePath).IsRequired();
+        });
 
         modelBuilder.Entity<AgentTemplate>(e =>
         {

@@ -1,5 +1,7 @@
 using AgentTeam.Api.Data;
+using AgentTeam.Api.Models;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace AgentTeam.Api.Controllers;
 
@@ -8,7 +10,6 @@ namespace AgentTeam.Api.Controllers;
 public class UploadController : ControllerBase
 {
     private readonly IWebHostEnvironment _env;
-
     private readonly AppDbContext _db;
 
     public UploadController(IWebHostEnvironment env, AppDbContext db)
@@ -20,7 +21,7 @@ public class UploadController : ControllerBase
     [HttpPost]
     public async Task<IActionResult> UploadImage([FromForm] IFormFile file, [FromForm] Guid? agentId)
     {
-        if (file == null || file.Length == 0) 
+        if (file == null || file.Length == 0)
             return BadRequest(new { error = "文件为空" });
 
         var ext = Path.GetExtension(file.FileName);
@@ -41,12 +42,24 @@ public class UploadController : ControllerBase
         if (!Directory.Exists(folder))
             Directory.CreateDirectory(folder);
 
-        var path = Path.Combine(folder, uniqueId + ext);
-        
-        using var stream = new FileStream(path, FileMode.Create);
+        var filePath = Path.Combine(folder, uniqueId + ext);
+
+        using var stream = new FileStream(filePath, FileMode.Create);
         await file.CopyToAsync(stream);
 
-        // 返回包含该文件本地完整绝对路径的结果
-        return Ok(new { url = path }); 
+        // 保存文件元数据到数据库
+        var fileUpload = new FileUpload
+        {
+            FilePath = filePath,
+            OriginalFileName = file.FileName,
+            ContentType = file.ContentType,
+            Size = file.Length
+        };
+        _db.FileUploads.Add(fileUpload);
+        await _db.SaveChangesAsync();
+
+        // 返回可通过 /api/files/{id} 访问的完整 URL
+        var baseUrl = $"{Request.Scheme}://{Request.Host}";
+        return Ok(new { url = $"{baseUrl}/api/files/{fileUpload.Id}" });
     }
 }

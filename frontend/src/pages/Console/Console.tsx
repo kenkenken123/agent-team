@@ -38,6 +38,7 @@ const ConsolePage: React.FC = () => {
   const [selectedTask, setSelectedTask] = useState<AgentTask | null>(null);
   const [prompt, setPrompt] = useState('');
   const [pastedImages, setPastedImages] = useState<{id: string, url: string}[]>([]);
+  const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
   const [launching, setLaunching] = useState(false);
   const [loadingTasks, setLoadingTasks] = useState(false);
   const [continueSession, setContinueSession] = useState<string | null>(null);
@@ -204,14 +205,18 @@ const ConsolePage: React.FC = () => {
     setCurrentTake(5); // 重置选定 Agent 时的默认条数
   }, [selectedAgentId]);
 
+  const hasRunningTask = useMemo(() => tasks.some(t => t.status === 'Running'), [tasks]);
+
   useEffect(() => {
     loadTasks();
     clearInterval(pollRef.current);
+    // 终端实时输出由 TerminalPanel WebSocket 负责，轮询仅用于刷新左侧列表
+    // 有任务运行时 5 秒，空闲时 15 秒降低开销
     pollRef.current = setInterval(async () => {
       await loadTasks();
-    }, 2000); // 提高轮询频率以快速获取 SessionId
+    }, hasRunningTask ? 5000 : 15000);
     return () => clearInterval(pollRef.current);
-  }, [loadTasks]);
+  }, [loadTasks, hasRunningTask]);
 
 
   const sortedAgents = useMemo(() => {
@@ -983,10 +988,18 @@ const ConsolePage: React.FC = () => {
                 <div className="pasted-images-row">
                   {pastedImages.map(img => (
                     <div key={img.id} className="pasted-image-thumb">
-                      <img src={img.url} alt="粘贴的图片" />
+                      <img
+                        src={img.url}
+                        alt="粘贴的图片"
+                        onClick={() => setPreviewImageUrl(img.url)}
+                        style={{ cursor: 'pointer' }}
+                      />
                       <button
                         className="pasted-image-remove"
-                        onClick={() => setPastedImages(prev => prev.filter(p => p.id !== img.id))}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setPastedImages(prev => prev.filter(p => p.id !== img.id));
+                        }}
                         title="移除图片"
                       >
                         ×
@@ -995,6 +1008,23 @@ const ConsolePage: React.FC = () => {
                   ))}
                 </div>
               )}
+              <Modal
+                open={!!previewImageUrl}
+                footer={null}
+                onCancel={() => setPreviewImageUrl(null)}
+                width="80vw"
+                centered
+                styles={{ body: { textAlign: 'center', padding: '16px' } }}
+              >
+                {previewImageUrl && (
+                  <img
+                    src={previewImageUrl}
+                    alt="预览图片"
+                    style={{ maxWidth: '100%', maxHeight: '80vh', objectFit: 'contain' }}
+                    onClick={() => setPreviewImageUrl(null)}
+                  />
+                )}
+              </Modal>
               <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '8px' }}>
                 <Upload
                   name="file"
