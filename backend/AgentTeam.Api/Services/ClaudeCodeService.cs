@@ -134,29 +134,44 @@ public class ClaudeCodeService(
             process.StartInfo.ArgumentList.Add(arg);
         }
 
-        // 注入配置：创建临时配置目录，凭据写入 settings.json 的 env 字段
+        // 注入配置：创建配置目录，凭据写入 settings.json 的 env 字段
         string? tempConfigDir = null;
         if (template != null)
         {
             try
             {
-                tempConfigDir = CreateTempConfigDir(task.Id, template);
-                lock (_lock) { _tempConfigDirs[task.Id] = tempConfigDir; }
-                process.StartInfo.Environment["CLAUDE_CONFIG_DIR"] = tempConfigDir;
+                if (agent.SaasUserId.HasValue)
+                {
+                    // SaaS 租户专属固定配置目录，无需软链接，天然持久化
+                    var userId = agent.SaasUserId.Value;
+                    var saasConfigDir = Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), "..", "..", "agent-dic", "user", userId.ToString(), ".claude"));
+                    Directory.CreateDirectory(saasConfigDir);
+                    WriteCleanSettingsJson(saasConfigDir, saasConfigDir, template);
+                    process.StartInfo.Environment["CLAUDE_CONFIG_DIR"] = saasConfigDir;
 
-                var baseUrl = template.BaseUrl?.Trim();
-                logger.LogInformation("[Task {TaskId}] 使用临时配置目录: CLAUDE_CONFIG_DIR={ConfigDir}, 凭据已写入 settings.json env, ANTHROPIC_BASE_URL={BaseUrl}",
-                    task.Id, tempConfigDir, baseUrl ?? "(未设置)");
+                    logger.LogInformation("[Task {TaskId}] SaaS 租户 {UserId} 使用专属固定配置目录: CLAUDE_CONFIG_DIR={ConfigDir}",
+                        task.Id, userId, saasConfigDir);
+                }
+                else
+                {
+                    tempConfigDir = CreateTempConfigDir(task.Id, template);
+                    lock (_lock) { _tempConfigDirs[task.Id] = tempConfigDir; }
+                    process.StartInfo.Environment["CLAUDE_CONFIG_DIR"] = tempConfigDir;
+
+                    var baseUrl = template.BaseUrl?.Trim();
+                    logger.LogInformation("[Task {TaskId}] 使用临时配置目录: CLAUDE_CONFIG_DIR={ConfigDir}, 凭据已写入 settings.json env, ANTHROPIC_BASE_URL={BaseUrl}",
+                        task.Id, tempConfigDir, baseUrl ?? "(未设置)");
+                }
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "[Task {TaskId}] 创建临时配置目录失败，清理已创建的目录", task.Id);
+                logger.LogError(ex, "[Task {TaskId}] 创建配置目录失败，清理已创建的目录", task.Id);
                 if (tempConfigDir != null)
                 {
                     try { Directory.Delete(tempConfigDir, true); } catch { }
                     tempConfigDir = null;
                 }
-                throw new InvalidOperationException("无法创建临时配置目录，请检查权限和磁盘空间", ex);
+                throw new InvalidOperationException("无法创建配置目录，请检查权限和磁盘空间", ex);
             }
         }
 

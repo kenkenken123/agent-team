@@ -42,6 +42,8 @@ export default function Agents() {
   const [taskPrompt, setTaskPrompt] = useState('');
   const [planMode, setPlanMode] = useState(false);
   const [isStartingTask, setIsStartingTask] = useState(false);
+  const [activeModel, setActiveModel] = useState('claude-3-7-sonnet-20250219');
+  const [sessionOption, setSessionOption] = useState('resume');
 
   const wsRef = useRef<WebSocket | null>(null);
   const outputEndRef = useRef<HTMLDivElement | null>(null);
@@ -158,6 +160,9 @@ export default function Agents() {
         prompt: taskPrompt.trim(),
         planMode: planMode,
         terminalType: 'powershell',
+        model: activeModel,
+        forceNewSession: sessionOption === 'new',
+        resumeSessionId: sessionOption === 'resume-selected' && activeTask?.claudeSessionId ? activeTask.claudeSessionId : undefined,
       });
       message.success('任务启动成功！');
       setTaskPrompt('');
@@ -417,6 +422,33 @@ export default function Agents() {
             </div>
 
             <div style={{ background: 'rgba(255,255,255,0.02)', padding: '12px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
+              <div style={{ display: 'flex', gap: 12, marginBottom: 8, alignItems: 'center' }}>
+                <span style={{ color: 'rgba(255, 255, 255, 0.45)', fontSize: 13 }}>选择模型:</span>
+                <Select
+                  value={activeModel}
+                  onChange={(val) => setActiveModel(val)}
+                  style={{ width: 200 }}
+                  size="small"
+                >
+                  <Select.Option value="claude-3-7-sonnet-20250219">claude-3-7-sonnet-20250219</Select.Option>
+                  <Select.Option value="claude-3-5-sonnet-20241022">claude-3-5-sonnet-20241022</Select.Option>
+                </Select>
+
+                <span style={{ color: 'rgba(255, 255, 255, 0.45)', fontSize: 13, marginLeft: 8 }}>会话控制:</span>
+                <Select
+                  value={sessionOption}
+                  onChange={(val) => setSessionOption(val)}
+                  style={{ width: 160 }}
+                  size="small"
+                >
+                  <Select.Option value="resume">沿用最近会话</Select.Option>
+                  <Select.Option value="new">开启新会话</Select.Option>
+                  {activeTask?.claudeSessionId && (
+                    <Select.Option value="resume-selected">继续选中的会话</Select.Option>
+                  )}
+                </Select>
+              </div>
+
               <TextArea
                 rows={3}
                 placeholder="在此输入您想要让 Claude 帮您执行的自然语言任务，例如：创建一个 index.html 并写一个炫酷的时钟..."
