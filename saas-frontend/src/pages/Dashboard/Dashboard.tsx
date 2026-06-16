@@ -1,7 +1,7 @@
 import { Card, Row, Col, Typography, Space } from 'antd';
 import {
   BookOutlined,
-  UsergroupAddOutlined,
+  MessageOutlined,
   SafetyCertificateOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '../../stores/authStore';
@@ -18,7 +18,7 @@ export default function Dashboard() {
           欢迎回来，{user?.username}！
         </Title>
         <Paragraph style={{ color: 'rgba(255, 255, 255, 0.45)', marginTop: 8 }}>
-          这是您的私有云端 Agent 空间。在这里，您可以安全地隔离运行 Claude Code 实例，配置个性化的自定义 Skills。
+          这是您的私有云端开发空间。在这里，您可以安全地隔离运行 Claude Code 实例，配置个性化的自定义 Skills。
         </Paragraph>
       </div>
 
@@ -66,13 +66,13 @@ export default function Dashboard() {
             style={{ height: '100%' }}
             title={
               <Space style={{ color: '#10b981' }}>
-                <UsergroupAddOutlined />
-                <span>独立 Agents</span>
+                <MessageOutlined />
+                <span>我的开发会话</span>
               </Space>
             }
           >
             <Paragraph style={{ color: 'rgba(255, 255, 255, 0.65)' }}>
-              您可以根据系统公共模板创建不同职责的智能 Agent。这些 Agent 的当前状态和执行历史任务仅在您的租户账号内可见。
+              您可以通过新建不同的开发会话来执行各种开发任务，每个会话之间上下文独立，会话状态和执行历史在您的租户账号内完全安全隔离。
             </Paragraph>
           </Card>
         </Col>
@@ -89,8 +89,8 @@ export default function Dashboard() {
         <Paragraph style={{ color: 'rgba(255, 255, 255, 0.65)' }}>
           1. <b>准备代码</b>：进入 <b>专属文件区</b> 创建文件夹并编写您的项目文件。<br />
           2. <b>编写规则</b>：在 <b>专属 Skills</b> 页面新建一个技术规范或命令快捷方式（即 <code>CLAUDE.md</code> 规则）。<br />
-          3. <b>创建 Agent</b>：进入 <b>我的 Agents</b> 新建一个专属机器人并绑定您的项目文件夹。<br />
-          4. <b>发送任务</b>：给 Agent 发送自然语言指令，通过实时控制台查看 Claude 执行修改并构建项目！
+          3. <b>管理文件与规范</b>：在 <b>专属文件区</b> 放置您的代码，通过 <b>专属 Skills</b> 定义编码规范。<br />
+          4. <b>开启会话开发</b>：进入 <b>我的会话</b> 并新建一个开发会话，向 Claude 发送自然语言指令，通过实时控制台查看 Claude 自动执行代码修改和构建！
         </Paragraph>
       </Card>
     </div>

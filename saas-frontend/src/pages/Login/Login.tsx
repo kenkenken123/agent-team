@@ -87,7 +87,7 @@ export default function Login() {
           <Space align="center" style={{ marginBottom: 12 }}>
             <RocketOutlined style={{ fontSize: 32, color: '#a855f7' }} />
             <span style={{ fontSize: 24, fontWeight: 700, letterSpacing: '1px' }} className="gradient-text">
-              Claude Agent Hub
+              Claude Code Hub
             </span>
           </Space>
           <div style={{ color: 'rgba(255, 255, 255, 0.45)', fontSize: 14 }}>

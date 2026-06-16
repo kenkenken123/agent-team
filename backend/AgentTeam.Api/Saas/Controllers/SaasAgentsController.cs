@@ -58,6 +58,30 @@ public class SaasAgentsController(AppDbContext db) : ControllerBase
         }
     }
 
+    [HttpGet("models")]
+    public async Task<IActionResult> GetModels()
+    {
+        try
+        {
+            var models = await db.ModelConfigs
+                .Select(c => c.ModelId)
+                .Distinct()
+                .ToListAsync();
+
+            if (models.Count == 0)
+            {
+                models.Add("claude-3-7-sonnet-20250219");
+                models.Add("claude-3-5-sonnet-20241022");
+            }
+
+            return Ok(models);
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
     [HttpGet("{id:guid}")]
     public async Task<IActionResult> GetById(Guid id)
     {

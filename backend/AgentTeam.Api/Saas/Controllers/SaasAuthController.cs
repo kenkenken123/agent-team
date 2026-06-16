@@ -1,3 +1,5 @@
+using AgentTeam.Api.Data;
+using AgentTeam.Api.Models;
 using AgentTeam.Api.Saas.DTOs;
 using AgentTeam.Api.Saas.Models;
 using AgentTeam.Api.Saas.Services;
@@ -11,7 +13,7 @@ namespace AgentTeam.Api.Saas.Controllers;
 
 [ApiController]
 [Route("api/saas/auth")]
-public class SaasAuthController(AgentSaasContext db, JwtService jwtService) : ControllerBase
+public class SaasAuthController(AgentSaasContext db, JwtService jwtService, AppDbContext appDb) : ControllerBase
 {
     [HttpPost("register")]
     public async Task<IActionResult> Register([FromBody] RegisterRequest req)
@@ -37,7 +39,25 @@ public class SaasAuthController(AgentSaasContext db, JwtService jwtService) : Co
         db.Users.Add(user);
         await db.SaveChangesAsync();
 
-        SaasPathHelper.GetUserRoot(user.Id);
+        var userRoot = SaasPathHelper.GetUserRoot(user.Id);
+
+        // 自动为新租户创建一个默认 Agent
+        var defaultTemplate = await appDb.AgentTemplates.FirstOrDefaultAsync(t => t.IsEnabled);
+        if (defaultTemplate != null)
+        {
+            var defaultAgent = new Agent
+            {
+                Name = "专属助手",
+                TemplateId = defaultTemplate.Id,
+                Template = defaultTemplate,
+                WorkingDirectory = userRoot,
+                AllowedModels = "claude-3-7-sonnet-20250219",
+                MaxTurns = 30,
+                SaasUserId = user.Id
+            };
+            appDb.Agents.Add(defaultAgent);
+            await appDb.SaveChangesAsync();
+        }
 
         var token = jwtService.GenerateToken(user);
         return Ok(new AuthResponse(token, new UserDto(user.Id, user.Username, user.CreatedAt)));

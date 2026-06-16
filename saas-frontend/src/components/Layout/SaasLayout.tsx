@@ -4,9 +4,9 @@ import {
   DashboardOutlined,
   FolderOpenOutlined,
   BookOutlined,
-  UsergroupAddOutlined,
   LogoutOutlined,
   RocketOutlined,
+  MessageOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '../../stores/authStore';
 
@@ -37,7 +37,7 @@ export default function SaasLayout({ children }: SaasLayoutProps) {
     { key: 'dashboard', icon: <DashboardOutlined />, label: '个人工作台' },
     { key: 'files', icon: <FolderOpenOutlined />, label: '专属文件区' },
     { key: 'skills', icon: <BookOutlined />, label: '专属 Skills' },
-    { key: 'agents', icon: <UsergroupAddOutlined />, label: '我的 Agents' },
+    { key: 'agents', icon: <MessageOutlined />, label: '我的会话' },
   ];
 
   const profileMenu = {
@@ -66,7 +66,7 @@ export default function SaasLayout({ children }: SaasLayoutProps) {
         >
           <RocketOutlined style={{ fontSize: 24, color: '#a855f7' }} />
           <span style={{ fontSize: 16, fontWeight: 700 }} className="gradient-text">
-            SaaS Agent Hub
+            SaaS Code Hub
           </span>
         </div>
         <Menu

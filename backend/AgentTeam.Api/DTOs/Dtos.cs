@@ -138,7 +138,8 @@ public record TaskDto(
     DateTime? CompletedAt,
     int? ExitCode,
     DateTime CreatedAt,
-    DateTime? MarkedForDeletionAt
+    DateTime? MarkedForDeletionAt,
+    string? SessionTitle = null
 );
 
 // ───── Message DTOs ─────
@@ -207,4 +208,8 @@ public record FileEntryDto(
     long? Size, // null for directories
     DateTime LastModified,
     string Path
+);
+
+public record UpdateSessionTitleRequest(
+    string Title
 );

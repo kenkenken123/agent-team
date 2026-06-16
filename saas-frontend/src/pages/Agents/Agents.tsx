@@ -1,132 +1,177 @@
 import { useState, useEffect, useRef } from 'react';
-import { Card, Button, Input, Modal, Form, Select, Row, Col, Space, Typography, message, Tag, List, Switch, Drawer } from 'antd';
-import { PlayCircleOutlined, ConsoleSqlOutlined, LoadingOutlined, CheckCircleOutlined, CloseCircleOutlined, SyncOutlined, PlusOutlined } from '@ant-design/icons';
-import { agentsApi, tasksApi } from '../../api/saasApi';
+import { Card, Button, Input, Select, Row, Col, Space, Typography, message, Tag, Switch, Avatar, Upload } from 'antd';
+import {
+  PlayCircleOutlined,
+  LoadingOutlined,
+  PlusOutlined,
+  MessageOutlined,
+  UserOutlined,
+  RobotOutlined,
+  DownOutlined,
+  UpOutlined,
+  DeleteOutlined,
+  PaperClipOutlined,
+} from '@ant-design/icons';
+import { agentsApi, tasksApi, filesApi } from '../../api/saasApi';
 
-const { Title, Paragraph } = Typography;
+const { Title } = Typography;
 const { TextArea } = Input;
-
-interface Agent {
-  id: string;
-  name: string;
-  templateId: string;
-  templateName?: string;
-  workingDirectory: string;
-  allowedModels: string;
-  maxTurns?: number;
-  isEnabled: boolean;
-  status: string;
-  createdAt: string;
-}
 
 interface Task {
   id: string;
+  agentId: string;
+  agentName: string;
   prompt: string;
   status: string;
-  createdAt: string;
   claudeSessionId?: string;
+  finalResult?: string;
+  createdAt: string;
+  sessionTitle?: string;
+}
+
+interface ChatSession {
+  sessionId: string;
+  title: string;
+  createdAt: string;
+  lastUpdatedAt: string;
+  tasks: Task[];
 }
 
 export default function Agents() {
-  const [agents, setAgents] = useState<Agent[]>([]);
-  const [templates, setTemplates] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [createVisible, setCreateVisible] = useState(false);
-  const [form] = Form.useForm();
-
-  const [terminalOpen, setTerminalOpen] = useState(false);
-  const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [activeTask, setActiveTask] = useState<Task | null>(null);
-  const [taskOutput, setTaskOutput] = useState('');
+  const [sessions, setSessions] = useState<ChatSession[]>([]);
+  const [activeSession, setActiveSession] = useState<ChatSession | null>(null);
+  const [implicitAgentId, setImplicitAgentId] = useState<string | null>(null);
+  const [uploadedFiles, setUploadedFiles] = useState<{ name: string; path: string }[]>([]);
+  
   const [taskPrompt, setTaskPrompt] = useState('');
   const [planMode, setPlanMode] = useState(false);
   const [isStartingTask, setIsStartingTask] = useState(false);
   const [activeModel, setActiveModel] = useState('claude-3-7-sonnet-20250219');
-  const [sessionOption, setSessionOption] = useState('resume');
-
+  const [models, setModels] = useState<string[]>([]);
+  
+  const [expandedLogs, setExpandedLogs] = useState<Record<string, boolean>>({});
+  const [runningTaskOutput, setRunningTaskOutput] = useState('');
+  
   const wsRef = useRef<WebSocket | null>(null);
-  const outputEndRef = useRef<HTMLDivElement | null>(null);
+  const chatEndRef = useRef<HTMLDivElement | null>(null);
+  const logEndRef = useRef<HTMLDivElement | null>(null);
 
-  const loadAgents = async () => {
-    setLoading(true);
+  const init = async () => {
     try {
-      const data = await agentsApi.getAgents();
-      setAgents(data);
+      const agents = await agentsApi.getAgents();
+      let agent = agents[0];
       
-      const tmps = await agentsApi.getTemplates();
-      setTemplates(tmps);
+      if (!agent) {
+        const templates = await agentsApi.getTemplates();
+        const defTmp = templates[0];
+        if (defTmp) {
+          agent = await agentsApi.createAgent({
+            name: "专属助手",
+            templateId: defTmp.id,
+            workingDirectory: "",
+            allowedModels: "claude-3-7-sonnet-20250219",
+            maxTurns: 30,
+          });
+        }
+      }
+      
+      if (agent) {
+        setImplicitAgentId(agent.id);
+        loadSessions(agent.id);
+      }
+      
+      const mList = await agentsApi.getModels();
+      setModels(mList || []);
+      if (mList && mList.length > 0) {
+        setActiveModel(mList[0]);
+      }
     } catch (err: any) {
-      message.error(err.message || '加载 Agents 失败');
-    } finally {
-      setLoading(false);
+      message.error(err.message || '系统初始化失败');
+    }
+  };
+
+  const loadSessions = async (agentId: string) => {
+    try {
+      const res = await tasksApi.getTasks({ agentId, take: 200 });
+      const allTasks: Task[] = res.items || [];
+      
+      const groups: Record<string, Task[]> = {};
+      allTasks.forEach((t) => {
+        const sId = t.claudeSessionId || `temp_${t.id}`;
+        if (!groups[sId]) {
+          groups[sId] = [];
+        }
+        groups[sId].push(t);
+      });
+      
+      const sessionList: ChatSession[] = Object.keys(groups).map((sId) => {
+        const tasksInGroup = groups[sId].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+        const firstTask = tasksInGroup[0];
+        const lastTask = tasksInGroup[tasksInGroup.length - 1];
+        
+        let title = firstTask.sessionTitle || firstTask.prompt;
+        if (title.length > 25) title = title.substring(0, 22) + '...';
+        
+        return {
+          sessionId: sId,
+          title: title,
+          createdAt: firstTask.createdAt,
+          lastUpdatedAt: lastTask.createdAt,
+          tasks: tasksInGroup,
+        };
+      });
+      
+      sessionList.sort((a, b) => new Date(b.lastUpdatedAt).getTime() - new Date(a.lastUpdatedAt).getTime());
+      
+      setSessions(sessionList);
+      
+      if (activeSession) {
+        const updatedActive = sessionList.find(s => s.sessionId === activeSession.sessionId);
+        if (updatedActive) {
+          setActiveSession(updatedActive);
+          const runningTask = updatedActive.tasks.find(t => t.status === 'Running');
+          if (runningTask) {
+            connectWebSocket(runningTask.id);
+          }
+        }
+      }
+    } catch (err: any) {
+      message.error('加载会话失败');
     }
   };
 
   useEffect(() => {
-    loadAgents();
+    init();
+    return () => {
+      if (wsRef.current) wsRef.current.close();
+    };
   }, []);
 
-  const handleCreateAgent = async (values: any) => {
-    try {
-      await agentsApi.createAgent({
-        name: values.name,
-        templateId: values.templateId,
-        workingDirectory: values.workingDirectory || '',
-        allowedModels: values.allowedModels || 'claude-3-7-sonnet-20250219',
-        maxTurns: values.maxTurns ? parseInt(values.maxTurns) : 30,
-      });
-      message.success('创建 Agent 成功');
-      setCreateVisible(false);
-      form.resetFields();
-      loadAgents();
-    } catch (err: any) {
-      message.error(err.message || '创建失败');
-    }
-  };
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [activeSession, runningTaskOutput]);
 
-  const openTerminal = async (agent: Agent) => {
-    setSelectedAgent(agent);
-    setTerminalOpen(true);
-    setTaskOutput('');
-    setActiveTask(null);
-    setTaskPrompt('');
-    loadTasks(agent.id);
-  };
-
-  const loadTasks = async (agentId: string) => {
-    try {
-      const res = await tasksApi.getTasks({ agentId, take: 10 });
-      setTasks(res.items || []);
-    } catch (err: any) {
-      message.error('加载历史任务失败');
-    }
-  };
-
-  const selectTask = async (task: Task) => {
-    setActiveTask(task);
-    setTaskOutput('正在读取任务日志...');
+  const selectSession = async (session: ChatSession) => {
+    setActiveSession(session);
+    setRunningTaskOutput('');
     if (wsRef.current) {
       wsRef.current.close();
     }
-
-    try {
-      const res = await tasksApi.getTaskOutput(task.id);
-      const cleanText = (res.content || '').replace(/\x1B\[[0-9;]*[a-zA-Z]/g, '');
-      setTaskOutput(cleanText || '(无日志输出)');
-      
-      if (task.status === 'Running') {
-        connectWebSocket(task.id);
+    
+    const runningTask = session.tasks.find(t => t.status === 'Running');
+    if (runningTask) {
+      try {
+        const res = await tasksApi.getTaskOutput(runningTask.id);
+        const cleanText = (res.content || '').replace(/\x1B\[[0-9;]*[a-zA-Z]/g, '');
+        setRunningTaskOutput(cleanText);
+        connectWebSocket(runningTask.id);
+      } catch (err) {
       }
-    } catch (err: any) {
-      setTaskOutput('获取日志失败: ' + err.message);
     }
   };
 
   const connectWebSocket = (taskId: string) => {
-    if (wsRef.current) {
-      wsRef.current.close();
-    }
+    if (wsRef.current) wsRef.current.close();
 
     const wsUrl = `ws://localhost:5501/ws/task/${taskId}`;
     const ws = new WebSocket(wsUrl);
@@ -137,345 +182,459 @@ export default function Agents() {
         const data = JSON.parse(event.data);
         if (data.type === 'output' && data.content) {
           const cleanChunk = data.content.replace(/\x1B\[[0-9;]*[a-zA-Z]/g, '');
-          setTaskOutput((prev) => prev + cleanChunk);
-          
-          setTimeout(() => {
-            outputEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-          }, 100);
+          setRunningTaskOutput((prev) => prev + cleanChunk);
+          logEndRef.current?.scrollIntoView({ behavior: 'smooth' });
         } else if (data.type === 'status' && data.status) {
-          if (selectedAgent) loadTasks(selectedAgent.id);
-          message.info(`任务状态变更: ${data.status}`);
+          if (implicitAgentId) loadSessions(implicitAgentId);
         }
       } catch (e) {
       }
     };
   };
 
-  const handleStartTask = async () => {
-    if (!selectedAgent || !taskPrompt.trim()) return;
+  const handleNewSession = () => {
+    setActiveSession(null);
+    setRunningTaskOutput('');
+    setTaskPrompt('');
+    if (wsRef.current) wsRef.current.close();
+  };
+
+  const handleSendPrompt = async () => {
+    if (!implicitAgentId || !taskPrompt.trim()) return;
     setIsStartingTask(true);
+    
+    const isNew = !activeSession || activeSession.sessionId.startsWith('temp_');
+    const resumeSessionId = !isNew ? activeSession?.sessionId : undefined;
+    
+    setRunningTaskOutput('任务启动中...');
+    
+    let finalPrompt = taskPrompt.trim();
+    if (uploadedFiles.length > 0) {
+      const fileListStr = uploadedFiles.map(f => f.name).join(', ');
+      finalPrompt += `\n\n[已通过聊天框上传的关联文件（已保存在用户根目录的 .temp/ 下）: ${fileListStr}]`;
+    }
+    
     try {
       const res = await tasksApi.createTask({
-        agentId: selectedAgent.id,
-        prompt: taskPrompt.trim(),
+        agentId: implicitAgentId,
+        prompt: finalPrompt,
         planMode: planMode,
         terminalType: 'powershell',
         model: activeModel,
-        forceNewSession: sessionOption === 'new',
-        resumeSessionId: sessionOption === 'resume-selected' && activeTask?.claudeSessionId ? activeTask.claudeSessionId : undefined,
+        forceNewSession: isNew,
+        resumeSessionId: resumeSessionId,
       });
-      message.success('任务启动成功！');
+      
+      message.success('指令发送成功！');
       setTaskPrompt('');
-      loadTasks(selectedAgent.id);
-      selectTask(res);
+      setUploadedFiles([]);
+      
+      if (isNew) {
+        const tempSess: ChatSession = {
+          sessionId: res.claudeSessionId || res.id,
+          title: res.sessionTitle || (res.prompt.length > 25 ? res.prompt.substring(0, 22) + '...' : res.prompt),
+          createdAt: res.createdAt,
+          lastUpdatedAt: res.createdAt,
+          tasks: [res],
+        };
+        setActiveSession(tempSess);
+      }
+      
+      await loadSessions(implicitAgentId);
+      connectWebSocket(res.id);
     } catch (err: any) {
-      message.error(err.message || '启动任务失败');
+      message.error(err.message || '发送指令失败');
     } finally {
       setIsStartingTask(false);
     }
   };
 
-  const handleCancelTask = async (taskId: string) => {
+  const handleRenameSession = async (sessionId: string, newTitle: string) => {
+    if (!newTitle.trim() || sessionId.startsWith('temp_')) return;
     try {
-      await tasksApi.cancelTask(taskId);
-      message.success('取消指令已下发');
-      if (selectedAgent) loadTasks(selectedAgent.id);
+      await tasksApi.updateSessionTitle(sessionId, newTitle.trim());
+      message.success('会话标题已更新');
+      
+      setSessions(prev => prev.map(s => {
+        if (s.sessionId === sessionId) {
+          return { ...s, title: newTitle.trim() };
+        }
+        return s;
+      }));
+      if (activeSession && activeSession.sessionId === sessionId) {
+        setActiveSession(prev => prev ? { ...prev, title: newTitle.trim() } : null);
+      }
     } catch (err: any) {
-      message.error(err.message || '取消失败');
+      message.error(err.message || '修改会话标题失败');
     }
   };
 
-  useEffect(() => {
-    return () => {
-      if (wsRef.current) wsRef.current.close();
-    };
-  }, []);
+  const handleUpload = async (file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    try {
+      message.loading({ content: '正在上传文件...', key: 'uploading' });
+      const res = await filesApi.uploadFile(formData);
+      message.success({ content: `文件 ${file.name} 上传成功，已存入 .temp 目录`, key: 'uploading' });
+      setUploadedFiles(prev => [...prev, { name: res.fileName, path: res.relativePath }]);
+    } catch (err: any) {
+      message.error({ content: err.message || '文件上传失败', key: 'uploading' });
+    }
+    return false; // 阻止 antd 自动上传
+  };
 
-  const getStatusTag = (status: string) => {
-    switch (status) {
-      case 'Running':
-        return <Tag color="processing" icon={<SyncOutlined spin />}>运行中</Tag>;
-      case 'Completed':
-        return <Tag color="success" icon={<CheckCircleOutlined />}>已完成</Tag>;
-      case 'Failed':
-        return <Tag color="error" icon={<CloseCircleOutlined />}>失败</Tag>;
-      case 'Cancelled':
-        return <Tag color="default">已取消</Tag>;
-      default:
-        return <Tag color="default">{status}</Tag>;
+  const handleDeleteSession = async (session: ChatSession) => {
+    try {
+      const firstTask = session.tasks[0];
+      await tasksApi.deleteSession({
+        sessionId: session.sessionId.startsWith('temp_') ? undefined : session.sessionId,
+        taskId: session.sessionId.startsWith('temp_') ? firstTask.id : undefined,
+      });
+      message.success('会话已删除');
+      if (activeSession?.sessionId === session.sessionId) {
+        setActiveSession(null);
+        setRunningTaskOutput('');
+      }
+      if (implicitAgentId) loadSessions(implicitAgentId);
+    } catch (err: any) {
+      message.error(err.message || '删除失败');
+    }
+  };
+
+  const toggleLog = async (taskId: string) => {
+    const isExpanded = !!expandedLogs[taskId];
+    if (isExpanded) {
+      setExpandedLogs(prev => ({ ...prev, [taskId]: false }));
+    } else {
+      try {
+        const res = await tasksApi.getTaskOutput(taskId);
+        const cleanText = (res.content || '').replace(/\x1B\[[0-9;]*[a-zA-Z]/g, '');
+        (window as any)[`log_${taskId}`] = cleanText || '(无日志输出)';
+        setExpandedLogs(prev => ({ ...prev, [taskId]: true }));
+      } catch (err) {
+        message.error('加载日志文件失败');
+      }
     }
   };
 
   return (
-    <div style={{ padding: '8px' }}>
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          marginBottom: 24,
-        }}
-      >
-        <div>
-          <Title level={2} style={{ margin: 0, fontWeight: 700 }} className="gradient-text">
-            我的 Agents 管理
-          </Title>
-          <Paragraph style={{ color: 'rgba(255,255,255,0.45)', margin: '8px 0 0 0' }}>
-            在此您可以为您的专属工作区配置 Agent，并通过控制台向 Claude Code 发送自然语言开发指令。
-          </Paragraph>
-        </div>
-        <Button
-          type="primary"
-          icon={<PlusOutlined />}
-          onClick={() => setCreateVisible(true)}
-          className="glow-btn"
-        >
-          创建 Agent
-        </Button>
-      </div>
+    <div style={{ height: 'calc(100vh - 160px)', display: 'flex', flexDirection: 'column' }}>
+      <Row style={{ flex: 1, minHeight: 0 }} gutter={24}>
+        <Col span={6} style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+          <Button
+            type="dashed"
+            block
+            icon={<PlusOutlined />}
+            onClick={handleNewSession}
+            style={{ marginBottom: 12, height: 40 }}
+            className="glow-btn"
+          >
+            + 新建会话
+          </Button>
 
-      <Row gutter={[24, 24]}>
-        {agents.map((agent) => (
-          <Col xs={24} md={12} lg={8} key={agent.id}>
-            <Card
-              bordered={false}
-              className="glass-card"
-              title={agent.name}
-              extra={
-                <Tag color={agent.isEnabled ? 'green' : 'red'}>
-                  {agent.isEnabled ? '已启用' : '已禁用'}
-                </Tag>
-              }
-              actions={[
-                <Button
-                  type="link"
-                  icon={<ConsoleSqlOutlined />}
-                  onClick={() => openTerminal(agent)}
-                  disabled={!agent.isEnabled}
-                >
-                  终端控制台
-                </Button>,
-              ]}
-            >
-              <Paragraph style={{ color: 'rgba(255,255,255,0.65)' }}>
-                <b>关联模板</b>: {agent.templateName || '通用助手'}<br />
-                <b>沙箱子目录</b>: <code>/ {agent.workingDirectory.split('user/')[1]?.split('/').slice(1).join('/') || '(根目录)'}</code><br />
-                <b>所用模型</b>: {agent.allowedModels}<br />
-                <b>最大轮次</b>: {agent.maxTurns || 30}
-              </Paragraph>
-            </Card>
-          </Col>
-        ))}
-        {agents.length === 0 && !loading && (
-          <div style={{ width: '100%', padding: '48px 0', textAlign: 'center', color: 'rgba(255,255,255,0.25)' }}>
-            没有找到任何 Agents，点击右上方「创建 Agent」开始创建。
-          </div>
-        )}
-      </Row>
-
-      <Modal
-        title="创建新 Agent"
-        open={createVisible}
-        onCancel={() => setCreateVisible(false)}
-        footer={null}
-        destroyOnClose
-      >
-        <Form form={form} layout="vertical" onFinish={handleCreateAgent} style={{ marginTop: 16 }}>
-          <Form.Item
-            name="name"
-            label="Agent 名称"
-            rules={[{ required: true, message: '请输入 Agent 名称' }]}
+          <Card
+            bordered={false}
+            className="glass-card"
+            style={{ flex: 1, overflowY: 'auto' }}
+            bodyStyle={{ padding: '12px 8px' }}
           >
-            <Input placeholder="例如: 前端修改助手" />
-          </Form.Item>
-          <Form.Item
-            name="templateId"
-            label="绑定系统角色模板"
-            rules={[{ required: true, message: '请选择角色模板' }]}
-          >
-            <Select placeholder="选择一个内置模板角色">
-              {templates.map((t) => (
-                <Select.Option key={t.id} value={t.id}>
-                  {t.name}
-                </Select.Option>
-              ))}
-            </Select>
-          </Form.Item>
-          <Form.Item
-            name="workingDirectory"
-            label="工作沙箱相对路径"
-            help="指定此 Agent 在您专属文件夹下的哪一个相对子目录中工作（留空代表用户根目录）"
-          >
-            <Input placeholder="例如: projects/web-app" />
-          </Form.Item>
-          <Form.Item
-            name="allowedModels"
-            label="模型选择"
-            initialValue="claude-3-7-sonnet-20250219"
-          >
-            <Select>
-              <Select.Option value="claude-3-7-sonnet-20250219">claude-3-7-sonnet-20250219</Select.Option>
-              <Select.Option value="claude-3-5-sonnet-20241022">claude-3-5-sonnet-20241022</Select.Option>
-            </Select>
-          </Form.Item>
-          <Form.Item
-            name="maxTurns"
-            label="允许执行最大轮次"
-            initialValue="30"
-          >
-            <Input type="number" />
-          </Form.Item>
-          <Form.Item style={{ textAlign: 'right', marginBottom: 0 }}>
-            <Space>
-              <Button onClick={() => setCreateVisible(false)}>取消</Button>
-              <Button type="primary" htmlType="submit" className="glow-btn">
-                确认创建
-              </Button>
-            </Space>
-          </Form.Item>
-        </Form>
-      </Modal>
-
-      <Drawer
-        title={selectedAgent ? `控制台终端: ${selectedAgent.name}` : '终端'}
-        placement="right"
-        width={960}
-        onClose={() => {
-          setTerminalOpen(false);
-          if (wsRef.current) wsRef.current.close();
-        }}
-        open={terminalOpen}
-        bodyStyle={{ display: 'flex', flexDirection: 'column', background: '#0b0c11', padding: '16px' }}
-      >
-        <Row style={{ flex: 1, minHeight: 0 }} gutter={16}>
-          <Col span={8} style={{ height: '100%', overflowY: 'auto', borderRight: '1px solid rgba(255,255,255,0.06)' }}>
-            <div style={{ color: 'rgba(255,255,255,0.45)', marginBottom: 8, fontWeight: 600 }}>指令执行历史</div>
-            <List
-              dataSource={tasks}
-              renderItem={(item) => (
-                <List.Item
-                  onClick={() => selectTask(item)}
-                  style={{
-                    cursor: 'pointer',
-                    padding: '10px',
-                    borderRadius: '6px',
-                    border: 'none',
-                    marginBottom: '8px',
-                    background: activeTask?.id === item.id ? 'rgba(255,255,255,0.05)' : 'transparent',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'flex-start',
-                  }}
-                >
-                  <div style={{ width: '100%', display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                    <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.25)' }}>
-                      {new Date(item.createdAt).toLocaleTimeString()}
-                    </span>
-                    {getStatusTag(item.status)}
-                  </div>
-                  <div style={{ color: '#d9d9d9', fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', width: '100%' }}>
-                    {item.prompt}
-                  </div>
-                  {item.status === 'Running' && (
-                    <Button
-                      size="small"
-                      danger
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {sessions.map((sess) => {
+                const isRunning = sess.tasks.some(t => t.status === 'Running');
+                return (
+                  <div
+                    key={sess.sessionId}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '12px',
+                      borderRadius: 8,
+                      background: activeSession?.sessionId === sess.sessionId ? 'rgba(168, 85, 247, 0.1)' : 'transparent',
+                      border: activeSession?.sessionId === sess.sessionId ? '1px solid rgba(168, 85, 247, 0.2)' : '1px solid transparent',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s',
+                    }}
+                    onClick={() => selectSession(sess)}
+                  >
+                    <Space size={8} style={{ overflow: 'hidden', flex: 1 }}>
+                      <MessageOutlined style={{ color: isRunning ? '#10b981' : '#a855f7' }} />
+                      <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        <span style={{ color: '#fff', fontSize: 13, fontWeight: 500 }}>
+                          {sess.title}
+                        </span>
+                        {isRunning && (
+                          <span style={{ marginLeft: 6, color: '#10b981', fontSize: 10 }}>
+                            <LoadingOutlined />
+                          </span>
+                        )}
+                      </div>
+                    </Space>
+                    
+                    <DeleteOutlined
+                      style={{ color: 'rgba(255,255,255,0.25)', padding: 4 }}
                       onClick={(e) => {
                         e.stopPropagation();
-                        handleCancelTask(item.id);
+                        handleDeleteSession(sess);
                       }}
-                      style={{ marginTop: 8, fontSize: 11 }}
-                    >
-                      强制停止
-                    </Button>
-                  )}
-                </List.Item>
+                      onMouseEnter={(e) => (e.currentTarget.style.color = '#ff4d4f')}
+                      onMouseLeave={(e) => (e.currentTarget.style.color = 'rgba(255,255,255,0.25)')}
+                    />
+                  </div>
+                );
+              })}
+              {sessions.length === 0 && (
+                <div style={{ textAlign: 'center', padding: 32, color: 'rgba(255,255,255,0.25)', fontSize: 12 }}>
+                  无历史会话记录，点击上方开启新聊天
+                </div>
               )}
-            />
-          </Col>
+            </div>
+          </Card>
+        </Col>
 
-          <Col span={16} style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-              <span style={{ color: 'rgba(255,255,255,0.45)', fontWeight: 600 }}>流式执行控制台</span>
-              {activeTask?.status === 'Running' && (
-                <span style={{ color: '#1890ff', fontSize: 13 }}><LoadingOutlined /> Claude 正在实时处理中...</span>
+        <Col span={18} style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+          <Card
+            bordered={false}
+            className="glass-card"
+            style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
+            bodyStyle={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '16px', overflow: 'hidden' }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.06)', paddingBottom: 12, marginBottom: 12 }}>
+              <Space>
+                <Title
+                  level={4}
+                  style={{ margin: 0, fontWeight: 600, color: '#fff' }}
+                  editable={activeSession && !activeSession.sessionId.startsWith('temp_') ? {
+                    onChange: (val) => handleRenameSession(activeSession.sessionId, val),
+                    triggerType: ['icon', 'text'],
+                    tooltip: '点击修改会话标题',
+                  } : false}
+                >
+                  {activeSession ? activeSession.title : '全新开发会话'}
+                </Title>
+                {activeSession && (
+                  <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.25)' }}>
+                    ID: {activeSession.sessionId.substring(0, 8)}...
+                  </span>
+                )}
+              </Space>
+            </div>
+
+            <div style={{ flex: 1, overflowY: 'auto', paddingRight: 8, marginBottom: 16 }}>
+              {activeSession ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+                  {activeSession.tasks.map((task) => {
+                    const isTaskRunning = task.status === 'Running';
+                    const hasResult = !!task.finalResult;
+                    const isExpanded = !!expandedLogs[task.id];
+                    
+                    return (
+                      <div key={task.id} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                          <div style={{ display: 'flex', gap: 10, maxWidth: '75%' }}>
+                            <Card
+                              bodyStyle={{ padding: '10px 14px' }}
+                              style={{
+                                background: 'linear-gradient(135deg, rgba(168, 85, 247, 0.15) 0%, rgba(99, 102, 241, 0.15) 100%)',
+                                border: '1px solid rgba(168, 85, 247, 0.2)',
+                                borderRadius: '12px 0 12px 12px',
+                              }}
+                            >
+                              <div style={{ color: '#fff', fontSize: 13, whiteSpace: 'pre-wrap' }}>
+                                {task.prompt}
+                              </div>
+                              <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)', textAlign: 'right', marginTop: 4 }}>
+                                {new Date(task.createdAt).toLocaleTimeString()}
+                              </div>
+                            </Card>
+                            <Avatar icon={<UserOutlined />} style={{ backgroundColor: '#a855f7' }} />
+                          </div>
+                        </div>
+
+                        <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
+                          <div style={{ display: 'flex', gap: 10, width: '90%', maxWidth: '90%' }}>
+                            <Avatar icon={<RobotOutlined />} style={{ backgroundColor: '#00a2ae' }} />
+                            <div style={{ flex: 1 }}>
+                              <Card
+                                bodyStyle={{ padding: '12px 16px' }}
+                                style={{
+                                  background: 'rgba(255,255,255,0.02)',
+                                  border: '1px solid rgba(255,255,255,0.06)',
+                                  borderRadius: '0 12px 12px 12px',
+                                }}
+                              >
+                                {hasResult && (
+                                  <div style={{ color: '#d9d9d9', fontSize: 13, lineHeight: '1.6', whiteSpace: 'pre-wrap' }}>
+                                    {task.finalResult}
+                                  </div>
+                                )}
+
+                                {isTaskRunning && (
+                                  <div>
+                                    <div style={{ color: '#10b981', fontSize: 13, marginBottom: 8 }}>
+                                      <LoadingOutlined style={{ marginRight: 6 }} /> Claude 正在实时处理执行中...
+                                    </div>
+                                    <div
+                                      style={{
+                                        background: '#040508',
+                                        borderRadius: '8px',
+                                        padding: '12px',
+                                        fontFamily: 'Consolas, monospace',
+                                        fontSize: 12,
+                                        color: '#33ff33',
+                                        maxHeight: 280,
+                                        overflowY: 'auto',
+                                        whiteSpace: 'pre-wrap',
+                                      }}
+                                    >
+                                      {runningTaskOutput || '正在初始化进程并开启流日志通道...'}
+                                      <div ref={logEndRef} />
+                                    </div>
+                                  </div>
+                                )}
+
+                                {!hasResult && !isTaskRunning && (
+                                  <div style={{ color: 'rgba(255,255,255,0.45)', fontSize: 13 }}>
+                                    任务退出状态: <Tag color={task.status === 'Completed' ? 'green' : 'red'}>{task.status}</Tag>
+                                  </div>
+                                )}
+
+                                {!isTaskRunning && (
+                                  <div style={{ marginTop: 12, borderTop: '1px solid rgba(255,255,255,0.04)', paddingTop: 8 }}>
+                                    <Button
+                                      type="link"
+                                      size="small"
+                                      icon={isExpanded ? <UpOutlined /> : <DownOutlined />}
+                                      onClick={() => toggleLog(task.id)}
+                                      style={{ padding: 0, fontSize: 12, color: 'rgba(255,255,255,0.35)' }}
+                                    >
+                                      {isExpanded ? '折叠底层构建日志' : '查看完整开发日志'}
+                                    </Button>
+                                    
+                                    {isExpanded && (
+                                      <pre
+                                        style={{
+                                          marginTop: 8,
+                                          background: '#040508',
+                                          borderRadius: '6px',
+                                          padding: '10px',
+                                          fontFamily: 'Consolas, monospace',
+                                          fontSize: 11,
+                                          color: '#87d068',
+                                          maxHeight: 320,
+                                          overflowY: 'auto',
+                                          whiteSpace: 'pre-wrap',
+                                          border: '1px solid rgba(255,255,255,0.05)',
+                                        }}
+                                      >
+                                        {(window as any)[`log_${task.id}`] || '正在加载日志内容...'}
+                                      </pre>
+                                    )}
+                                  </div>
+                                )}
+                              </Card>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  <div ref={chatEndRef} />
+                </div>
+              ) : (
+                <div style={{ height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', color: 'rgba(255,255,255,0.25)' }}>
+                  <MessageOutlined style={{ fontSize: 48, marginBottom: 16, color: '#a855f7' }} />
+                  <span style={{ fontSize: 16, fontWeight: 500 }}>欢迎使用 Claude 协作聊天室</span>
+                  <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.45)', marginTop: 8 }}>
+                    在下方输入您希望执行的开发指令即可自动开启新会话。
+                  </span>
+                </div>
               )}
             </div>
 
-            <div
-              style={{
-                flex: 1,
-                background: '#040508',
-                border: '1px solid rgba(255,255,255,0.08)',
-                borderRadius: '8px',
-                padding: '12px',
-                fontFamily: 'Consolas, monospace',
-                fontSize: 12,
-                color: '#33ff33',
-                overflowY: 'auto',
-                whiteSpace: 'pre-wrap',
-                marginBottom: '16px',
-              }}
-            >
-              {taskOutput}
-              <div ref={outputEndRef} />
-            </div>
-
-            <div style={{ background: 'rgba(255,255,255,0.02)', padding: '12px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
+            <div style={{ background: 'rgba(255,255,255,0.02)', padding: '12px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.05)' }}>
               <div style={{ display: 'flex', gap: 12, marginBottom: 8, alignItems: 'center' }}>
-                <span style={{ color: 'rgba(255, 255, 255, 0.45)', fontSize: 13 }}>选择模型:</span>
+                <span style={{ color: 'rgba(255, 255, 255, 0.45)', fontSize: 13 }}>模型:</span>
                 <Select
                   value={activeModel}
                   onChange={(val) => setActiveModel(val)}
-                  style={{ width: 200 }}
+                  style={{ width: 220 }}
                   size="small"
                 >
-                  <Select.Option value="claude-3-7-sonnet-20250219">claude-3-7-sonnet-20250219</Select.Option>
-                  <Select.Option value="claude-3-5-sonnet-20241022">claude-3-5-sonnet-20241022</Select.Option>
+                  {models.map((m) => (
+                    <Select.Option key={m} value={m}>{m}</Select.Option>
+                  ))}
                 </Select>
-
-                <span style={{ color: 'rgba(255, 255, 255, 0.45)', fontSize: 13, marginLeft: 8 }}>会话控制:</span>
-                <Select
-                  value={sessionOption}
-                  onChange={(val) => setSessionOption(val)}
-                  style={{ width: 160 }}
-                  size="small"
-                >
-                  <Select.Option value="resume">沿用最近会话</Select.Option>
-                  <Select.Option value="new">开启新会话</Select.Option>
-                  {activeTask?.claudeSessionId && (
-                    <Select.Option value="resume-selected">继续选中的会话</Select.Option>
-                  )}
-                </Select>
+                
+                <span style={{ display: 'inline-flex', alignItems: 'center', marginLeft: 16 }}>
+                  <Switch checked={planMode} onChange={(val) => setPlanMode(val)} size="small" />
+                  <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: 13, marginLeft: 6 }}>
+                    分析模式 (仅分析，不修改文件)
+                  </span>
+                </span>
               </div>
+
+              {uploadedFiles.length > 0 && (
+                <div style={{ marginBottom: 8, display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
+                  <span style={{ color: 'rgba(255, 255, 255, 0.45)', fontSize: 12 }}>已上传文件:</span>
+                  {uploadedFiles.map((file, idx) => (
+                    <Tag
+                      key={idx}
+                      closable
+                      onClose={() => setUploadedFiles(prev => prev.filter((_, i) => i !== idx))}
+                      color="purple"
+                      style={{ fontSize: 11 }}
+                    >
+                      {file.name} (保存在 .temp/)
+                    </Tag>
+                  ))}
+                </div>
+              )}
 
               <TextArea
                 rows={3}
-                placeholder="在此输入您想要让 Claude 帮您执行的自然语言任务，例如：创建一个 index.html 并写一个炫酷的时钟..."
+                placeholder={activeSession ? "继续在此会话中发送问题或开发指令... (按 Ctrl+Enter 发送)" : "描述您想让 Claude 执行的开发指令... (按 Ctrl+Enter 发送)"}
                 value={taskPrompt}
                 onChange={(e) => setTaskPrompt(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.ctrlKey && e.key === 'Enter') {
+                    e.preventDefault();
+                    if (!isStartingTask && taskPrompt.trim() && implicitAgentId) {
+                      handleSendPrompt();
+                    }
+                  }
+                }}
                 style={{ background: '#090a0f', color: '#fff', border: '1px solid rgba(255,255,255,0.1)', marginBottom: 8 }}
+                disabled={isStartingTask}
               />
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Space>
-                  <Switch checked={planMode} onChange={(val) => setPlanMode(val)} />
-                  <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: 13 }}>分析模式 (仅做方案不做文件修改)</span>
-                </Space>
+                <Upload
+                  beforeUpload={handleUpload}
+                  showUploadList={false}
+                >
+                  <Button
+                    icon={<PaperClipOutlined />}
+                    disabled={isStartingTask || !implicitAgentId}
+                    style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.15)', color: 'rgba(255,255,255,0.65)' }}
+                  >
+                    上传文件
+                  </Button>
+                </Upload>
                 <Button
                   type="primary"
                   icon={<PlayCircleOutlined />}
-                  onClick={handleStartTask}
+                  onClick={handleSendPrompt}
                   loading={isStartingTask}
                   className="glow-btn"
-                  disabled={!taskPrompt.trim()}
+                  disabled={!taskPrompt.trim() || !implicitAgentId}
                 >
                   发送指令
                 </Button>
               </div>
             </div>
-          </Col>
-        </Row>
-      </Drawer>
+          </Card>
+        </Col>
+      </Row>
     </div>
   );
 }

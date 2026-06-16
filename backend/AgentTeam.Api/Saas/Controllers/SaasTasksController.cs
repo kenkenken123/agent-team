@@ -41,14 +41,27 @@ public class SaasTasksController(
 
             var total = await query.CountAsync();
 
+            var tempDir = SaasPathHelper.ResolveSafe(userId, ".temp");
+            Dictionary<string, string> titles = new();
+            var titlesFile = Path.Combine(tempDir, "session_titles.json");
+            if (System.IO.File.Exists(titlesFile))
+            {
+                try
+                {
+                    var content = await System.IO.File.ReadAllTextAsync(titlesFile);
+                    titles = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(content) ?? new();
+                }
+                catch {}
+            }
+
             var tasks = await query
                 .OrderByDescending(t => t.CreatedAt)
                 .Skip(skip)
                 .Take(take)
-                .Select(t => ToDto(t))
                 .ToListAsync();
 
-            return Ok(new { items = tasks, total });
+            var taskDtos = tasks.Select(t => ToDto(t, titles)).ToList();
+            return Ok(new { items = taskDtos, total });
         }
         catch (Exception ex)
         {
@@ -64,7 +77,21 @@ public class SaasTasksController(
             var userId = GetUserId();
             var task = await db.Tasks.Include(t => t.Agent).FirstOrDefaultAsync(t => t.Id == id && t.Agent.SaasUserId == userId);
             if (task == null) return NotFound();
-            return Ok(ToDto(task));
+
+            var tempDir = SaasPathHelper.ResolveSafe(userId, ".temp");
+            Dictionary<string, string> titles = new();
+            var titlesFile = Path.Combine(tempDir, "session_titles.json");
+            if (System.IO.File.Exists(titlesFile))
+            {
+                try
+                {
+                    var content = await System.IO.File.ReadAllTextAsync(titlesFile);
+                    titles = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(content) ?? new();
+                }
+                catch {}
+            }
+
+            return Ok(ToDto(task, titles));
         }
         catch (Exception ex)
         {
@@ -258,30 +285,78 @@ public class SaasTasksController(
         return userId;
     }
 
-    private static TaskDto ToDto(AgentTask t) => new(
-        t.Id,
-        t.AgentId,
-        t.Agent?.Name ?? "",
-        t.WorkingDirectory,
-        t.Prompt,
-        t.Status.ToString(),
-        t.ClaudeSessionId,
-        t.TerminalType,
-        t.TokensUsed,
-        t.InputTokens,
-        t.OutputTokens,
-        t.CacheReadTokens,
-        t.CacheCreationTokens,
-        t.RequestCount,
-        t.Model,
-        t.IsPlanMode,
-        t.FinalResult,
-        t.ButlerSummary,
-        t.OptimizedPrompt,
-        t.StartedAt,
-        t.CompletedAt,
-        t.ExitCode,
-        t.CreatedAt,
-        t.MarkedForDeletionAt
-    );
+    [HttpPut("session/{sessionId}/title")]
+    public async Task<IActionResult> UpdateSessionTitle(string sessionId, [FromBody] UpdateSessionTitleRequest req)
+    {
+        try
+        {
+            var userId = GetUserId();
+            if (string.IsNullOrEmpty(sessionId)) return BadRequest(new { error = "会话 ID 不能为空" });
+            if (string.IsNullOrEmpty(req.Title)) return BadRequest(new { error = "标题不能为空" });
+
+            var tempDir = SaasPathHelper.ResolveSafe(userId, ".temp");
+            if (!Directory.Exists(tempDir))
+            {
+                Directory.CreateDirectory(tempDir);
+            }
+
+            var filePath = Path.Combine(tempDir, "session_titles.json");
+            Dictionary<string, string> titles = new();
+            if (System.IO.File.Exists(filePath))
+            {
+                try
+                {
+                    var content = await System.IO.File.ReadAllTextAsync(filePath);
+                    titles = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(content) ?? new();
+                }
+                catch {}
+            }
+
+            titles[sessionId] = req.Title;
+            var json = System.Text.Json.JsonSerializer.Serialize(titles, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+            await System.IO.File.WriteAllTextAsync(filePath, json);
+
+            return Ok(new { message = "标题修改成功", sessionId, title = req.Title });
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
+    private static TaskDto ToDto(AgentTask t, Dictionary<string, string>? titles = null)
+    {
+        string? sessionTitle = null;
+        if (t.ClaudeSessionId != null && titles != null)
+        {
+            titles.TryGetValue(t.ClaudeSessionId, out sessionTitle);
+        }
+        return new(
+            t.Id,
+            t.AgentId,
+            t.Agent?.Name ?? "",
+            t.WorkingDirectory,
+            t.Prompt,
+            t.Status.ToString(),
+            t.ClaudeSessionId,
+            t.TerminalType,
+            t.TokensUsed,
+            t.InputTokens,
+            t.OutputTokens,
+            t.CacheReadTokens,
+            t.CacheCreationTokens,
+            t.RequestCount,
+            t.Model,
+            t.IsPlanMode,
+            t.FinalResult,
+            t.ButlerSummary,
+            t.OptimizedPrompt,
+            t.StartedAt,
+            t.CompletedAt,
+            t.ExitCode,
+            t.CreatedAt,
+            t.MarkedForDeletionAt,
+            sessionTitle
+        );
+    }
 }

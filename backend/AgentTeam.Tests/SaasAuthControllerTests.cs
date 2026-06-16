@@ -1,3 +1,5 @@
+using AgentTeam.Api.Data;
+using AgentTeam.Api.Models;
 using AgentTeam.Api.Saas;
 using AgentTeam.Api.Saas.Controllers;
 using AgentTeam.Api.Saas.DTOs;
@@ -16,6 +18,7 @@ namespace AgentTeam.Tests;
 public class SaasAuthControllerTests : IDisposable
 {
     private readonly AgentSaasContext _db;
+    private readonly AppDbContext _appDb;
     private readonly JwtService _jwtService;
     private readonly SaasAuthController _controller;
     private readonly List<Guid> _createdUserIds = [];
@@ -26,6 +29,21 @@ public class SaasAuthControllerTests : IDisposable
             .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
             .Options;
         _db = new AgentSaasContext(options);
+
+        var appDbOptions = new DbContextOptionsBuilder<AppDbContext>()
+            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
+            .Options;
+        _appDb = new AppDbContext(appDbOptions);
+
+        // 播种默认 Agent 模板
+        _appDb.AgentTemplates.Add(new AgentTemplate
+        {
+            Id = Guid.NewGuid(),
+            Name = "测试模板",
+            SystemPrompt = "System Prompt",
+            IsEnabled = true
+        });
+        _appDb.SaveChanges();
 
         var inMemorySettings = new Dictionary<string, string?>
         {
@@ -38,7 +56,7 @@ public class SaasAuthControllerTests : IDisposable
             .Build();
         _jwtService = new JwtService(configuration);
 
-        _controller = new SaasAuthController(_db, _jwtService);
+        _controller = new SaasAuthController(_db, _jwtService, _appDb);
     }
 
     [Fact]
@@ -116,6 +134,7 @@ public class SaasAuthControllerTests : IDisposable
     public void Dispose()
     {
         _db.Dispose();
+        _appDb.Dispose();
 
         foreach (var userId in _createdUserIds)
         {

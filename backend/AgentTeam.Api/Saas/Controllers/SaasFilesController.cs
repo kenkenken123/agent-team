@@ -6,6 +6,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Http;
 
 namespace AgentTeam.Api.Saas.Controllers;
 
@@ -193,6 +194,42 @@ public class SaasFilesController : ControllerBase
             }
 
             return Ok(new { success = true });
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
+    [HttpPost("upload")]
+    public async Task<IActionResult> Upload(IFormFile file)
+    {
+        try
+        {
+            var userId = GetUserId();
+            if (file == null || file.Length == 0)
+            {
+                return BadRequest(new { error = "没有选择文件或文件为空" });
+            }
+
+            var tempDir = SaasPathHelper.ResolveSafe(userId, ".temp");
+            if (!Directory.Exists(tempDir))
+            {
+                Directory.CreateDirectory(tempDir);
+            }
+
+            var fileName = Path.GetFileName(file.FileName);
+            var safePath = Path.Combine(tempDir, fileName);
+
+            using (var stream = new FileStream(safePath, FileMode.Create))
+            {
+                await file.CopyToAsync(stream);
+            }
+
+            var userRoot = SaasPathHelper.GetUserRoot(userId);
+            var relativePath = GetRelativePath(userRoot, safePath);
+
+            return Ok(new { success = true, relativePath, fileName });
         }
         catch (Exception ex)
         {
