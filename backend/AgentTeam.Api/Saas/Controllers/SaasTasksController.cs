@@ -1,0 +1,287 @@
+using AgentTeam.Api.Data;
+using AgentTeam.Api.DTOs;
+using AgentTeam.Api.Models;
+using AgentTeam.Api.Services;
+using AgentTeam.Api.Saas.Services;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+
+namespace AgentTeam.Api.Saas.Controllers;
+
+[Authorize]
+[ApiController]
+[Route("api/saas/tasks")]
+public class SaasTasksController(
+    AppDbContext db,
+    ClaudeCodeService claudeService,
+    OutputFileService outputFileService,
+    MessageRouterService router) : ControllerBase
+{
+    [HttpGet]
+    public async Task<IActionResult> GetAll([FromQuery] Guid? agentId, [FromQuery] string? status, [FromQuery] string? sessionId, [FromQuery] int skip = 0, [FromQuery] int take = 5)
+    {
+        try
+        {
+            var userId = GetUserId();
+            var query = db.Tasks.Include(t => t.Agent).Where(t => t.Agent.SaasUserId == userId);
+
+            if (agentId.HasValue)
+                query = query.Where(t => t.AgentId == agentId.Value);
+
+            if (!string.IsNullOrEmpty(status) && Enum.TryParse<AgentTeam.Api.Models.TaskStatus>(status, true, out var s))
+                query = query.Where(t => t.Status == s);
+
+            if (!string.IsNullOrEmpty(sessionId))
+                query = query.Where(t => t.ClaudeSessionId != null && t.ClaudeSessionId.Contains(sessionId));
+
+            var total = await query.CountAsync();
+
+            var tasks = await query
+                .OrderByDescending(t => t.CreatedAt)
+                .Skip(skip)
+                .Take(take)
+                .Select(t => ToDto(t))
+                .ToListAsync();
+
+            return Ok(new { items = tasks, total });
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
+    [HttpGet("{id:guid}")]
+    public async Task<IActionResult> GetById(Guid id)
+    {
+        try
+        {
+            var userId = GetUserId();
+            var task = await db.Tasks.Include(t => t.Agent).FirstOrDefaultAsync(t => t.Id == id && t.Agent.SaasUserId == userId);
+            if (task == null) return NotFound();
+            return Ok(ToDto(task));
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> Create([FromBody] CreateTaskRequest req)
+    {
+        try
+        {
+            var userId = GetUserId();
+            var prompt = req.Prompt;
+            var agentId = req.AgentId;
+
+            if (!agentId.HasValue) return BadRequest(new { error = "未选择 Agent" });
+
+            var agent = await db.Agents.Include(a => a.Template).FirstOrDefaultAsync(a => a.Id == agentId.Value && a.SaasUserId == userId);
+            if (agent == null) return BadRequest(new { error = "Agent 不存在或无权访问" });
+            if (!agent.IsEnabled) return BadRequest(new { error = "Agent 已被禁用" });
+
+            var relativePath = req.WorkingDirectory ?? "";
+            var safePhysicalPath = SaasPathHelper.ResolveSafe(userId, relativePath);
+
+            if (req.OptimizePrompt)
+            {
+                prompt = await router.OptimizePromptAsync(prompt, agentId);
+            }
+
+            if (req.PlanMode)
+            {
+                prompt += "\n\n注意: 当前处于分析模式。请分析并给出执行步骤，禁止执行任何文件写入或系统修改操作。";
+            }
+
+            string? sessionId = null;
+            if (!req.ForceNewSession)
+            {
+                sessionId = req.ResumeSessionId;
+                if (sessionId == null)
+                {
+                    var lastTask = await db.Tasks
+                        .Where(t => t.AgentId == agentId.Value && t.ClaudeSessionId != null)
+                        .OrderByDescending(t => t.CreatedAt)
+                        .FirstOrDefaultAsync();
+                    sessionId = lastTask?.ClaudeSessionId;
+                }
+            }
+
+            var task = new AgentTask
+            {
+                AgentId = agentId.Value,
+                Agent = agent,
+                Prompt = req.Prompt,
+                OptimizedPrompt = prompt != req.Prompt ? prompt : null,
+                ClaudeSessionId = sessionId,
+                TerminalType = req.TerminalType,
+                WorkingDirectory = safePhysicalPath,
+                Model = req.Model,
+                UsePlatformConfig = !string.IsNullOrEmpty(req.Model),
+                IsPlanMode = req.PlanMode
+            };
+
+            agent.LastUsedAt = DateTime.UtcNow;
+            db.Tasks.Add(task);
+            await db.SaveChangesAsync();
+
+            _ = claudeService.StartTaskAsync(task, agent);
+
+            return CreatedAtAction(nameof(GetById), new { id = task.Id }, ToDto(task));
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
+    [HttpPost("{id:guid}/cancel")]
+    public async Task<IActionResult> Cancel(Guid id)
+    {
+        try
+        {
+            var userId = GetUserId();
+            var task = await db.Tasks.Include(t => t.Agent).FirstOrDefaultAsync(t => t.Id == id && t.Agent.SaasUserId == userId);
+            if (task == null) return NotFound();
+            if (task.Status != AgentTeam.Api.Models.TaskStatus.Running)
+                return BadRequest(new { error = "任务不在运行中" });
+
+            var success = await claudeService.CancelTaskAsync(id);
+            return success ? Ok(new { message = "任务已取消" }) : StatusCode(500, new { error = "取消失败" });
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
+    [HttpDelete("{id:guid}")]
+    public async Task<IActionResult> Delete(Guid id)
+    {
+        try
+        {
+            var userId = GetUserId();
+            var task = await db.Tasks.Include(t => t.Agent).FirstOrDefaultAsync(t => t.Id == id && t.Agent.SaasUserId == userId);
+            if (task == null) return NotFound();
+
+            if (task.Status == AgentTeam.Api.Models.TaskStatus.Running)
+            {
+                await claudeService.CancelTaskAsync(id);
+                await Task.Delay(200);
+            }
+
+            outputFileService.Delete(id);
+            db.Tasks.Remove(task);
+            await db.SaveChangesAsync();
+
+            return Ok(new { message = "删除任务成功" });
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
+    [HttpDelete("session")]
+    public async Task<IActionResult> DeleteSession([FromQuery] string? sessionId, [FromQuery] Guid? taskId)
+    {
+        try
+        {
+            var userId = GetUserId();
+            if (string.IsNullOrEmpty(sessionId) && (!taskId.HasValue))
+                return BadRequest(new { error = "必须提供 sessionId 或 taskId" });
+
+            List<AgentTask> tasksToDelete;
+            if (!string.IsNullOrEmpty(sessionId))
+            {
+                tasksToDelete = await db.Tasks.Include(t => t.Agent)
+                    .Where(t => t.ClaudeSessionId == sessionId && t.Agent.SaasUserId == userId)
+                    .ToListAsync();
+            }
+            else
+            {
+                tasksToDelete = await db.Tasks.Include(t => t.Agent)
+                    .Where(t => t.Id == taskId && t.ClaudeSessionId == null && t.Agent.SaasUserId == userId)
+                    .ToListAsync();
+            }
+
+            foreach (var task in tasksToDelete)
+            {
+                if (task.Status == AgentTeam.Api.Models.TaskStatus.Running)
+                {
+                    await claudeService.CancelTaskAsync(task.Id);
+                }
+                outputFileService.Delete(task.Id);
+                db.Tasks.Remove(task);
+            }
+
+            await db.SaveChangesAsync();
+            return Ok(new { message = "会话已删除", count = tasksToDelete.Count });
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
+    [HttpGet("{id:guid}/output")]
+    public async Task<IActionResult> GetOutput(Guid id)
+    {
+        try
+        {
+            var userId = GetUserId();
+            var task = await db.Tasks.Include(t => t.Agent).FirstOrDefaultAsync(t => t.Id == id && t.Agent.SaasUserId == userId);
+            if (task == null) return NotFound();
+            var content = await outputFileService.ReadAsync(id);
+            return Ok(new { content });
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
+    private Guid GetUserId()
+    {
+        var nameIdentifier = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        if (string.IsNullOrEmpty(nameIdentifier) || !Guid.TryParse(nameIdentifier, out var userId))
+        {
+            throw new UnauthorizedAccessException("未登录或 Token 无效。");
+        }
+        return userId;
+    }
+
+    private static TaskDto ToDto(AgentTask t) => new(
+        t.Id,
+        t.AgentId,
+        t.Agent?.Name ?? "",
+        t.WorkingDirectory,
+        t.Prompt,
+        t.Status.ToString(),
+        t.ClaudeSessionId,
+        t.TerminalType,
+        t.TokensUsed,
+        t.InputTokens,
+        t.OutputTokens,
+        t.CacheReadTokens,
+        t.CacheCreationTokens,
+        t.RequestCount,
+        t.Model,
+        t.IsPlanMode,
+        t.FinalResult,
+        t.ButlerSummary,
+        t.OptimizedPrompt,
+        t.StartedAt,
+        t.CompletedAt,
+        t.ExitCode,
+        t.CreatedAt,
+        t.MarkedForDeletionAt
+    );
+}

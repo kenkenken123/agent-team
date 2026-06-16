@@ -19,5 +19,7 @@ public class Agent
     public Guid? GroupId { get; set; }
     public AgentGroup? Group { get; set; }
 
+    public Guid? SaasUserId { get; set; }
+    
     public ICollection<AgentTask> Tasks { get; set; } = [];
 }

@@ -72,6 +72,7 @@ export interface CreateAgentRequest {
   allowedModels: string;
   maxTurns?: number;
   groupId?: string;
+  createDirectoryIfMissing?: boolean;
 }
 
 export interface UpdateAgentRequest extends CreateAgentRequest {
@@ -108,6 +109,7 @@ export interface AgentTask {
   outputTokens?: number;
   cacheReadTokens?: number;
   cacheCreationTokens?: number;
+  requestCount?: number;
   model?: string;
   isPlanMode?: boolean;
   finalResult?: string;
@@ -144,6 +146,7 @@ export interface AgentUsage {
   cacheReadTokens: number;
   cacheCreationTokens: number;
   totalTokens: number;
+  requestCount: number;
 }
 
 export interface OverviewStats {
@@ -154,6 +157,7 @@ export interface OverviewStats {
   periodOutputTokens: number;
   periodCacheReadTokens: number;
   periodCacheCreationTokens: number;
+  periodRequestCount: number;
 }
 
 // WebSocket 消息类型

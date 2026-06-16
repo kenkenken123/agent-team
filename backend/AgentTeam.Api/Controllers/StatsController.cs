@@ -29,11 +29,13 @@ public class StatsController(AppDbContext db) : ControllerBase
         var periodOutputTokens = periodStats.Sum(s => s.OutputTokens);
         var periodCacheReadTokens = periodStats.Sum(s => s.CacheReadTokens);
         var periodCacheCreationTokens = periodStats.Sum(s => s.CacheCreationTokens);
+        var periodRequestCount = periodStats.Sum(s => s.RequestCount);
 
         return Ok(new OverviewStats(
             totalAgents, runningTasks, periodTasks,
             periodInputTokens, periodOutputTokens,
-            periodCacheReadTokens, periodCacheCreationTokens));
+            periodCacheReadTokens, periodCacheCreationTokens,
+            periodRequestCount));
     }
 
     [HttpGet("agents")]
@@ -54,7 +56,8 @@ public class StatsController(AppDbContext db) : ControllerBase
                 InputTokens = g.Sum(s => s.InputTokens),
                 OutputTokens = g.Sum(s => s.OutputTokens),
                 CacheReadTokens = g.Sum(s => s.CacheReadTokens),
-                CacheCreationTokens = g.Sum(s => s.CacheCreationTokens)
+                CacheCreationTokens = g.Sum(s => s.CacheCreationTokens),
+                RequestCount = g.Sum(s => s.RequestCount)
             })
             .ToListAsync();
 
@@ -66,7 +69,8 @@ public class StatsController(AppDbContext db) : ControllerBase
             s.OutputTokens,
             s.CacheReadTokens,
             s.CacheCreationTokens,
-            s.InputTokens + s.OutputTokens + s.CacheReadTokens + s.CacheCreationTokens
+            s.InputTokens + s.OutputTokens + s.CacheReadTokens + s.CacheCreationTokens,
+            s.RequestCount
         ))
         .OrderByDescending(s => s.TotalTokens)
         .ToList();

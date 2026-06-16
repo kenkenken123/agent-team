@@ -221,6 +221,7 @@ public class TasksController(
         t.OutputTokens,
         t.CacheReadTokens,
         t.CacheCreationTokens,
+        t.RequestCount,
         t.Model,
         t.IsPlanMode,
         t.FinalResult,

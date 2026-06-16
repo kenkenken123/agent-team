@@ -17,6 +17,9 @@ public class TaskStats
     public int CacheCreationTokens { get; set; }
     public int TotalTokens => InputTokens + OutputTokens + CacheReadTokens + CacheCreationTokens;
 
+    /// <summary>API 请求次数</summary>
+    public int RequestCount { get; set; }
+
     /// <summary>任务创建时间（用于日期范围查询）</summary>
     public DateTime CreatedAt { get; set; }
 }

@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import {
   Table, Button, Tag, Drawer, Form, Input, InputNumber,
   Switch, Space, Popconfirm, message, Typography, Tooltip,
-  Select, Tabs, ColorPicker,
+  Select, Tabs, ColorPicker, Modal,
 } from 'antd';
 import {
   PlusOutlined, EditOutlined, DeleteOutlined,
@@ -127,6 +127,8 @@ const AgentsPage: React.FC = () => {
   const [editingTemplate, setEditingTemplate] = useState<AgentTemplate | null>(null);
 
   const [dirValid, setDirValid] = useState<boolean | null>(null);
+  const [showCreateDirConfirm, setShowCreateDirConfirm] = useState(false);
+  const [pendingCreateDir, setPendingCreateDir] = useState<string | null>(null);
 
   const [agentForm] = Form.useForm();
   const [groupForm] = Form.useForm();
@@ -304,22 +306,34 @@ const AgentsPage: React.FC = () => {
     loadAll();
   };
 
-  const handleSaveAgent = async () => {
+  const handleSaveAgent = async (createDirIfMissing = false) => {
     const values = await agentForm.validateFields();
-    const submitData = {
+    const submitData: CreateAgentRequest | UpdateAgentRequest = {
       ...values,
       allowedModels: Array.isArray(values.allowedModels) ? values.allowedModels.join(',') : values.allowedModels,
+      createDirectoryIfMissing,
     };
 
-    if (editingAgent) {
-      await agentApi.update(editingAgent.id, submitData as UpdateAgentRequest);
-      message.success('Agent 已更新');
-    } else {
-      await agentApi.create(submitData as CreateAgentRequest);
-      message.success('Agent 已创建');
+    try {
+      if (editingAgent) {
+        await agentApi.update(editingAgent.id, submitData as UpdateAgentRequest);
+        message.success('Agent 已更新');
+      } else {
+        await agentApi.create(submitData as CreateAgentRequest);
+        message.success('Agent 已创建');
+      }
+      setAgentDrawerOpen(false);
+      loadAll();
+    } catch (e: any) {
+      const errData = e.response?.data;
+      if (errData?.directoryMissing) {
+        setPendingCreateDir(values.workingDirectory);
+        setShowCreateDirConfirm(true);
+      } else {
+        const errorMsg = errData?.error || e.message || '保存失败';
+        message.error(errorMsg);
+      }
     }
-    setAgentDrawerOpen(false);
-    loadAll();
   };
 
   // -- Common Path Handlers --
@@ -348,6 +362,14 @@ const AgentsPage: React.FC = () => {
     const { exists } = await statsApi.validateDirectory(dir);
     setDirValid(exists);
     if (!exists) message.warning('目录不存在，请检查路径');
+  };
+
+  const handleCreateDirConfirm = async () => {
+    setShowCreateDirConfirm(false);
+    if (pendingCreateDir) {
+      await handleSaveAgent(true);
+      setPendingCreateDir(null);
+    }
   };
 
   const groupColumns: ColumnsType<AgentGroup> = [
@@ -727,6 +749,20 @@ const AgentsPage: React.FC = () => {
           </Form.Item>
         </Form>
       </Drawer>
+
+      {/* --- 目录不存在确认 Modal --- */}
+      <Modal
+        title="目录不存在"
+        open={showCreateDirConfirm}
+        onOk={handleCreateDirConfirm}
+        onCancel={() => { setShowCreateDirConfirm(false); setPendingCreateDir(null); }}
+        okText="创建目录"
+        cancelText="取消"
+        zIndex={1100}
+      >
+        <p>工作目录 <code style={{ color: '#D29922' }}>{pendingCreateDir}</code> 不存在。</p>
+        <p style={{ marginTop: 8 }}>是否自动创建该目录并继续保存 Agent？</p>
+      </Modal>
     </div>
   );
 };

@@ -122,6 +122,13 @@ const HistoryPage: React.FC = () => {
       render: (v) => <span style={{ color: '#D29922', fontFamily: 'JetBrains Mono, monospace', fontWeight: 500 }}>{v?.toLocaleString() ?? '0'}</span>,
     },
     {
+      title: '请求次数',
+      dataIndex: 'requestCount',
+      key: 'requestCount',
+      width: 100,
+      render: (v) => <span style={{ color: '#F78166', fontFamily: 'JetBrains Mono, monospace', fontWeight: 600 }}>{v?.toLocaleString() ?? '0'}</span>,
+    },
+    {
       title: '创建时间',
       dataIndex: 'createdAt',
       key: 'createdAt',

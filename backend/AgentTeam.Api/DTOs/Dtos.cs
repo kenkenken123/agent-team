@@ -78,7 +78,8 @@ public record CreateAgentRequest(
     string? WorkingDirectory,
     string AllowedModels,
     int? MaxTurns,
-    Guid? GroupId = null
+    Guid? GroupId = null,
+    bool CreateDirectoryIfMissing = false
 );
 
 public record UpdateAgentRequest(
@@ -88,7 +89,8 @@ public record UpdateAgentRequest(
     string AllowedModels,
     int? MaxTurns,
     bool IsEnabled,
-    Guid? GroupId = null
+    Guid? GroupId = null,
+    bool CreateDirectoryIfMissing = false
 );
 
 // ───── Common Path DTOs ─────
@@ -126,6 +128,7 @@ public record TaskDto(
     int? OutputTokens,
     int? CacheReadTokens,
     int? CacheCreationTokens,
+    int? RequestCount,
     string? Model,
     bool IsPlanMode,
     string? FinalResult,
@@ -176,11 +179,12 @@ public record CreateTaskRequest(
 public record OverviewStats(
     int TotalAgents,
     int RunningTasks,
-    int PeriodTasks, // 改名为 Period 以支持区间
+    int PeriodTasks,
     int PeriodInputTokens,
     int PeriodOutputTokens,
     int PeriodCacheReadTokens,
-    int PeriodCacheCreationTokens
+    int PeriodCacheCreationTokens,
+    int PeriodRequestCount
 );
 
 public record AgentUsageDto(
@@ -191,7 +195,8 @@ public record AgentUsageDto(
     int OutputTokens,
     int CacheReadTokens,
     int CacheCreationTokens,
-    int TotalTokens
+    int TotalTokens,
+    int RequestCount
 );
 
 // ───── File DTOs ─────

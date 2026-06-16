@@ -41,7 +41,23 @@ public class AgentsController(AppDbContext db) : ControllerBase
     public async Task<IActionResult> Create([FromBody] CreateAgentRequest req)
     {
         if (!string.IsNullOrEmpty(req.WorkingDirectory) && !Directory.Exists(req.WorkingDirectory))
-            return BadRequest(new { error = $"工作目录不存在: {req.WorkingDirectory}" });
+        {
+            if (req.CreateDirectoryIfMissing)
+            {
+                try
+                {
+                    Directory.CreateDirectory(req.WorkingDirectory);
+                }
+                catch (Exception ex)
+                {
+                    return BadRequest(new { error = $"创建目录失败: {req.WorkingDirectory} - {ex.Message}" });
+                }
+            }
+            else
+            {
+                return BadRequest(new { error = $"工作目录不存在: {req.WorkingDirectory}", directoryMissing = true });
+            }
+        }
 
         var template = await db.AgentTemplates.FindAsync(req.TemplateId);
         if (template == null) return BadRequest(new { error = $"未找到Template: {req.TemplateId}" });
@@ -68,7 +84,23 @@ public class AgentsController(AppDbContext db) : ControllerBase
         if (agent == null) return NotFound();
 
         if (!string.IsNullOrEmpty(req.WorkingDirectory) && !Directory.Exists(req.WorkingDirectory))
-            return BadRequest(new { error = $"工作目录不存在: {req.WorkingDirectory}" });
+        {
+            if (req.CreateDirectoryIfMissing)
+            {
+                try
+                {
+                    Directory.CreateDirectory(req.WorkingDirectory);
+                }
+                catch (Exception ex)
+                {
+                    return BadRequest(new { error = $"创建目录失败: {req.WorkingDirectory} - {ex.Message}" });
+                }
+            }
+            else
+            {
+                return BadRequest(new { error = $"工作目录不存在: {req.WorkingDirectory}", directoryMissing = true });
+            }
+        }
 
         var template = await db.AgentTemplates.FindAsync(req.TemplateId);
         if (template == null) return BadRequest(new { error = $"未找到Template: {req.TemplateId}" });

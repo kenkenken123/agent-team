@@ -52,6 +52,9 @@ namespace AgentTeam.Api.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid?>("SaasUserId")
+                        .HasColumnType("TEXT");
+
                     b.Property<Guid>("TemplateId")
                         .HasColumnType("TEXT");
 
@@ -161,6 +164,9 @@ namespace AgentTeam.Api.Migrations
                     b.Property<string>("Prompt")
                         .IsRequired()
                         .HasColumnType("TEXT");
+
+                    b.Property<int?>("RequestCount")
+                        .HasColumnType("INTEGER");
 
                     b.Property<DateTime?>("StartedAt")
                         .HasColumnType("TEXT");
@@ -439,6 +445,9 @@ namespace AgentTeam.Api.Migrations
                         .HasColumnType("INTEGER");
 
                     b.Property<int>("OutputTokens")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("RequestCount")
                         .HasColumnType("INTEGER");
 
                     b.Property<Guid>("TaskId")

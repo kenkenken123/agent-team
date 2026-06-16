@@ -47,6 +47,9 @@ public class AgentTask
     /// <summary>输入缓存创建 token（写入缓存，计费同普通 input）</summary>
     public int? CacheCreationTokens { get; set; }
 
+    /// <summary>API 请求次数（每次 usage 事件计为一次请求）</summary>
+    public int? RequestCount { get; set; }
+
     /// <summary>任务输出日志文件路径</summary>
     public string? OutputFilePath { get; set; }
 

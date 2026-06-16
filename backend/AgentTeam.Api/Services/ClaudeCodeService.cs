@@ -633,6 +633,7 @@ public class ClaudeCodeService(
             OutputTokens = task.OutputTokens ?? 0,
             CacheReadTokens = task.CacheReadTokens ?? 0,
             CacheCreationTokens = task.CacheCreationTokens ?? 0,
+            RequestCount = task.RequestCount ?? 0,
             CreatedAt = task.CreatedAt
         };
         db.TaskStats.Add(stats);
@@ -978,6 +979,7 @@ public class ClaudeCodeService(
                     t.OutputTokens = (t.OutputTokens ?? 0) + output;
                     t.CacheReadTokens = (t.CacheReadTokens ?? 0) + cacheRead;
                     t.CacheCreationTokens = (t.CacheCreationTokens ?? 0) + cacheCreation;
+                    t.RequestCount = (t.RequestCount ?? 0) + 1;
                     t.TokensUsed = t.InputTokens + t.OutputTokens + t.CacheReadTokens + t.CacheCreationTokens;
                     await db.SaveChangesAsync();
                 }

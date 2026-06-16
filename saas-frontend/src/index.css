@@ -1,0 +1,113 @@
+:root {
+  font-family: 'Outfit', 'Inter', system-ui, -apple-system, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+
+  color-scheme: dark;
+  color: rgba(255, 255, 255, 0.9);
+  background-color: #0c0d14;
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  margin: 0;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background: radial-gradient(circle at 10% 20%, #131524 0%, #08090f 90%);
+}
+
+#root {
+  width: 100vw;
+  height: 100vh;
+}
+
+.glass-card {
+  background: rgba(255, 255, 255, 0.02) !important;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.05) !important;
+  box-shadow: 0 12px 40px 0 rgba(0, 0, 0, 0.5) !important;
+  border-radius: 16px;
+}
+
+.gradient-text {
+  background: linear-gradient(135deg, #c084fc 0%, #6366f1 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.glow-btn {
+  background: linear-gradient(135deg, #a855f7 0%, #4f46e5 100%) !important;
+  border: none !important;
+  color: white !important;
+  box-shadow: 0 0 15px rgba(168, 85, 247, 0.3);
+  transition: all 0.3s ease;
+}
+
+.glow-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 0 25px rgba(168, 85, 247, 0.6);
+}
+
+.glow-btn-success {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
+  border: none !important;
+  color: white !important;
+  box-shadow: 0 0 15px rgba(16, 185, 129, 0.3);
+  transition: all 0.3s ease;
+}
+
+.glow-btn-success:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 0 25px rgba(16, 185, 129, 0.6);
+}
+
+/* 自定义暗色滚动条 */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.1);
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* 调整 antd 的布局全局背景颜色 */
+.ant-layout {
+  background: transparent !important;
+}
+.ant-layout-sider {
+  background: rgba(10, 11, 18, 0.6) !important;
+  border-right: 1px solid rgba(255, 255, 255, 0.04);
+}
+.ant-menu {
+  background: transparent !important;
+}
+.ant-layout-header {
+  background: rgba(10, 11, 18, 0.4) !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(10px);
+}
+
+/* XTerm.js 终端美化 */
+.terminal-container {
+  padding: 12px;
+  background-color: #090a0f;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+.xterm-viewport::-webkit-scrollbar {
+  width: 8px;
+}

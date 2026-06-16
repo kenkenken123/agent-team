@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { Spin, DatePicker, Space } from 'antd';
 import dayjs from 'dayjs';
-import { 
-  RobotOutlined, 
-  ThunderboltOutlined, 
-  CalendarOutlined, 
-  DeploymentUnitOutlined 
+import {
+  RobotOutlined,
+  ThunderboltOutlined,
+  CalendarOutlined,
+  DeploymentUnitOutlined,
+  ApiOutlined
 } from '@ant-design/icons';
 import { statsApi } from '../../api/statsApi';
 import type { OverviewStats } from '../../types';
@@ -110,6 +111,17 @@ const Dashboard: React.FC = () => {
                                 <span className="stat-unit">M tokens</span>
                             </div>
                         </div>
+
+                        <div className="stat-card">
+                            <div className="stat-header">
+                                <span className="stat-label">选定期间 API 请求次数</span>
+                                <ApiOutlined className="stat-icon" style={{ color: '#F78166' }} />
+                            </div>
+                            <div className="stat-value">
+                                {formatNum(stats?.periodRequestCount ?? 0)}
+                                <span className="stat-unit">次</span>
+                            </div>
+                        </div>
                     </div>
 
                     <div className="dashboard-detail-row">
@@ -147,7 +159,7 @@ const Dashboard: React.FC = () => {
                                         <div className="agent-usage-item" key={agent.agentId}>
                                             <div className="agent-info">
                                                 <div className="agent-name">{agent.agentName}</div>
-                                                <div className="agent-tasks">{agent.taskCount} 个任务</div>
+                                                <div className="agent-tasks">{agent.taskCount} 个任务 · {formatNum(agent.requestCount)} 次请求</div>
                                             </div>
                                             <div className="agent-tokens">
                                                 <div className="token-total">{formatMToken(agent.totalTokens)} M</div>

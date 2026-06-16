@@ -5,6 +5,10 @@ using AgentTeam.Api.Data;
 using AgentTeam.Api.Models;
 using AgentTeam.Api.Services;
 using AgentTeam.Api.WebSockets;
+using AgentTeam.Api.Saas;
+using AgentTeam.Api.Saas.Services;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
 using Microsoft.EntityFrameworkCore;
 
 AppDomain.CurrentDomain.UnhandledException += (s, e) =>
@@ -39,6 +43,37 @@ builder.Services.AddHttpClient();
 // SQLite
 builder.Services.AddDbContext<AppDbContext>(opts =>
     opts.UseSqlite($"Data Source={Path.Combine(builder.Environment.ContentRootPath, "data", "agent-team.db")}"));
+
+// SaaS SQLite
+builder.Services.AddDbContext<AgentSaasContext>(opts =>
+    opts.UseSqlite($"Data Source={Path.Combine(builder.Environment.ContentRootPath, "data", "agent-saas.db")}"));
+
+// SaaS Services
+builder.Services.AddSingleton<JwtService>();
+
+// JWT Authentication
+var secret = builder.Configuration["Jwt:Secret"] ?? "AntigravitySuperSecretSaaSKey2026!#$@";
+var issuer = builder.Configuration["Jwt:Issuer"] ?? "AgentTeamSaas";
+var audience = builder.Configuration["Jwt:Audience"] ?? "AgentTeamSaasUsers";
+
+builder.Services.AddAuthentication(opts =>
+{
+    opts.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+    opts.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+})
+.AddJwtBearer(opts =>
+{
+    opts.TokenValidationParameters = new TokenValidationParameters
+    {
+        ValidateIssuer = true,
+        ValidateAudience = true,
+        ValidateLifetime = true,
+        ValidateIssuerSigningKey = true,
+        ValidIssuer = issuer,
+        ValidAudience = audience,
+        IssuerSigningKey = new SymmetricSecurityKey(System.Text.Encoding.UTF8.GetBytes(secret))
+    };
+});
 
 // 核心服务 - 使用显式注入
 builder.Services.AddSingleton<OutputFileService>();
@@ -76,6 +111,9 @@ using (var scope = app.Services.CreateScope())
     Directory.CreateDirectory(Path.Combine(app.Environment.ContentRootPath, "data", "sessions"));
     dbCtx.Database.Migrate();
 
+    var saasDbCtx = scope.ServiceProvider.GetRequiredService<AgentSaasContext>();
+    saasDbCtx.Database.Migrate();
+
     // 清理上次非正常关闭导致卡住的任务
     var claudeServiceStartup = scope.ServiceProvider.GetRequiredService<ClaudeCodeService>();
     await claudeServiceStartup.CleanupStuckTasksAsync();
@@ -87,6 +125,8 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 
 app.UseCors();
+app.UseAuthentication();
+app.UseAuthorization();
 app.UseWebSockets(new WebSocketOptions { KeepAliveInterval = TimeSpan.FromSeconds(30) });
 
 var wsManager = app.Services.GetRequiredService<TaskWebSocketManager>();
