@@ -92,6 +92,7 @@ export default function Agents() {
   const logEndRef = useRef<HTMLDivElement | null>(null);
   const activeSessionRef = useRef<ChatSession | null>(null);
   const implicitAgentIdRef = useRef<string | null>(null);
+  const pollTimerRef = useRef<any>(null);
 
   useEffect(() => {
     activeSessionRef.current = activeSession;
@@ -178,6 +179,8 @@ export default function Agents() {
           const runningTask = updatedActive.tasks.find(t => t.status === 'Running' || t.status === 'Pending');
           if (runningTask) {
             connectWebSocket(runningTask.id);
+          } else {
+            stopStatusPolling();
           }
         }
       }
@@ -198,11 +201,33 @@ export default function Agents() {
     }
   };
 
+  const startStatusPolling = () => {
+    if (pollTimerRef.current) return;
+    pollTimerRef.current = setInterval(async () => {
+      if (implicitAgentIdRef.current) {
+        await loadSessions(implicitAgentIdRef.current);
+        const currentActive = activeSessionRef.current;
+        const hasRunning = currentActive?.tasks.some(t => t.status === 'Running' || t.status === 'Pending');
+        if (!hasRunning) {
+          stopStatusPolling();
+        }
+      }
+    }, 2500);
+  };
+
+  const stopStatusPolling = () => {
+    if (pollTimerRef.current) {
+      clearInterval(pollTimerRef.current);
+      pollTimerRef.current = null;
+    }
+  };
+
   useEffect(() => {
     init();
     loadDirectoryOptions();
     return () => {
       if (wsRef.current) wsRef.current.close();
+      stopStatusPolling();
     };
   }, []);
 
@@ -247,6 +272,7 @@ export default function Agents() {
     wsRef.current = ws;
 
     ws.onopen = () => {
+      stopStatusPolling();
       if (implicitAgentIdRef.current) loadSessions(implicitAgentIdRef.current);
     };
 
@@ -261,6 +287,22 @@ export default function Agents() {
           if (implicitAgentIdRef.current) loadSessions(implicitAgentIdRef.current);
         }
       } catch (e) {
+      }
+    };
+
+    ws.onclose = () => {
+      const currentActive = activeSessionRef.current;
+      const hasRunning = currentActive?.tasks.some(t => t.status === 'Running' || t.status === 'Pending');
+      if (hasRunning) {
+        startStatusPolling();
+      }
+    };
+
+    ws.onerror = () => {
+      const currentActive = activeSessionRef.current;
+      const hasRunning = currentActive?.tasks.some(t => t.status === 'Running' || t.status === 'Pending');
+      if (hasRunning) {
+        startStatusPolling();
       }
     };
   };

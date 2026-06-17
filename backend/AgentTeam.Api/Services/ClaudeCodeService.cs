@@ -4,6 +4,7 @@ using AgentTeam.Api.Data;
 using AgentTeam.Api.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using AgentTeam.Api.Saas.Services;
 
 namespace AgentTeam.Api.Services;
 
@@ -175,6 +176,43 @@ public class ClaudeCodeService(
             }
         }
 
+
+        // 加载并注入租户专属用户目录下的 .env 环境变量
+        if (agent.SaasUserId.HasValue)
+        {
+            try
+            {
+                var userRoot = SaasPathHelper.GetUserRoot(agent.SaasUserId.Value);
+                var envPath = Path.Combine(userRoot, ".env");
+                if (File.Exists(envPath))
+                {
+                    logger.LogInformation("[Task {TaskId}] 检测到用户专属目录下的 .env 环境变量文件，正在加载...", task.Id);
+                    var envLines = File.ReadAllLines(envPath);
+                    foreach (var line in envLines)
+                    {
+                        if (string.IsNullOrWhiteSpace(line)) continue;
+                        var trimmed = line.Trim();
+                        if (trimmed.StartsWith("#")) continue;
+                        var eqIdx = trimmed.IndexOf('=');
+                        if (eqIdx > 0)
+                        {
+                            var envKey = trimmed.Substring(0, eqIdx).Trim();
+                            var envVal = trimmed.Substring(eqIdx + 1).Trim();
+                            // 去除双引号或单引号包裹
+                            if ((envVal.StartsWith("\"") && envVal.EndsWith("\"")) || (envVal.StartsWith("'") && envVal.EndsWith("'")))
+                            {
+                                envVal = envVal.Substring(1, envVal.Length - 2);
+                            }
+                            process.StartInfo.Environment[envKey] = envVal;
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "[Task {TaskId}] 加载租户 .env 环境变量文件失败", task.Id);
+            }
+        }
 
         try
         {
