@@ -139,7 +139,8 @@ public record TaskDto(
     int? ExitCode,
     DateTime CreatedAt,
     DateTime? MarkedForDeletionAt,
-    string? SessionTitle = null
+    string? SessionTitle = null,
+    string? SessionDir = null
 );
 
 // ───── Message DTOs ─────
@@ -212,4 +213,12 @@ public record FileEntryDto(
 
 public record UpdateSessionTitleRequest(
     string Title
+);
+
+public record UpdateSessionDirRequest(
+    string WorkingDir
+);
+
+public record SaveModelsRequest(
+    List<string> Models
 );

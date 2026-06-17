@@ -4,8 +4,8 @@
   font-weight: 400;
 
   color-scheme: dark;
-  color: rgba(255, 255, 255, 0.9);
-  background-color: #0c0d14;
+  color: rgba(255, 255, 255, 0.95);
+  background-color: #0b0b0c;
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -18,7 +18,7 @@ body {
   width: 100vw;
   height: 100vh;
   overflow: hidden;
-  background: radial-gradient(circle at 10% 20%, #131524 0%, #08090f 90%);
+  background: radial-gradient(circle at 50% 50%, #16171a 0%, #0b0b0c 100%);
 }
 
 #root {
@@ -27,12 +27,12 @@ body {
 }
 
 .glass-card {
-  background: rgba(255, 255, 255, 0.02) !important;
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.05) !important;
-  box-shadow: 0 12px 40px 0 rgba(0, 0, 0, 0.5) !important;
-  border-radius: 16px;
+  background: rgba(18, 18, 20, 0.45) !important;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.04) !important;
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37) !important;
+  border-radius: 12px;
 }
 
 .gradient-text {
@@ -89,25 +89,119 @@ body {
   background: transparent !important;
 }
 .ant-layout-sider {
-  background: rgba(10, 11, 18, 0.6) !important;
-  border-right: 1px solid rgba(255, 255, 255, 0.04);
+  background: rgba(9, 10, 11, 0.7) !important;
+  border-right: 1px solid rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(10px);
 }
 .ant-menu {
   background: transparent !important;
 }
+.ant-menu-item {
+  border-radius: 8px !important;
+  margin: 4px 8px !important;
+  width: calc(100% - 16px) !important;
+  transition: all 0.25s !important;
+}
+.ant-menu-item-selected {
+  background: rgba(255, 255, 255, 0.04) !important;
+  color: #fff !important;
+}
 .ant-layout-header {
-  background: rgba(10, 11, 18, 0.4) !important;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  background: rgba(11, 11, 12, 0.5) !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
   backdrop-filter: blur(10px);
 }
 
 /* XTerm.js 终端美化 */
 .terminal-container {
   padding: 12px;
-  background-color: #090a0f;
+  background-color: #0e0f11;
   border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.04);
 }
 .xterm-viewport::-webkit-scrollbar {
   width: 8px;
+}
+
+/* Markdown 内容样式美化 */
+.markdown-content {
+  font-size: 13px;
+  line-height: 1.6;
+  color: #e2e8f0;
+}
+.markdown-content p {
+  margin-top: 0;
+  margin-bottom: 8px;
+}
+.markdown-content p:last-child {
+  margin-bottom: 0;
+}
+.markdown-content pre {
+  background: #090a0f !important;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: 10px 14px;
+  overflow-x: auto;
+  margin: 8px 0;
+}
+.markdown-content code {
+  font-family: 'Consolas', 'Fira Code', monospace;
+  font-size: 12px;
+  background: rgba(255, 255, 255, 0.08);
+  padding: 2px 4px;
+  border-radius: 4px;
+}
+.markdown-content pre code {
+  background: transparent !important;
+  padding: 0;
+  border-radius: 0;
+  color: #a78bfa;
+}
+.markdown-content ul, .markdown-content ol {
+  margin-top: 0;
+  margin-bottom: 8px;
+  padding-left: 20px;
+}
+.markdown-content li {
+  margin-bottom: 4px;
+}
+.markdown-content h1, .markdown-content h2, .markdown-content h3, .markdown-content h4 {
+  color: #fff;
+  font-weight: 600;
+  margin-top: 14px;
+  margin-bottom: 6px;
+}
+.markdown-content h1 { font-size: 1.4em; }
+.markdown-content h2 { font-size: 1.25em; }
+.markdown-content h3 { font-size: 1.1em; }
+.markdown-content table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 12px 0;
+}
+.markdown-content th, .markdown-content td {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 8px 12px;
+  text-align: left;
+}
+.markdown-content th {
+  background: rgba(255, 255, 255, 0.05);
+  color: #fff;
+  font-weight: 600;
+}
+.markdown-content blockquote {
+  border-left: 4px solid #a855f7;
+  margin: 8px 0;
+  padding-left: 12px;
+  color: rgba(255, 255, 255, 0.65);
+}
+
+/* 磨砂玻璃卡片 Hover 微动效 */
+.glass-card {
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+.glass-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(168, 85, 247, 0.2) !important;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5) !important;
 }

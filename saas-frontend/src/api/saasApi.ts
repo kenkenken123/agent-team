@@ -29,6 +29,7 @@ export const agentsApi = {
   getAgents: () => request.get('/agents') as Promise<any>,
   getTemplates: () => request.get('/agents/templates') as Promise<any>,
   getModels: () => request.get('/agents/models') as Promise<any>,
+  saveModels: (models: string[]) => request.post('/agents/models', { models }) as Promise<any>,
   createAgent: (data: any) => request.post('/agents', data) as Promise<any>,
   updateAgent: (id: string, data: any) => request.put(`/agents/${id}`, data) as Promise<any>,
   deleteAgent: (id: string) => request.delete(`/agents/${id}`) as Promise<any>,
@@ -46,4 +47,5 @@ export const tasksApi = {
   deleteSession: (params: { sessionId?: string; taskId?: string }) => 
     request.delete('/tasks/session', { params }) as Promise<any>,
   updateSessionTitle: (sessionId: string, title: string) => request.put(`/tasks/session/${sessionId}/title`, { title }) as Promise<any>,
+  updateSessionDir: (sessionId: string, workingDir: string) => request.put(`/tasks/session/${sessionId}/working-dir`, { workingDir }) as Promise<any>,
 };

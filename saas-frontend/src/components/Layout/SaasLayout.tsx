@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Layout, Menu, Avatar, Dropdown, Space } from 'antd';
 import {
   DashboardOutlined,
@@ -6,7 +6,7 @@ import {
   BookOutlined,
   LogoutOutlined,
   RocketOutlined,
-  MessageOutlined,
+  SettingOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '../../stores/authStore';
 
@@ -17,8 +17,33 @@ interface SaasLayoutProps {
 }
 
 export default function SaasLayout({ children }: SaasLayoutProps) {
-  const [activeKey, setActiveKey] = useState('dashboard');
+  const [activeKey, setActiveKey] = useState(() => {
+    const hash = window.location.hash.substring(1);
+    const validKeys = ['dashboard', 'files', 'skills', 'models'];
+    return validKeys.includes(hash) ? hash : 'dashboard';
+  });
   const { user, logout } = useAuthStore();
+
+  useEffect(() => {
+    const handleHashChange = () => {
+      const hash = window.location.hash.substring(1);
+      const validKeys = ['dashboard', 'files', 'skills', 'models'];
+      if (validKeys.includes(hash)) {
+        setActiveKey(hash);
+      }
+    };
+
+    window.addEventListener('hashchange', handleHashChange);
+
+    // 页面初次加载，若无合法 hash 则默认加上当前 activeKey
+    const hash = window.location.hash.substring(1);
+    const validKeys = ['dashboard', 'files', 'skills', 'models'];
+    if (!hash || !validKeys.includes(hash)) {
+      window.location.hash = '#' + activeKey;
+    }
+
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, [activeKey]);
 
   const getAvatarColor = (name: string) => {
     const colors = ['#7265e6', '#ffbf00', '#00a2ae', '#87d068', '#1890ff', '#108ee9', '#a855f7'];
@@ -37,7 +62,7 @@ export default function SaasLayout({ children }: SaasLayoutProps) {
     { key: 'dashboard', icon: <DashboardOutlined />, label: '个人工作台' },
     { key: 'files', icon: <FolderOpenOutlined />, label: '专属文件区' },
     { key: 'skills', icon: <BookOutlined />, label: '专属 Skills' },
-    { key: 'agents', icon: <MessageOutlined />, label: '我的会话' },
+    { key: 'models', icon: <SettingOutlined />, label: '模型配置' },
   ];
 
   const profileMenu = {
@@ -74,7 +99,9 @@ export default function SaasLayout({ children }: SaasLayoutProps) {
           mode="inline"
           selectedKeys={[activeKey]}
           items={menuItems}
-          onClick={({ key }) => setActiveKey(key)}
+          onClick={({ key }) => {
+            window.location.hash = '#' + key;
+          }}
           style={{ marginTop: 16 }}
         />
       </Sider>

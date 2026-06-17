@@ -63,10 +63,28 @@ public class SaasAgentsController(AppDbContext db) : ControllerBase
     {
         try
         {
-            var models = await db.ModelConfigs
-                .Select(c => c.ModelId)
-                .Distinct()
-                .ToListAsync();
+            var userId = GetUserId();
+            var tempDir = SaasPathHelper.ResolveSafe(userId, ".temp");
+            var filePath = Path.Combine(tempDir, "allowed_models.json");
+            
+            List<string> models = new();
+            if (System.IO.File.Exists(filePath))
+            {
+                try
+                {
+                    var content = await System.IO.File.ReadAllTextAsync(filePath);
+                    models = System.Text.Json.JsonSerializer.Deserialize<List<string>>(content) ?? new();
+                }
+                catch {}
+            }
+
+            if (models.Count == 0)
+            {
+                models = await db.ModelConfigs
+                    .Select(c => c.ModelId)
+                    .Distinct()
+                    .ToListAsync();
+            }
 
             if (models.Count == 0)
             {
@@ -75,6 +93,41 @@ public class SaasAgentsController(AppDbContext db) : ControllerBase
             }
 
             return Ok(models);
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
+    [HttpPost("models")]
+    public async Task<IActionResult> SaveModels([FromBody] SaveModelsRequest req)
+    {
+        try
+        {
+            var userId = GetUserId();
+            if (req.Models == null || req.Models.Count == 0)
+            {
+                return BadRequest(new { error = "模型列表不能为空" });
+            }
+
+            var tempDir = SaasPathHelper.ResolveSafe(userId, ".temp");
+            if (!Directory.Exists(tempDir))
+            {
+                Directory.CreateDirectory(tempDir);
+            }
+
+            var filePath = Path.Combine(tempDir, "allowed_models.json");
+            var filtered = req.Models.Where(m => !string.IsNullOrWhiteSpace(m)).Select(m => m.Trim()).Distinct().ToList();
+            if (filtered.Count == 0)
+            {
+                return BadRequest(new { error = "无效的模型列表" });
+            }
+
+            var json = System.Text.Json.JsonSerializer.Serialize(filtered, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+            await System.IO.File.WriteAllTextAsync(filePath, json);
+
+            return Ok(new { success = true, models = filtered });
         }
         catch (Exception ex)
         {

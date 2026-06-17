@@ -45,4 +45,17 @@ public static class SaasPathHelper
         }
         return skillsDir;
     }
+
+    public static string GetRelativePath(Guid userId, string fullPath)
+    {
+        if (string.IsNullOrEmpty(fullPath)) return "";
+        var root = GetUserRoot(userId);
+        var canonicalFullPath = Path.GetFullPath(fullPath);
+        if (canonicalFullPath.StartsWith(root, StringComparison.OrdinalIgnoreCase))
+        {
+            var rel = canonicalFullPath.Substring(root.Length).TrimStart('/', '\\');
+            return rel.Replace('\\', '/'); // 统一使用正斜杠
+        }
+        return "";
+    }
 }

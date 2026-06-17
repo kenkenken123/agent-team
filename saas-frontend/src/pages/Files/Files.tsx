@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Card, Button, Input, Modal, Space, Typography, message, Row, Col, Popconfirm } from 'antd';
+import Editor from '@monaco-editor/react';
 import {
   FolderOutlined,
   FileOutlined,
@@ -11,8 +12,7 @@ import {
 } from '@ant-design/icons';
 import { filesApi } from '../../api/saasApi';
 
-const { Title, Paragraph } = Typography;
-const { TextArea } = Input;
+const { Title } = Typography;
 
 interface FileNode {
   name: string;
@@ -23,8 +23,39 @@ interface FileNode {
 }
 
 export default function Files() {
+  const getLanguage = (fileName: string) => {
+    const ext = fileName.split('.').pop()?.toLowerCase();
+    switch (ext) {
+      case 'js':
+      case 'jsx':
+        return 'javascript';
+      case 'ts':
+      case 'tsx':
+        return 'typescript';
+      case 'py':
+        return 'python';
+      case 'cs':
+        return 'csharp';
+      case 'html':
+        return 'html';
+      case 'css':
+        return 'css';
+      case 'json':
+        return 'json';
+      case 'md':
+        return 'markdown';
+      case 'sh':
+      case 'bat':
+      case 'ps1':
+        return 'shell';
+      default:
+        return 'plaintext';
+    }
+  };
+
   const [fileList, setFileList] = useState<FileNode[]>([]);
   const [currentPath, setCurrentPath] = useState('');
+  const [pathInput, setPathInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [activeFile, setActiveFile] = useState<FileNode | null>(null);
   const [fileContent, setFileContent] = useState('');
@@ -41,8 +72,10 @@ export default function Files() {
       const data = await filesApi.listFiles(path);
       setFileList(data);
       setCurrentPath(path);
+      setPathInput(path);
     } catch (err: any) {
       message.error(err.message || '加载文件列表失败');
+      setPathInput(currentPath);
     } finally {
       setLoading(false);
     }
@@ -159,9 +192,33 @@ export default function Files() {
           <Title level={2} style={{ margin: 0, fontWeight: 700 }} className="gradient-text">
             专属文件区
           </Title>
-          <Paragraph style={{ color: 'rgba(255,255,255,0.45)', margin: '4px 0 0 0' }}>
-            当前目录: <code>/ {currentPath}</code>
-          </Paragraph>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '4px 0 0 0' }}>
+            <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: 13 }}>当前目录:</span>
+            <Input
+              value={pathInput}
+              onChange={(e) => setPathInput(e.target.value)}
+              onPressEnter={() => loadFiles(pathInput.trim())}
+              placeholder="输入相对路径，回车切换 (根目录为空)"
+              size="small"
+              prefix={<span style={{ color: 'rgba(255,255,255,0.25)', marginRight: 2 }}>/</span>}
+              style={{
+                width: 320,
+                background: 'rgba(255,255,255,0.03)',
+                border: '1px solid rgba(255,255,255,0.08)',
+                color: '#fff',
+                borderRadius: 6,
+              }}
+            />
+            <Button
+              type="primary"
+              size="small"
+              onClick={() => loadFiles(pathInput.trim())}
+              className="glow-btn"
+              style={{ fontSize: 12, height: 24 }}
+            >
+              前往
+            </Button>
+          </div>
         </div>
         <Space>
           <Button icon={<ReloadOutlined />} onClick={() => loadFiles(currentPath)}>
@@ -190,21 +247,21 @@ export default function Files() {
                     justifyContent: 'space-between',
                     padding: '8px 12px',
                     borderRadius: 6,
-                    background: activeFile?.relativePath === item.relativePath ? 'rgba(168, 85, 247, 0.1)' : 'transparent',
-                    border: activeFile?.relativePath === item.relativePath ? '1px solid rgba(168, 85, 247, 0.2)' : '1px solid transparent',
+                    background: activeFile?.relativePath === item.relativePath ? 'rgba(255, 255, 255, 0.04)' : 'transparent',
+                    border: activeFile?.relativePath === item.relativePath ? '1px solid rgba(255, 255, 255, 0.06)' : '1px solid transparent',
                     cursor: 'pointer',
-                    transition: 'all 0.2s',
+                    transition: 'all 0.25s',
                   }}
                   onClick={() => (item.type === 'directory' ? handleFolderClick(item.relativePath) : handleFileClick(item))}
                   className="file-row"
                 >
                   <Space>
                     {item.type === 'directory' ? (
-                      <FolderOutlined style={{ fontSize: 16, color: '#ffbf00' }} />
+                      <FolderOutlined style={{ fontSize: 16, color: '#d4af37' }} />
                     ) : (
-                      <FileOutlined style={{ fontSize: 16, color: '#1890ff' }} />
+                      <FileOutlined style={{ fontSize: 16, color: '#8ba4f9' }} />
                     )}
-                    <span style={{ color: item.type === 'directory' ? '#ffbf00' : '#d9d9d9', fontWeight: item.type === 'directory' ? 600 : 400 }}>
+                    <span style={{ color: item.type === 'directory' ? '#d4af37' : '#d9d9d9', fontWeight: item.type === 'directory' ? 600 : 400 }}>
                       {item.name}
                     </span>
                   </Space>
@@ -257,19 +314,21 @@ export default function Files() {
             }
           >
             {activeFile ? (
-              <TextArea
-                value={fileContent}
-                onChange={(e) => setFileContent(e.target.value)}
-                style={{
-                  flex: 1,
-                  fontFamily: 'Fira Code, Source Code Pro, monospace',
-                  fontSize: 13,
-                  background: '#07080c',
-                  color: '#9cdcfe',
-                  border: '1px solid rgba(255,255,255,0.06)',
-                  resize: 'none',
-                }}
-              />
+              <div style={{ flex: 1, border: '1px solid rgba(255,255,255,0.06)', borderRadius: 8, overflow: 'hidden' }}>
+                <Editor
+                  height="100%"
+                  language={getLanguage(activeFile.name)}
+                  theme="vs-dark"
+                  value={fileContent}
+                  onChange={(val) => setFileContent(val || '')}
+                  options={{
+                    minimap: { enabled: false },
+                    fontSize: 13,
+                    fontFamily: 'Fira Code, Source Code Pro, monospace',
+                    automaticLayout: true,
+                  }}
+                />
+              </div>
             ) : (
               <div style={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center', color: 'rgba(255,255,255,0.25)' }}>
                 请在左侧点击或双击文件载入进行在线编辑

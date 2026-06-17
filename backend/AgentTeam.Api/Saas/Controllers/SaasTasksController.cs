@@ -54,13 +54,25 @@ public class SaasTasksController(
                 catch {}
             }
 
+            Dictionary<string, string> dirs = new();
+            var dirsFile = Path.Combine(tempDir, "session_dirs.json");
+            if (System.IO.File.Exists(dirsFile))
+            {
+                try
+                {
+                    var content = await System.IO.File.ReadAllTextAsync(dirsFile);
+                    dirs = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(content) ?? new();
+                }
+                catch {}
+            }
+
             var tasks = await query
                 .OrderByDescending(t => t.CreatedAt)
                 .Skip(skip)
                 .Take(take)
                 .ToListAsync();
 
-            var taskDtos = tasks.Select(t => ToDto(t, titles)).ToList();
+            var taskDtos = tasks.Select(t => ToDto(t, titles, dirs)).ToList();
             return Ok(new { items = taskDtos, total });
         }
         catch (Exception ex)
@@ -91,7 +103,19 @@ public class SaasTasksController(
                 catch {}
             }
 
-            return Ok(ToDto(task, titles));
+            Dictionary<string, string> dirs = new();
+            var dirsFile = Path.Combine(tempDir, "session_dirs.json");
+            if (System.IO.File.Exists(dirsFile))
+            {
+                try
+                {
+                    var content = await System.IO.File.ReadAllTextAsync(dirsFile);
+                    dirs = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(content) ?? new();
+                }
+                catch {}
+            }
+
+            return Ok(ToDto(task, titles, dirs));
         }
         catch (Exception ex)
         {
@@ -114,7 +138,45 @@ public class SaasTasksController(
             if (agent == null) return BadRequest(new { error = "Agent 不存在或无权访问" });
             if (!agent.IsEnabled) return BadRequest(new { error = "Agent 已被禁用" });
 
-            var relativePath = req.WorkingDirectory ?? "";
+            var relativePath = req.WorkingDirectory;
+
+            if (string.IsNullOrEmpty(relativePath))
+            {
+                string? sId = null;
+                if (!req.ForceNewSession)
+                {
+                    sId = req.ResumeSessionId;
+                    if (sId == null)
+                    {
+                        var lastTask = await db.Tasks
+                            .Where(t => t.AgentId == agentId.Value && t.ClaudeSessionId != null)
+                            .OrderByDescending(t => t.CreatedAt)
+                            .FirstOrDefaultAsync();
+                        sId = lastTask?.ClaudeSessionId;
+                    }
+                }
+
+                if (!string.IsNullOrEmpty(sId))
+                {
+                    var tempDir = SaasPathHelper.ResolveSafe(userId, ".temp");
+                    var dirsFile = Path.Combine(tempDir, "session_dirs.json");
+                    if (System.IO.File.Exists(dirsFile))
+                    {
+                        try
+                        {
+                            var content = await System.IO.File.ReadAllTextAsync(dirsFile);
+                            var dirs = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(content);
+                            if (dirs != null && dirs.TryGetValue(sId, out var savedDir))
+                            {
+                                relativePath = savedDir;
+                            }
+                        }
+                        catch {}
+                    }
+                }
+            }
+
+            relativePath ??= "";
             var safePhysicalPath = SaasPathHelper.ResolveSafe(userId, relativePath);
 
             if (req.OptimizePrompt)
@@ -324,13 +386,67 @@ public class SaasTasksController(
         }
     }
 
-    private static TaskDto ToDto(AgentTask t, Dictionary<string, string>? titles = null)
+    [HttpPut("session/{sessionId}/working-dir")]
+    public async Task<IActionResult> UpdateSessionDir(string sessionId, [FromBody] UpdateSessionDirRequest req)
+    {
+        try
+        {
+            var userId = GetUserId();
+            if (string.IsNullOrEmpty(sessionId)) return BadRequest(new { error = "会话 ID 不能为空" });
+
+            var tempDir = SaasPathHelper.ResolveSafe(userId, ".temp");
+            if (!Directory.Exists(tempDir))
+            {
+                Directory.CreateDirectory(tempDir);
+            }
+
+            var filePath = Path.Combine(tempDir, "session_dirs.json");
+            Dictionary<string, string> dirs = new();
+            if (System.IO.File.Exists(filePath))
+            {
+                try
+                {
+                    var content = await System.IO.File.ReadAllTextAsync(filePath);
+                    dirs = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(content) ?? new();
+                }
+                catch {}
+            }
+
+            dirs[sessionId] = req.WorkingDir ?? "";
+            var json = System.Text.Json.JsonSerializer.Serialize(dirs, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+            await System.IO.File.WriteAllTextAsync(filePath, json);
+
+            return Ok(new { message = "会话启动目录更新成功", sessionId, workingDir = req.WorkingDir });
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
+    private static TaskDto ToDto(AgentTask t, Dictionary<string, string>? titles = null, Dictionary<string, string>? dirs = null)
     {
         string? sessionTitle = null;
         if (t.ClaudeSessionId != null && titles != null)
         {
             titles.TryGetValue(t.ClaudeSessionId, out sessionTitle);
         }
+
+        string? sessionDir = null;
+        if (t.ClaudeSessionId != null && dirs != null)
+        {
+            dirs.TryGetValue(t.ClaudeSessionId, out sessionDir);
+        }
+
+        if (string.IsNullOrEmpty(sessionDir) && !string.IsNullOrEmpty(t.WorkingDirectory))
+        {
+            var userId = t.Agent?.SaasUserId;
+            if (userId.HasValue)
+            {
+                sessionDir = SaasPathHelper.GetRelativePath(userId.Value, t.WorkingDirectory);
+            }
+        }
+
         return new(
             t.Id,
             t.AgentId,
@@ -356,7 +472,8 @@ public class SaasTasksController(
             t.ExitCode,
             t.CreatedAt,
             t.MarkedForDeletionAt,
-            sessionTitle
+            sessionTitle,
+            sessionDir
         );
     }
 }

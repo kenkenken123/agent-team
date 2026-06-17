@@ -121,6 +121,7 @@ export default function Skills() {
             <Card
               bordered={false}
               className="glass-card"
+              style={{ position: 'relative' }}
               actions={[
                 <EditOutlined key="edit" onClick={() => handleEditOpen(skill)} />,
                 <Popconfirm
@@ -134,6 +135,16 @@ export default function Skills() {
                 </Popconfirm>,
               ]}
             >
+              <div style={{
+                position: 'absolute',
+                top: 16,
+                right: 16,
+                width: 6,
+                height: 6,
+                borderRadius: '50%',
+                backgroundColor: '#10b981',
+                boxShadow: '0 0 8px #10b981',
+              }} />
               <Card.Meta
                 avatar={<BookOutlined style={{ fontSize: 24, color: '#a855f7' }} />}
                 title={skill.skillName}

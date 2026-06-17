@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Card, Button, Input, Select, Row, Col, Space, Typography, message, Tag, Switch, Avatar, Upload } from 'antd';
+import { Card, Button, Input, Select, Row, Col, Space, Typography, message, Tag, Switch, Avatar, Upload, Popconfirm, AutoComplete } from 'antd';
 import {
   PlayCircleOutlined,
   LoadingOutlined,
@@ -13,6 +13,7 @@ import {
   PaperClipOutlined,
 } from '@ant-design/icons';
 import { agentsApi, tasksApi, filesApi } from '../../api/saasApi';
+import MarkdownRenderer from '../../components/MarkdownRenderer';
 
 const { Title } = Typography;
 const { TextArea } = Input;
@@ -27,6 +28,7 @@ interface Task {
   finalResult?: string;
   createdAt: string;
   sessionTitle?: string;
+  sessionDir?: string;
 }
 
 interface ChatSession {
@@ -37,11 +39,43 @@ interface ChatSession {
   tasks: Task[];
 }
 
+const getSessionStats = (session: any) => {
+  if (!session || !session.tasks || session.tasks.length === 0) return null;
+  let totalInput = 0;
+  let totalOutput = 0;
+  let totalCacheRead = 0;
+  let totalCacheCreate = 0;
+  let totalRequests = 0;
+
+  session.tasks.forEach((t: any) => {
+    totalInput += t.inputTokens || 0;
+    totalOutput += t.outputTokens || 0;
+    totalCacheRead += t.cacheReadTokens || 0;
+    totalCacheCreate += t.cacheCreationTokens || 0;
+    totalRequests += t.requestCount || 0;
+  });
+
+  const totalTokens = totalInput + totalOutput;
+  const cost = ((totalInput - totalCacheRead) * 3 + totalCacheRead * 0.3 + totalOutput * 15) / 1000000;
+
+  return {
+    totalInput,
+    totalOutput,
+    totalCacheRead,
+    totalCacheCreate,
+    totalTokens,
+    totalRequests,
+    cost: cost.toFixed(4)
+  };
+};
+
 export default function Agents() {
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [activeSession, setActiveSession] = useState<ChatSession | null>(null);
   const [implicitAgentId, setImplicitAgentId] = useState<string | null>(null);
   const [uploadedFiles, setUploadedFiles] = useState<{ name: string; path: string }[]>([]);
+  const [sessionDir, setSessionDir] = useState('');
+  const [dirOptions, setDirOptions] = useState<{ value: string }[]>([]);
   
   const [taskPrompt, setTaskPrompt] = useState('');
   const [planMode, setPlanMode] = useState(false);
@@ -53,8 +87,19 @@ export default function Agents() {
   const [runningTaskOutput, setRunningTaskOutput] = useState('');
   
   const wsRef = useRef<WebSocket | null>(null);
+  const wsTaskIdRef = useRef<string | null>(null);
   const chatEndRef = useRef<HTMLDivElement | null>(null);
   const logEndRef = useRef<HTMLDivElement | null>(null);
+  const activeSessionRef = useRef<ChatSession | null>(null);
+  const implicitAgentIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    activeSessionRef.current = activeSession;
+  }, [activeSession]);
+
+  useEffect(() => {
+    implicitAgentIdRef.current = implicitAgentId;
+  }, [implicitAgentId]);
 
   const init = async () => {
     try {
@@ -125,11 +170,12 @@ export default function Agents() {
       
       setSessions(sessionList);
       
-      if (activeSession) {
-        const updatedActive = sessionList.find(s => s.sessionId === activeSession.sessionId);
+      const currentActive = activeSessionRef.current;
+      if (currentActive) {
+        const updatedActive = sessionList.find(s => s.sessionId === currentActive.sessionId);
         if (updatedActive) {
           setActiveSession(updatedActive);
-          const runningTask = updatedActive.tasks.find(t => t.status === 'Running');
+          const runningTask = updatedActive.tasks.find(t => t.status === 'Running' || t.status === 'Pending');
           if (runningTask) {
             connectWebSocket(runningTask.id);
           }
@@ -140,8 +186,21 @@ export default function Agents() {
     }
   };
 
+  const loadDirectoryOptions = async () => {
+    try {
+      const entries = await filesApi.listFiles('');
+      const dirs = (entries || [])
+        .filter((item: any) => item.type === 'directory' && item.name !== '.temp')
+        .map((item: any) => ({ value: item.name }));
+      setDirOptions(dirs);
+    } catch (err) {
+      console.error('加载快捷目录列表失败', err);
+    }
+  };
+
   useEffect(() => {
     init();
+    loadDirectoryOptions();
     return () => {
       if (wsRef.current) wsRef.current.close();
     };
@@ -154,28 +213,42 @@ export default function Agents() {
   const selectSession = async (session: ChatSession) => {
     setActiveSession(session);
     setRunningTaskOutput('');
+    wsTaskIdRef.current = null;
     if (wsRef.current) {
       wsRef.current.close();
     }
+
+    const lastTask = session.tasks[session.tasks.length - 1];
+    setSessionDir(lastTask?.sessionDir || '');
     
-    const runningTask = session.tasks.find(t => t.status === 'Running');
+    const runningTask = session.tasks.find(t => t.status === 'Running' || t.status === 'Pending');
     if (runningTask) {
       try {
         const res = await tasksApi.getTaskOutput(runningTask.id);
         const cleanText = (res.content || '').replace(/\x1B\[[0-9;]*[a-zA-Z]/g, '');
-        setRunningTaskOutput(cleanText);
+        setRunningTaskOutput(cleanText || (runningTask.status === 'Pending' ? '任务启动中...' : ''));
         connectWebSocket(runningTask.id);
       } catch (err) {
       }
     }
   };
 
+
   const connectWebSocket = (taskId: string) => {
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN && wsTaskIdRef.current === taskId) {
+      return;
+    }
+
     if (wsRef.current) wsRef.current.close();
+    wsTaskIdRef.current = taskId;
 
     const wsUrl = `ws://localhost:5501/ws/task/${taskId}`;
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
+
+    ws.onopen = () => {
+      if (implicitAgentIdRef.current) loadSessions(implicitAgentIdRef.current);
+    };
 
     ws.onmessage = (event) => {
       try {
@@ -185,7 +258,7 @@ export default function Agents() {
           setRunningTaskOutput((prev) => prev + cleanChunk);
           logEndRef.current?.scrollIntoView({ behavior: 'smooth' });
         } else if (data.type === 'status' && data.status) {
-          if (implicitAgentId) loadSessions(implicitAgentId);
+          if (implicitAgentIdRef.current) loadSessions(implicitAgentIdRef.current);
         }
       } catch (e) {
       }
@@ -196,6 +269,7 @@ export default function Agents() {
     setActiveSession(null);
     setRunningTaskOutput('');
     setTaskPrompt('');
+    wsTaskIdRef.current = null;
     if (wsRef.current) wsRef.current.close();
   };
 
@@ -223,6 +297,7 @@ export default function Agents() {
         model: activeModel,
         forceNewSession: isNew,
         resumeSessionId: resumeSessionId,
+        workingDirectory: sessionDir,
       });
       
       message.success('指令发送成功！');
@@ -283,6 +358,45 @@ export default function Agents() {
     return false; // 阻止 antd 自动上传
   };
 
+  const handlePaste = async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    if (!implicitAgentId || isStartingTask) return;
+    const items = e.clipboardData?.items;
+    if (!items) return;
+
+    let hasFile = false;
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      if (item.kind === 'file') {
+        const file = item.getAsFile();
+        if (file) {
+          hasFile = true;
+          let finalFile = file;
+          if (!file.name || file.name === 'image.png') {
+            const ext = file.type.split('/')[1] || 'png';
+            const randomName = `pasted_file_${Date.now()}_${Math.floor(Math.random() * 1000)}.${ext}`;
+            finalFile = new File([file], randomName, { type: file.type });
+          }
+          await handleUpload(finalFile);
+        }
+      }
+    }
+
+    if (hasFile) {
+      e.preventDefault();
+    }
+  };
+
+  const handleCancelTask = async (taskId: string) => {
+    try {
+      message.loading({ content: '正在发送中止指令...', key: 'cancelling' });
+      await tasksApi.cancelTask(taskId);
+      message.success({ content: '中止指令发送成功！', key: 'cancelling' });
+      if (implicitAgentId) loadSessions(implicitAgentId);
+    } catch (err: any) {
+      message.error({ content: err.message || '中止任务失败', key: 'cancelling' });
+    }
+  };
+
   const handleDeleteSession = async (session: ChatSession) => {
     try {
       const firstTask = session.tasks[0];
@@ -340,7 +454,7 @@ export default function Agents() {
           >
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               {sessions.map((sess) => {
-                const isRunning = sess.tasks.some(t => t.status === 'Running');
+                const isRunning = sess.tasks.some(t => t.status === 'Running' || t.status === 'Pending');
                 return (
                   <div
                     key={sess.sessionId}
@@ -348,12 +462,12 @@ export default function Agents() {
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'space-between',
-                      padding: '12px',
+                      padding: '10px 12px',
                       borderRadius: 8,
-                      background: activeSession?.sessionId === sess.sessionId ? 'rgba(168, 85, 247, 0.1)' : 'transparent',
-                      border: activeSession?.sessionId === sess.sessionId ? '1px solid rgba(168, 85, 247, 0.2)' : '1px solid transparent',
+                      background: activeSession?.sessionId === sess.sessionId ? 'rgba(255, 255, 255, 0.04)' : 'transparent',
+                      border: activeSession?.sessionId === sess.sessionId ? '1px solid rgba(255, 255, 255, 0.06)' : '1px solid transparent',
                       cursor: 'pointer',
-                      transition: 'all 0.2s',
+                      transition: 'all 0.25s',
                     }}
                     onClick={() => selectSession(sess)}
                   >
@@ -371,15 +485,23 @@ export default function Agents() {
                       </div>
                     </Space>
                     
-                    <DeleteOutlined
-                      style={{ color: 'rgba(255,255,255,0.25)', padding: 4 }}
-                      onClick={(e) => {
-                        e.stopPropagation();
+                    <Popconfirm
+                      title="确定删除此会话吗？"
+                      onConfirm={(e) => {
+                        e?.stopPropagation();
                         handleDeleteSession(sess);
                       }}
-                      onMouseEnter={(e) => (e.currentTarget.style.color = '#ff4d4f')}
-                      onMouseLeave={(e) => (e.currentTarget.style.color = 'rgba(255,255,255,0.25)')}
-                    />
+                      onCancel={(e) => e?.stopPropagation()}
+                      okText="确认"
+                      cancelText="取消"
+                    >
+                      <DeleteOutlined
+                        style={{ color: 'rgba(255,255,255,0.25)', padding: 4 }}
+                        onClick={(e) => e.stopPropagation()}
+                        onMouseEnter={(e) => (e.currentTarget.style.color = '#ff4d4f')}
+                        onMouseLeave={(e) => (e.currentTarget.style.color = 'rgba(255,255,255,0.25)')}
+                      />
+                    </Popconfirm>
                   </div>
                 );
               })}
@@ -420,11 +542,58 @@ export default function Agents() {
               </Space>
             </div>
 
+            {activeSession && (() => {
+              const stats = getSessionStats(activeSession);
+              if (!stats) return null;
+              return (
+                <div style={{ 
+                  background: 'rgba(255,255,255,0.02)', 
+                  border: '1px solid rgba(255,255,255,0.05)', 
+                  borderRadius: 8, 
+                  padding: '8px 12px', 
+                  display: 'flex', 
+                  gap: 16, 
+                  fontSize: 12, 
+                  flexWrap: 'wrap',
+                  marginBottom: 16,
+                  alignItems: 'center'
+                }}>
+                  <div>
+                    <span style={{ color: 'rgba(255,255,255,0.45)' }}>总计消耗: </span>
+                    <span style={{ color: '#c084fc', fontWeight: 600 }}>{stats.totalTokens.toLocaleString()} Tokens</span>
+                  </div>
+                  <div style={{ borderLeft: '1px solid rgba(255,255,255,0.1)', height: 12 }} />
+                  <div>
+                    <span style={{ color: 'rgba(255,255,255,0.45)' }}>输入 / 输出: </span>
+                    <span style={{ color: '#fff' }}>{stats.totalInput.toLocaleString()} / {stats.totalOutput.toLocaleString()}</span>
+                  </div>
+                  {stats.totalCacheRead > 0 && (
+                    <>
+                      <div style={{ borderLeft: '1px solid rgba(255,255,255,0.1)', height: 12 }} />
+                      <div>
+                        <span style={{ color: 'rgba(255,255,255,0.45)' }}>缓存命中: </span>
+                        <span style={{ color: '#10b981', fontWeight: 600 }}>{stats.totalCacheRead.toLocaleString()}</span>
+                      </div>
+                    </>
+                  )}
+                  <div style={{ borderLeft: '1px solid rgba(255,255,255,0.1)', height: 12 }} />
+                  <div>
+                    <span style={{ color: 'rgba(255,255,255,0.45)' }}>API 交互: </span>
+                    <span style={{ color: '#fff' }}>{stats.totalRequests} 次</span>
+                  </div>
+                  <div style={{ marginLeft: 'auto' }}>
+                    <span style={{ color: 'rgba(255,255,255,0.45)' }}>预估消费: </span>
+                    <span style={{ color: '#f59e0b', fontWeight: 600 }}>${stats.cost}</span>
+                  </div>
+                </div>
+              );
+            })()}
+
             <div style={{ flex: 1, overflowY: 'auto', paddingRight: 8, marginBottom: 16 }}>
               {activeSession ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
                   {activeSession.tasks.map((task) => {
-                    const isTaskRunning = task.status === 'Running';
+                    const isTaskRunning = task.status === 'Running' || task.status === 'Pending';
                     const hasResult = !!task.finalResult;
                     const isExpanded = !!expandedLogs[task.id];
                     
@@ -435,9 +604,9 @@ export default function Agents() {
                             <Card
                               bodyStyle={{ padding: '10px 14px' }}
                               style={{
-                                background: 'linear-gradient(135deg, rgba(168, 85, 247, 0.15) 0%, rgba(99, 102, 241, 0.15) 100%)',
-                                border: '1px solid rgba(168, 85, 247, 0.2)',
-                                borderRadius: '12px 0 12px 12px',
+                                background: 'linear-gradient(135deg, rgba(168, 85, 247, 0.08) 0%, rgba(99, 102, 241, 0.08) 100%)',
+                                border: '1px solid rgba(168, 85, 247, 0.12)',
+                                borderRadius: '16px 0 16px 16px',
                               }}
                             >
                               <div style={{ color: '#fff', fontSize: 13, whiteSpace: 'pre-wrap' }}>
@@ -458,33 +627,44 @@ export default function Agents() {
                               <Card
                                 bodyStyle={{ padding: '12px 16px' }}
                                 style={{
-                                  background: 'rgba(255,255,255,0.02)',
-                                  border: '1px solid rgba(255,255,255,0.06)',
-                                  borderRadius: '0 12px 12px 12px',
+                                  background: 'transparent',
+                                  border: 'none',
+                                  borderRadius: 0,
+                                  boxShadow: 'none',
                                 }}
                               >
                                 {hasResult && (
-                                  <div style={{ color: '#d9d9d9', fontSize: 13, lineHeight: '1.6', whiteSpace: 'pre-wrap' }}>
-                                    {task.finalResult}
-                                  </div>
+                                  <MarkdownRenderer content={task.finalResult || ''} />
                                 )}
 
                                 {isTaskRunning && (
                                   <div>
-                                    <div style={{ color: '#10b981', fontSize: 13, marginBottom: 8 }}>
-                                      <LoadingOutlined style={{ marginRight: 6 }} /> Claude 正在实时处理执行中...
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                                      <div style={{ color: '#10b981', fontSize: 13 }}>
+                                        <LoadingOutlined style={{ marginRight: 6 }} /> Claude 正在实时处理执行中...
+                                      </div>
+                                      <Button
+                                        type="primary"
+                                        danger
+                                        size="small"
+                                        onClick={() => handleCancelTask(task.id)}
+                                        style={{ fontSize: 11 }}
+                                      >
+                                        终止任务
+                                      </Button>
                                     </div>
                                     <div
                                       style={{
-                                        background: '#040508',
+                                        background: '#0e0f11',
                                         borderRadius: '8px',
                                         padding: '12px',
                                         fontFamily: 'Consolas, monospace',
                                         fontSize: 12,
-                                        color: '#33ff33',
+                                        color: '#e2e8f0',
                                         maxHeight: 280,
                                         overflowY: 'auto',
                                         whiteSpace: 'pre-wrap',
+                                        border: '1px solid rgba(255,255,255,0.03)',
                                       }}
                                     >
                                       {runningTaskOutput || '正在初始化进程并开启流日志通道...'}
@@ -552,13 +732,13 @@ export default function Agents() {
               )}
             </div>
 
-            <div style={{ background: 'rgba(255,255,255,0.02)', padding: '12px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.05)' }}>
-              <div style={{ display: 'flex', gap: 12, marginBottom: 8, alignItems: 'center' }}>
+            <div style={{ background: 'rgba(18, 18, 20, 0.35)', padding: '16px', borderRadius: '16px', border: '1px solid rgba(255, 255, 255, 0.04)' }}>
+              <div style={{ display: 'flex', gap: 12, marginBottom: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                 <span style={{ color: 'rgba(255, 255, 255, 0.45)', fontSize: 13 }}>模型:</span>
                 <Select
                   value={activeModel}
                   onChange={(val) => setActiveModel(val)}
-                  style={{ width: 220 }}
+                  style={{ width: 200 }}
                   size="small"
                 >
                   {models.map((m) => (
@@ -572,6 +752,35 @@ export default function Agents() {
                     分析模式 (仅分析，不修改文件)
                   </span>
                 </span>
+
+                <span style={{ color: 'rgba(255, 255, 255, 0.45)', fontSize: 13, marginLeft: 16 }}>启动目录:</span>
+                <AutoComplete
+                  options={dirOptions}
+                  value={sessionDir}
+                  onChange={(val) => {
+                    if (val.includes('..') || val.includes(':')) {
+                      message.warning({ content: '目录必须在您的专属主目录下，禁止包含 .. 或盘符！', key: 'dir-warn' });
+                      return;
+                    }
+                    setSessionDir(val);
+                  }}
+                  disabled={!!activeSession && activeSession.tasks && activeSession.tasks.length > 0}
+                  filterOption={(inputValue, option) =>
+                    option!.value.toUpperCase().indexOf(inputValue.toUpperCase()) !== -1
+                  }
+                  style={{ width: 220 }}
+                >
+                  <Input
+                    placeholder="快捷选择或输入子目录"
+                    style={{ 
+                      background: 'rgba(255,255,255,0.01)', 
+                      color: '#fff', 
+                      border: '1px solid rgba(255,255,255,0.08)', 
+                      borderRadius: 6 
+                    }}
+                    size="small"
+                  />
+                </AutoComplete>
               </div>
 
               {uploadedFiles.length > 0 && (
@@ -596,6 +805,7 @@ export default function Agents() {
                 placeholder={activeSession ? "继续在此会话中发送问题或开发指令... (按 Ctrl+Enter 发送)" : "描述您想让 Claude 执行的开发指令... (按 Ctrl+Enter 发送)"}
                 value={taskPrompt}
                 onChange={(e) => setTaskPrompt(e.target.value)}
+                onPaste={handlePaste}
                 onKeyDown={(e) => {
                   if (e.ctrlKey && e.key === 'Enter') {
                     e.preventDefault();
@@ -604,7 +814,14 @@ export default function Agents() {
                     }
                   }
                 }}
-                style={{ background: '#090a0f', color: '#fff', border: '1px solid rgba(255,255,255,0.1)', marginBottom: 8 }}
+                style={{ 
+                  background: 'rgba(255, 255, 255, 0.01)', 
+                  color: '#fff', 
+                  border: '1px solid rgba(255,255,255,0.06)', 
+                  borderRadius: 12,
+                  padding: '10px 14px',
+                  marginBottom: 8 
+                }}
                 disabled={isStartingTask}
               />
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -627,6 +844,7 @@ export default function Agents() {
                   loading={isStartingTask}
                   className="glow-btn"
                   disabled={!taskPrompt.trim() || !implicitAgentId}
+                  style={{ borderRadius: 20 }}
                 >
                   发送指令
                 </Button>
