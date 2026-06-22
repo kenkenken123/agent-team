@@ -3,6 +3,7 @@ using System;
 using AgentTeam.Api.Saas;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -10,9 +11,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace AgentTeam.Api.Saas.Migrations
 {
     [DbContext(typeof(AgentSaasContext))]
-    partial class AgentSaasContextModelSnapshot : ModelSnapshot
+    [Migration("20260618092105_AddModelPricing")]
+    partial class AddModelPricing
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.5");
@@ -22,9 +25,6 @@ namespace AgentTeam.Api.Saas.Migrations
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER");
-
-                    b.Property<decimal>("CacheInputPricePerMillion")
-                        .HasColumnType("TEXT");
 
                     b.Property<decimal>("InputPricePerMillion")
                         .HasColumnType("TEXT");

@@ -6,6 +6,7 @@ using AgentTeam.Api.Saas.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using System;
 using System.Threading.Tasks;
 
@@ -13,7 +14,11 @@ namespace AgentTeam.Api.Saas.Controllers;
 
 [ApiController]
 [Route("api/saas/auth")]
-public class SaasAuthController(AgentSaasContext db, JwtService jwtService, AppDbContext appDb) : ControllerBase
+public class SaasAuthController(
+    AgentSaasContext db,
+    JwtService jwtService,
+    AppDbContext appDb,
+    IConfiguration configuration) : ControllerBase
 {
     [HttpPost("register")]
     public async Task<IActionResult> Register([FromBody] RegisterRequest req)
@@ -72,6 +77,19 @@ public class SaasAuthController(AgentSaasContext db, JwtService jwtService, AppD
         }
 
         var username = req.Username.Trim();
+
+        // ── 管理员检查（优先匹配，直接比较配置文件明文密码）──────────
+        var adminUsername = configuration["Admin:Username"];
+        var adminPassword = configuration["Admin:Password"];
+        if (!string.IsNullOrEmpty(adminUsername)
+            && string.Equals(username, adminUsername, StringComparison.OrdinalIgnoreCase)
+            && req.Password == adminPassword)
+        {
+            var adminToken = jwtService.GenerateAdminToken(username);
+            return Ok(new AuthResponse(adminToken, null, IsAdmin: true));
+        }
+
+        // ── 普通租户登录 ──────────────────────────────────────────────
         var user = await db.Users.FirstOrDefaultAsync(u => u.Username.ToLower() == username.ToLower());
         if (user == null || !BCrypt.Net.BCrypt.Verify(req.Password, user.PasswordHash))
         {

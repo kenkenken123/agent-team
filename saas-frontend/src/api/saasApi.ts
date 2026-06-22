@@ -49,3 +49,16 @@ export const tasksApi = {
   updateSessionTitle: (sessionId: string, title: string) => request.put(`/tasks/session/${sessionId}/title`, { title }) as Promise<any>,
   updateSessionDir: (sessionId: string, workingDir: string) => request.put(`/tasks/session/${sessionId}/working-dir`, { workingDir }) as Promise<any>,
 };
+
+export const adminApi = {
+  // 用户管理
+  getUsers: () => request.get('/admin/users') as Promise<any>,
+  createUser: (data: { username: string; password: string }) => request.post('/admin/users', data) as Promise<any>,
+  updateUser: (id: string, data: { username?: string; password?: string }) => request.put(`/admin/users/${id}`, data) as Promise<any>,
+  deleteUser: (id: string) => request.delete(`/admin/users/${id}`) as Promise<any>,
+  // 模型计费
+  getModelPricing: () => request.get('/admin/model-pricing') as Promise<any>,
+  saveModelPricing: (items: { modelId: string; inputPricePerMillion: number; outputPricePerMillion: number; cacheInputPricePerMillion: number }[]) =>
+    request.post('/admin/model-pricing', { items }) as Promise<any>,
+};
+

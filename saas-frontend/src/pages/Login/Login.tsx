@@ -5,30 +5,20 @@ import { authApi } from '../../api/saasApi';
 import { useAuthStore } from '../../stores/authStore';
 
 export default function Login() {
-  const [isRegister, setIsRegister] = useState(false);
   const [loading, setLoading] = useState(false);
   const setAuth = useAuthStore((state) => state.setAuth);
 
   const onFinish = async (values: any) => {
     setLoading(true);
     try {
-      if (isRegister) {
-        const res = await authApi.register({
-          username: values.username,
-          password: values.password,
-        });
-        message.success('注册成功，已自动登录');
-        setAuth(res.token, res.user);
-      } else {
-        const res = await authApi.login({
-          username: values.username,
-          password: values.password,
-        });
-        message.success('登录成功');
-        setAuth(res.token, res.user);
-      }
+      const res = await authApi.login({
+        username: values.username,
+        password: values.password,
+      });
+      message.success('登录成功');
+      setAuth(res.token, res.user ?? null, res.isAdmin ?? false);
     } catch (err: any) {
-      message.error(err.message || '操作失败');
+      message.error(err.message || '登录失败');
     } finally {
       setLoading(false);
     }
@@ -91,11 +81,11 @@ export default function Login() {
             </span>
           </Space>
           <div style={{ color: 'rgba(255, 255, 255, 0.45)', fontSize: 14 }}>
-            {isRegister ? '欢迎加入多租户 SaaS 协作终端' : '欢迎回来，请输入您的凭据'}
+            欢迎回来，请输入您的凭据
           </div>
         </div>
 
-        <Form name="auth_form" size="large" onFinish={onFinish} layout="vertical">
+        <Form name="login_form" size="large" onFinish={onFinish} layout="vertical">
           <Form.Item
             name="username"
             rules={[{ required: true, message: '请输入用户名' }]}
@@ -135,19 +125,10 @@ export default function Login() {
               className="glow-btn"
               style={{ height: 44, fontSize: 16 }}
             >
-              {isRegister ? '注 册' : '登 录'}
+              登 录
             </Button>
           </Form.Item>
         </Form>
-
-        <div style={{ textAlign: 'center', marginTop: 16 }}>
-          <a
-            onClick={() => setIsRegister(!isRegister)}
-            style={{ color: '#a855f7', fontSize: 14, cursor: 'pointer' }}
-          >
-            {isRegister ? '已有账号？去登录' : '没有账号？立即注册'}
-          </a>
-        </div>
       </Card>
     </div>
   );

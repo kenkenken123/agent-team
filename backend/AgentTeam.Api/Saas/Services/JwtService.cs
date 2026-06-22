@@ -33,6 +33,23 @@ public class JwtService
             new Claim("saas", "true")
         };
 
+        return BuildToken(claims);
+    }
+
+    public string GenerateAdminToken(string username)
+    {
+        var claims = new List<Claim>
+        {
+            new Claim(ClaimTypes.Name, username),
+            new Claim(ClaimTypes.Role, "admin"),
+            new Claim("saas", "true")
+        };
+
+        return BuildToken(claims);
+    }
+
+    private string BuildToken(List<Claim> claims)
+    {
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_secret));
         var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
@@ -47,3 +64,4 @@ public class JwtService
         return new JwtSecurityTokenHandler().WriteToken(token);
     }
 }
+
